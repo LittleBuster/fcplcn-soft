@@ -1,0 +1,11 @@
+#!/bin/sh
+set -eu
+
+RTC_TOOLS_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+RTC_SOURCE_DIR="$RTC_TOOLS_DIR/../../firmware/base/tests/rtc"
+RTC_BUILD_DIR="${FCPLCN_RTC_BUILD_DIR:-$HOME/esp/build/fcplcn/base-rtc}"
+export PATH="/opt/homebrew/bin:$PATH"
+
+cmake -S "$RTC_SOURCE_DIR" -B "$RTC_BUILD_DIR" -G Ninja "$@"
+cmake --build "$RTC_BUILD_DIR" --parallel
+ctest --test-dir "$RTC_BUILD_DIR" --output-on-failure

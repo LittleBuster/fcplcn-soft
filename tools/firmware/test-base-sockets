@@ -1,0 +1,9 @@
+#!/bin/sh
+set -eu
+SOCKET_TOOLS_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+SOCKET_SOURCE_DIR="$SOCKET_TOOLS_DIR/../../firmware/base/tests/sockets"
+SOCKET_BUILD_DIR="${FCPLCN_SOCKET_BUILD_DIR:-$HOME/esp/build/fcplcn/base-sockets}"
+export PATH="/opt/homebrew/bin:$PATH"
+cmake -S "$SOCKET_SOURCE_DIR" -B "$SOCKET_BUILD_DIR" -G Ninja "$@"
+cmake --build "$SOCKET_BUILD_DIR" --parallel
+ctest --test-dir "$SOCKET_BUILD_DIR" --output-on-failure

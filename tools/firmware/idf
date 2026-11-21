@@ -1,0 +1,13 @@
+#!/bin/bash
+set -e
+
+ESP_SDK_DIR="${ESP_IDF_SDK_DIR:-$HOME/esp/esp-idf-v6.1}"
+if [ ! -f "$ESP_SDK_DIR/export.sh" ]; then
+    printf 'ESP-IDF v6.1 not found at %s\n' "$ESP_SDK_DIR" >&2
+    exit 1
+fi
+
+export PATH="/opt/homebrew/opt/python@3.12/libexec/bin:/opt/homebrew/bin:$PATH"
+export IDF_CCACHE_ENABLE=1
+source "$ESP_SDK_DIR/export.sh" >/dev/null
+exec python "$ESP_SDK_DIR/tools/idf.py" "$@"

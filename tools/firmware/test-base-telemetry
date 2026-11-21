@@ -1,0 +1,9 @@
+#!/bin/sh
+set -eu
+FCPLCN_TOOLS_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+FCPLCN_TEST_DIR="$FCPLCN_TOOLS_DIR/../../firmware/base/tests/mqtt_telemetry"
+FCPLCN_TEST_BUILD="${FCPLCN_TELEMETRY_BUILD_DIR:-$HOME/esp/build/fcplcn/base-telemetry}"
+export PATH="/opt/homebrew/bin:$PATH"
+cmake -S "$FCPLCN_TEST_DIR" -B "$FCPLCN_TEST_BUILD" -G Ninja "$@"
+cmake --build "$FCPLCN_TEST_BUILD" --parallel
+ctest --test-dir "$FCPLCN_TEST_BUILD" --output-on-failure

@@ -1,0 +1,169 @@
+/* Быстрые сценарии дома */
+
+.scenes-panel {
+  margin: 4px 0 30px;
+}
+
+.scene-cards {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.scene-card {
+  position: relative;
+  min-width: 0;
+  border: 1px solid #3b5573;
+  border-radius: 13px;
+  background: linear-gradient(145deg, #1d3046, #182331);
+  overflow: hidden;
+}
+
+.scene-away {
+  border-color: #4b5d55;
+  background: linear-gradient(145deg, #233b35, #182b2b);
+}
+
+.scene-prepare {
+  border-color: #6a5940;
+  background: linear-gradient(145deg, #3b342a, #272b2e);
+}
+
+.scene-run-button {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  min-height: 148px;
+  width: 100%;
+  padding: 24px 18px;
+  text-align: left;
+  background: none;
+}
+
+.scene-run-button:not(:disabled):hover {
+  background: #b7d8ff0a;
+}
+
+.scene-run-button:disabled {
+  opacity: 0.6;
+}
+
+.scene-art {
+  display: grid;
+  place-items: center;
+  width: 58px;
+  height: 68px;
+  flex-shrink: 0;
+  color: #a6caff;
+  filter: drop-shadow(0 0 13px #9fc5ff1c);
+}
+
+.scene-art > .icon {
+  width: 55px;
+  height: 55px;
+  stroke-width: 1.2;
+}
+
+.scene-away .scene-art {
+  color: #99ddbe;
+}
+
+.scene-prepare .scene-art {
+  color: #f1d194;
+}
+
+.scene-card-copy {
+  min-width: 0;
+  display: grid;
+  gap: 8px;
+  padding-right: 13px;
+}
+
+.scene-card-copy > strong {
+  font-size: 18px;
+  font-weight: 650;
+  letter-spacing: -0.3px;
+  line-height: 1.4;
+}
+
+.scene-card-copy > span:not(.scene-start-label) {
+  color: #97abc6;
+  font-size: 10px;
+  line-height: 1.6;
+}
+
+.scene-away .scene-card-copy > span:not(.scene-start-label) {
+  color: #98b6aa;
+}
+
+.scene-prepare .scene-card-copy > span:not(.scene-start-label) {
+  color: #b9ae97;
+}
+
+.scene-start-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 2px;
+  color: #adcfff;
+  font-size: 9px;
+  font-weight: 600;
+}
+
+.scene-away .scene-start-label {
+  color: #a4e5c9;
+}
+
+.scene-prepare .scene-start-label {
+  color: #eed19b;
+}
+
+.scene-start-label .icon {
+  width: 13px;
+  height: 13px;
+}
+
+.scene-settings-button {
+  position: absolute;
+  top: 9px;
+  right: 9px;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 5px;
+  border: 1px solid #7893b13b;
+  border-radius: 7px;
+  color: #9fb5d2;
+  background: #12203266;
+}
+
+.scene-settings-button .icon {
+  width: 15px;
+  height: 15px;
+}
+
+.scene-settings-button:not(:disabled):hover {
+  color: #d8e8ff;
+  border-color: #7b9fcb;
+  background: #29415f;
+}
+
+.scene-settings-button:disabled {
+  opacity: 0.45;
+}
+
+.scene-running {
+  border-color: #accaf7;
+}
+
+.scene-running .scene-start-label .icon {
+  animation: turn 1s linear infinite;
+}
+
+.scene-first-hint {
+  color: #7e94b2;
+  font-size: 10px;
+  line-height: 1.8;
+  margin-top: 12px;
+}

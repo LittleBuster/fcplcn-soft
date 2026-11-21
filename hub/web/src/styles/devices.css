@@ -1,0 +1,182 @@
+/* Поиск, фильтры и карточки PLC */
+
+.devices-toolbar {
+  margin-bottom: 18px;
+}
+
+.section-heading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  justify-content: space-between;
+  margin-bottom: 17px;
+}
+
+.section-heading h2 {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  font-size: 17px;
+  font-weight: 620;
+  letter-spacing: -0.25px;
+}
+
+.section-heading h2 .icon {
+  width: 20px;
+  height: 20px;
+  color: #a4c4f4;
+}
+
+.section-meta {
+  font-size: 10px;
+  color: #8597b1;
+}
+
+.device-filters {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+input,
+select {
+  border: 1px solid #33445d;
+  background: var(--input);
+  border-radius: 8px;
+  color: #dbe5f4;
+  min-height: 41px;
+  padding: 9px 12px;
+  min-width: 0;
+}
+
+input::placeholder {
+  color: #6e819e;
+}
+
+.search-field {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 1;
+  max-width: 300px;
+}
+
+.search-field .icon {
+  position: absolute;
+  left: 12px;
+  color: #7d91af;
+  width: 16px;
+  height: 16px;
+  pointer-events: none;
+}
+
+.search-field input {
+  width: 100%;
+  min-height: 37px;
+  padding-left: 36px;
+  font-size: 10px;
+}
+
+.room-filter {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.room-filter .icon {
+  color: #92a7c5;
+  width: 15px;
+  height: 15px;
+}
+
+.room-filter select {
+  min-height: 37px;
+  width: 166px;
+  font-size: 10px;
+  padding: 8px 11px;
+}
+
+.device-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.device-card {
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 19px 19px 0;
+  border: 1px solid #304056;
+  background: #182230;
+  border-radius: 13px;
+  overflow: hidden;
+  transition:
+    border-color 0.15s,
+    background 0.15s;
+}
+
+.device-card:hover {
+  border-color: #789ccf;
+  background: #1c293b;
+}
+
+.device-topline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.device-topline .eyebrow {
+  font-size: 8px;
+  letter-spacing: 1.2px;
+  color: #9cacc4;
+}
+
+.badge {
+  display: inline-flex;
+  gap: 5px;
+  align-items: center;
+  font-size: 9px;
+  line-height: 1.4;
+  padding: 4px 7px;
+  border-radius: 5px;
+  color: #9fb0c9;
+  background: #253246;
+  white-space: nowrap;
+}
+
+.badge-dot {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.badge.green {
+  color: #8be1b8;
+  background: #254237;
+}
+
+.badge.red {
+  color: var(--red);
+  background: #4a2c39;
+}
+
+.badge.muted {
+  color: #a1adc1;
+  background: #293345;
+}
+
+.device-illustration {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 145px;
+  margin: 6px -7px 3px;
+  background: radial-gradient(ellipse at 50% 55%, #2b42663d, transparent 68%);
+}

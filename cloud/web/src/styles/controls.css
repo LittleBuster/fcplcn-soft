@@ -1,0 +1,230 @@
+/* Общие поверхности, кнопки и действия. */
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+}
+
+.card {
+  padding: 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  min-width: 0;
+}
+
+.card > h2 {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 0;
+}
+
+.card > h2 .icon {
+  color: #94bdf7;
+}
+
+.card > p {
+  margin-bottom: 0;
+}
+
+.button {
+  border: 1px solid #91b6eb;
+  background: #9bbff1;
+  color: #10233c;
+  min-height: 44px;
+  border-radius: 9px;
+  font-weight: 650;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 12px 18px;
+  text-align: center;
+}
+
+.button.secondary {
+  background: #1b2a3d;
+  color: #d0dff4;
+  border-color: #354e6e;
+}
+
+.button.small {
+  min-height: 35px;
+  padding: 8px 12px;
+  font-size: 12px;
+}
+
+.button.danger {
+  border-color: #5c3843;
+  color: #f8b5be;
+}
+
+.text-button {
+  border: 0;
+  background: transparent;
+  color: #9dc3f7;
+  padding: 7px;
+  font-size: 13px;
+}
+
+.icon-button {
+  border: 1px solid #30445e;
+  color: #a9c9f3;
+  background: #1a293c;
+  width: 41px;
+  height: 41px;
+  border-radius: 10px;
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+}
+
+.icon-button.danger {
+  color: #d69ba7;
+}
+
+.icon-button .icon {
+  width: 20px;
+  height: 20px;
+}
+
+/* Поля форм и флажки. */
+label {
+  font-size: 13px;
+  font-weight: 550;
+  display: grid;
+  gap: 9px;
+}
+
+input,
+select {
+  width: 100%;
+  min-width: 0;
+  color: #e1e9f5;
+  background: #101b29;
+  border: 1px solid #354a64;
+  border-radius: 9px;
+  padding: 12px 13px;
+  min-height: 44px;
+  outline: none;
+}
+
+input::placeholder {
+  color: #6f85a1;
+}
+
+input:focus,
+select:focus {
+  border-color: #89b6f4;
+}
+
+input[readonly] {
+  color: #a9bfdc;
+  background: #142132;
+}
+
+label.checkbox {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #b4c4da;
+}
+
+.checkbox input {
+  width: 17px;
+  min-height: 17px;
+  height: 17px;
+  accent-color: #9bbff1;
+  flex: none;
+}
+
+.checkbox.compact {
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+/* Фирменный блок и подписи продукта. */
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.brand-symbol {
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  border: 1px solid #3a567b;
+  background: #1c304b;
+  color: #b2d0fa;
+}
+
+.brand strong {
+  font-size: 23px;
+  letter-spacing: -0.7px;
+}
+
+.brand small {
+  display: block;
+  font-size: 10px;
+  letter-spacing: 0.5px;
+  margin-top: 4px;
+}
+
+/* Уведомления, статусы и скрытые доступные подписи. */
+.notice {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  padding: 16px 20px;
+  border: 1px solid #38506f;
+  border-radius: 12px;
+  background: #1b2b41;
+  color: #bcd6fb;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.notice .icon-button {
+  margin-left: auto;
+  background: transparent;
+  border: 0;
+}
+
+.notice.error {
+  background: #3a232e;
+  border-color: #64404a;
+  color: #ffb9c4;
+}
+
+.notice.success {
+  background: #1b372e;
+  border-color: #3b6251;
+  color: #a0dec0;
+}
+
+.notice.warning {
+  background: #353327;
+  border-color: #605a3e;
+  color: #e3d7aa;
+}
+
+.badge {
+  padding: 7px 11px;
+  border-radius: 999px;
+  background: #233449;
+  color: #b6cae5;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+}

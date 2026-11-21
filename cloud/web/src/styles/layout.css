@@ -1,0 +1,70 @@
+/* Оболочка: верхняя панель, выбор дома и учётная запись. */
+.cloud-topbar {
+  display: flex;
+  gap: 35px;
+  align-items: center;
+  padding: 20px 34px;
+  border-bottom: 1px solid #29384c;
+  background: #101a26;
+  position: relative;
+  z-index: 1;
+}
+
+.home-select {
+  margin-left: auto;
+  width: min(380px, 35vw);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.home-select > .icon {
+  color: #9bb9df;
+}
+
+.home-select select {
+  border-color: #2e435d;
+  background: #172538;
+}
+
+.account-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.account-button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 0;
+  color: #c4d2e5;
+  background: transparent;
+  font-size: 13px;
+  padding: 4px;
+}
+
+.account-button.active {
+  color: #accdfb;
+}
+
+.avatar {
+  display: grid;
+  place-items: center;
+  width: 35px;
+  height: 35px;
+  background: #293c57;
+  border: 1px solid #3a567c;
+  border-radius: 50%;
+  color: #c7ddfb;
+  font-size: 13px;
+}
+
+.cloud-main {
+  max-width: 1600px;
+  margin: auto;
+  padding: 30px 34px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}

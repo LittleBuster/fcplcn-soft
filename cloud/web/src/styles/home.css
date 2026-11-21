@@ -1,0 +1,215 @@
+/* Заголовок дома, состояние связи и навигация по разделам. */
+.home-heading,
+.section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 25px;
+  padding: 12px 0;
+}
+
+.home-heading h1 > span {
+  color: #97bbf0;
+}
+
+.home-heading p {
+  margin: 0;
+  font-size: 13px;
+}
+
+.home-heading .eyebrow {
+  margin-bottom: 10px;
+}
+
+.connection-badge {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 10px 15px;
+  border: 1px solid #3a4a5b;
+  border-radius: 999px;
+  color: #9caec4;
+  background: #1a2635;
+  white-space: nowrap;
+  font-size: 12px;
+}
+
+.connection-badge i {
+  width: 7px;
+  height: 7px;
+  background: #8394a8;
+  border-radius: 50%;
+}
+
+.connection-badge.online {
+  color: #99d8b8;
+  background: #17372e;
+  border-color: #3b6654;
+}
+
+.connection-badge.online i {
+  background: #8fd8b4;
+}
+
+.home-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  border-bottom: 1px solid #293b53;
+  padding-bottom: 17px;
+}
+
+.home-tabs button {
+  border: 1px solid transparent;
+  background: transparent;
+  color: #9db0c9;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 11px 16px;
+  border-radius: 10px;
+}
+
+.home-tabs button.active {
+  background: #223853;
+  border-color: #3a577a;
+  color: #bcd8ff;
+}
+
+.home-tabs .icon {
+  width: 19px;
+  height: 19px;
+}
+
+/* Встроенная панель хаба. Высоту содержимого сообщает сам iframe. */
+.portal-host {
+  margin: -10px -14px 0;
+  min-width: 0;
+}
+
+.portal-host iframe {
+  display: block;
+  width: 100%;
+  border: 0;
+  border-radius: 16px;
+  min-height: 850px;
+  background: #0e1620;
+}
+
+/* Пустые состояния, создание дома и принятие приглашения. */
+.empty-state {
+  padding: 65px 30px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  align-items: center;
+  text-align: center;
+  max-width: 900px;
+  width: 100%;
+  margin: 25px auto;
+}
+
+.empty-state > p {
+  max-width: 500px;
+  margin: 0;
+}
+
+.empty-state > h1,
+.empty-state > h2 {
+  margin: 0;
+}
+
+.empty-state > .icon,
+.empty-art > .icon {
+  width: 68px;
+  height: 68px;
+  color: #a6c9f6;
+}
+
+.empty-art {
+  display: grid;
+  place-items: center;
+  width: 130px;
+  height: 130px;
+  border: 1px solid #3b587d;
+  border-radius: 32px;
+  background: radial-gradient(circle at 30% 20%, #2c4b70, #1b2a40);
+  margin-bottom: 13px;
+}
+
+.empty-state.compact {
+  padding: 45px 25px;
+}
+
+.empty-state.compact > .icon {
+  width: 54px;
+  height: 54px;
+}
+
+.create-home {
+  display: flex;
+  align-items: end;
+  gap: 18px;
+  padding: 24px;
+  flex-wrap: wrap;
+}
+
+.create-home > div {
+  flex: 1;
+  min-width: 220px;
+}
+
+.create-home h2 {
+  margin: 0 0 8px;
+}
+
+.create-home p {
+  font-size: 13px;
+  margin: 0;
+}
+
+.create-home label {
+  min-width: 200px;
+  flex: 1;
+}
+
+.join-invite {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  padding: 25px;
+}
+
+.join-invite > .icon {
+  width: 44px;
+  height: 44px;
+  color: #a2c9fb;
+}
+
+.join-invite h2 {
+  margin: 0 0 8px;
+}
+
+.join-invite p {
+  margin: 0;
+}
+
+.join-invite > .button {
+  margin-left: auto;
+}
+
+/* Сетки разделов подключения, доступа и учётной записи. */
+.connection-grid,
+.access-grid,
+.account-grid {
+  display: grid;
+  grid-template-columns: 1.3fr 1fr;
+  gap: 24px;
+}
+
+.hub-list,
+.members-list {
+  display: grid;
+  gap: 12px;
+}

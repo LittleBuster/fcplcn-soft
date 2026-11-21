@@ -1,0 +1,14 @@
+#!/bin/sh
+set -eu
+
+MQTT_TOOLS_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+MQTT_TEST_DIR="$MQTT_TOOLS_DIR/integration"
+MQTT_TEST_PYTHON="$MQTT_TEST_DIR/.venv/bin/python"
+
+if [ ! -x "$MQTT_TEST_PYTHON" ]; then
+    printf 'MQTT test environment is missing: %s\n' "$MQTT_TEST_PYTHON" >&2
+    printf 'See tools/firmware/integration/README.md for setup.\n' >&2
+    exit 1
+fi
+
+exec "$MQTT_TEST_PYTHON" -m pytest -q "$MQTT_TEST_DIR" "$@"

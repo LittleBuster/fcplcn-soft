@@ -1,0 +1,9 @@
+#!/bin/sh
+set -eu
+FCPLCN_RUNTIME_TOOLS="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+FCPLCN_RUNTIME_SOURCE="$FCPLCN_RUNTIME_TOOLS/../../firmware/base/tests/runtime"
+FCPLCN_RUNTIME_BUILD="${FCPLCN_RUNTIME_BUILD_DIR:-$HOME/esp/build/fcplcn/base-runtime}"
+export PATH="/opt/homebrew/bin:$PATH"
+cmake -S "$FCPLCN_RUNTIME_SOURCE" -B "$FCPLCN_RUNTIME_BUILD" -G Ninja
+cmake --build "$FCPLCN_RUNTIME_BUILD" --parallel
+ctest --test-dir "$FCPLCN_RUNTIME_BUILD" --output-on-failure "$@"

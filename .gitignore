@@ -1,0 +1,15 @@
+.DS_Store
+**/__pycache__/
+*.py[cod]
+.pytest_cache/
+**/node_modules/
+**/.venv/
+**/.build/
+**/dist/
+**/.artifacts/
+**/managed_components/
+**/test-results/
+**/playwright-report/
+**/.env
+**/.env.*
+!**/.env.example

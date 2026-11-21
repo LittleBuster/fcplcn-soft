@@ -1,0 +1,11 @@
+#!/bin/sh
+set -eu
+
+METRICS_TOOLS_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+METRICS_SOURCE_DIR="$METRICS_TOOLS_DIR/../../firmware/base/tests/metrics"
+METRICS_BUILD_DIR="${FCPLCN_METRICS_BUILD_DIR:-$HOME/esp/build/fcplcn/base-metrics}"
+export PATH="/opt/homebrew/bin:$PATH"
+
+cmake -S "$METRICS_SOURCE_DIR" -B "$METRICS_BUILD_DIR" -G Ninja "$@"
+cmake --build "$METRICS_BUILD_DIR" --parallel
+ctest --test-dir "$METRICS_BUILD_DIR" --output-on-failure

@@ -1,0 +1,164 @@
+/* Загрузка, начальный экран и авторизация */
+
+.loading-panel {
+  display: grid;
+  justify-items: center;
+  gap: 16px;
+  padding: 60px;
+  color: var(--muted);
+}
+
+.loading-panel > .icon {
+  animation: turn 2s linear infinite;
+}
+
+.startup-screen {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 20px;
+  min-height: 100vh;
+  padding: 25px;
+  text-align: center;
+}
+
+.startup-screen h1 {
+  font-size: 25px;
+  font-weight: 650;
+}
+
+.startup-screen p {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.8;
+}
+
+.login-page {
+  position: relative;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  padding: 45px 20px;
+  background: radial-gradient(ellipse at 50% 35%, #1a365129, transparent 50%), #101721;
+}
+
+.login-card {
+  width: 100%;
+  max-width: 400px;
+  padding: 32px;
+  z-index: 1;
+}
+
+.login-brand {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 31px;
+}
+
+.login-brand strong {
+  display: block;
+  font-size: 24px;
+  letter-spacing: -0.8px;
+}
+
+.login-brand div > span {
+  display: block;
+  font-size: 10px;
+  color: var(--muted);
+  margin-top: 3px;
+}
+
+.login-card h1 {
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.4px;
+}
+
+.login-card > p {
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.8;
+  margin: 13px 0 23px;
+}
+
+.login-card label {
+  display: block;
+  font-size: 12px;
+  color: #aebed4;
+  margin-top: 19px;
+}
+
+.login-card input {
+  width: 100%;
+  margin-top: 8px;
+}
+
+.login-card .notice {
+  margin-top: 20px;
+}
+
+.login-button {
+  width: 100%;
+  margin-top: 24px;
+}
+
+.login-button .icon {
+  margin-left: auto;
+}
+
+.login-foot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 21px;
+  color: #738aa6;
+  font-size: 10px;
+}
+
+.login-foot .icon {
+  width: 14px;
+  height: 14px;
+}
+
+.login-product {
+  font-size: 10px;
+  color: #63758e;
+  margin-top: 25px;
+  letter-spacing: 0.5px;
+}
+
+.login-orbit {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  width: min(650px, 95vw);
+  height: min(650px, 95vw);
+  border: 1px solid #213249;
+  border-radius: 50%;
+  opacity: 0.4;
+}
+
+.login-orbit:before {
+  content: '';
+  position: absolute;
+  inset: 36px;
+  border: 1px dashed #2c4564;
+  border-radius: 50%;
+}
+
+.login-orbit .icon {
+  width: 120px;
+  height: 120px;
+  color: #5b85b5;
+}
+
+@keyframes turn {
+  to {
+    transform: rotate(360deg);
+  }
+}

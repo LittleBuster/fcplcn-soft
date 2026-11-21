@@ -1,0 +1,49 @@
+# FCPLCn: ESP-IDF visual conventions, implemented with clang-format 23.
+BasedOnStyle: LLVM
+Language: Cpp
+Standard: c++17
+IndentWidth: 4
+ContinuationIndentWidth: 4
+TabWidth: 4
+UseTab: Never
+ColumnLimit: 100
+NamespaceIndentation: None
+AccessModifierOffset: -4
+BreakBeforeBraces: Custom
+BraceWrapping:
+  AfterFunction: true
+  AfterClass: false
+  AfterStruct: false
+  AfterEnum: false
+  AfterNamespace: false
+  AfterControlStatement: Never
+  BeforeElse: false
+  BeforeCatch: false
+AllowShortFunctionsOnASingleLine: None
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortLoopsOnASingleLine: false
+AllowShortBlocksOnASingleLine: Never
+AllowShortCaseLabelsOnASingleLine: false
+AllowShortLambdasOnASingleLine: Empty
+BreakBeforeBinaryOperators: NonAssignment
+BinPackArguments: false
+BinPackParameters: OnePerLine
+IndentCaseLabels: true
+PointerAlignment: Left
+ReferenceAlignment: Left
+DerivePointerAlignment: false
+AlignTrailingComments:
+  Kind: Never
+SpacesBeforeTrailingComments: 2
+SpaceBeforeParens: ControlStatements
+SeparateDefinitionBlocks: Always
+FixNamespaceComments: true
+MaxEmptyLinesToKeep: 1
+KeepEmptyLines:
+  AtStartOfBlock: false
+  AtEndOfFile: false
+  AtStartOfFile: false
+SortIncludes: Never
+SortUsingDeclarations: Never
+BreakStringLiterals: false
+InsertBraces: false

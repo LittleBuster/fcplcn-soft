@@ -1,0 +1,9 @@
+#!/bin/sh
+set -eu
+OTA_TOOLS_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+OTA_SOURCE_DIR="$OTA_TOOLS_DIR/../../firmware/base/tests/ota"
+OTA_BUILD_DIR="${FCPLCN_OTA_BUILD_DIR:-$HOME/esp/build/fcplcn/base-ota}"
+export PATH="/opt/homebrew/bin:$PATH"
+cmake -S "$OTA_SOURCE_DIR" -B "$OTA_BUILD_DIR" -G Ninja -DOPENSSL_ROOT_DIR=/opt/homebrew/opt/openssl@3 "$@"
+cmake --build "$OTA_BUILD_DIR" --parallel
+ctest --test-dir "$OTA_BUILD_DIR" --output-on-failure

@@ -1,0 +1,9 @@
+node_modules/
+dist/
+data/
+.env
+.artifacts/
+test-results/
+playwright-report/
+deploy/runtime/
+deploy/secrets/

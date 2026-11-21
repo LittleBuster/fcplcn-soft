@@ -1,0 +1,96 @@
+/* Адаптивная компоновка: (max-width: 360px) */
+
+@media (max-width: 360px) {
+  .sidebar nav {
+    gap: 5px;
+  }
+
+  .nav-item {
+    padding: 8px 9px;
+    font-size: 10px;
+    gap: 6px;
+  }
+
+  .nav-item .icon {
+    width: 15px;
+    height: 15px;
+  }
+
+  .nav-item span {
+    padding: 2px 4px;
+  }
+
+  .device-filters {
+    flex-wrap: wrap;
+  }
+
+  .search-field,
+  .room-filter,
+  .room-filter select {
+    width: 100%;
+  }
+
+  .room-filter {
+    justify-content: end;
+  }
+
+  .room-filter select {
+    max-width: none;
+  }
+
+  .page-heading h1 {
+    font-size: 25px;
+  }
+
+  .refresh-button {
+    padding: 8px;
+  }
+
+  .breadcrumb {
+    gap: 5px;
+  }
+
+  .breadcrumb > .icon {
+    display: none;
+  }
+
+  .metrics-grid {
+    gap: 9px;
+  }
+
+  .metric-card {
+    padding: 13px 10px 10px;
+    grid-template-columns: 27px minmax(0, 1fr);
+    gap: 8px;
+  }
+
+  .metric-icon {
+    width: 27px;
+    height: 27px;
+  }
+
+  .metric-icon .icon {
+    width: 17px;
+    height: 17px;
+  }
+
+  .metric-card strong {
+    font-size: 23px;
+  }
+
+  .metric-card div > span {
+    font-size: 9px;
+  }
+
+  .metric-trend {
+    font-size: 7px;
+  }
+
+  .device-detail-banner > .button {
+    margin-left: 0;
+  }
+
+  .command-result {
+    max-width: 70px;
+  }
+}

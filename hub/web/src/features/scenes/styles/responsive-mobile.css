@@ -1,0 +1,157 @@
+/* Адаптивная компоновка: (max-width: 600px) */
+
+@media (max-width: 600px) {
+  .scene-cards {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .scene-run-button {
+    flex-direction: row;
+    align-items: center;
+    gap: 15px;
+    padding: 18px;
+    min-height: 120px;
+  }
+
+  .scene-art {
+    width: 53px;
+    height: 58px;
+  }
+
+  .scene-art > .icon {
+    width: 49px;
+    height: 49px;
+  }
+
+  .scene-card-copy {
+    padding-right: 18px;
+  }
+
+  .scene-card-copy > strong {
+    font-size: 19px;
+  }
+
+  .scene-card-copy > span:not(.scene-start-label) {
+    font-size: 10px;
+  }
+
+  .scenes-panel > .section-heading {
+    align-items: start;
+  }
+
+  .scenes-panel > .section-heading > .section-meta {
+    max-width: 110px;
+    text-align: right;
+    font-size: 9px;
+    line-height: 1.6;
+  }
+
+  .scene-run-heading {
+    padding: 13px;
+    align-items: start;
+    gap: 9px;
+  }
+
+  .scene-run-heading strong {
+    font-size: 11px;
+  }
+
+  .scene-run-heading strong > span {
+    display: block;
+  }
+
+  .scene-run-heading > time {
+    font-size: 8px;
+    padding-top: 4px;
+  }
+
+  .scene-run-heading p {
+    font-size: 9px;
+  }
+
+  .scene-result-list {
+    padding: 0 13px;
+  }
+
+  .scene-result-status {
+    font-size: 8px;
+    max-width: 85px;
+    text-align: right;
+  }
+
+  .scene-library-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .scene-library .section-heading {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .scene-library .section-heading .button {
+    min-height: 36px;
+  }
+
+  .scene-editor {
+    width: calc(100vw - 20px);
+    max-height: calc(100dvh - 22px);
+    padding: 19px 15px;
+  }
+
+  .scene-editor-heading h2 {
+    font-size: 22px;
+  }
+
+  .scene-fixed-action {
+    padding: 12px;
+    gap: 9px;
+  }
+
+  .scene-fixed-action p {
+    font-size: 10px;
+  }
+
+  .scene-action-fields {
+    grid-template-columns: 1fr;
+  }
+
+  .scene-action-fields select,
+  .scene-name-fields input,
+  .scene-name-fields textarea,
+  .scene-schedule-time input {
+    font-size: 16px;
+  }
+
+  .scene-action-editor-row {
+    padding: 12px;
+  }
+
+  .scene-schedule-time {
+    grid-template-columns: 1fr;
+  }
+
+  .scene-weekdays {
+    gap: 5px;
+  }
+
+  .scene-weekdays span {
+    width: 33px;
+    height: 34px;
+  }
+
+  .scene-editor-footer {
+    align-items: stretch;
+  }
+
+  .scene-editor-footer .button {
+    flex: 1;
+    min-width: 120px;
+  }
+
+  .scene-editor-footer > .scene-delete-button {
+    flex-basis: 100%;
+    margin-bottom: 7px;
+    justify-content: center;
+  }
+}

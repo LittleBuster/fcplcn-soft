@@ -1,0 +1,67 @@
+#!/usr/bin/env python3
+"""Format owned FCPLCn sources, or check them without changing files."""
+
+import argparse
+import re
+import shutil
+import subprocess
+from pathlib import Path
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--check", action="store_true", help="Report formatting differences only")
+    args = parser.parse_args()
+    root = Path(__file__).resolve().parents[2]
+
+    formatter = shutil.which("clang-format")
+    if not formatter:
+        parser.error("clang-format is missing; install clang-format 23 (brew install clang-format)")
+    version = subprocess.check_output([formatter, "--version"], text=True)
+    if not re.search(r"version 23\.", version):
+        parser.error("FCPLCn formatting uses clang-format 23; found " + version.strip())
+
+    cpp_roots = [
+        root / "firmware/base/main",
+        root / "firmware/base/tests",
+        root / "tools/firmware/host-smoke",
+        root / "tools/firmware/esp32s3-smoke/main",
+    ]
+    cpp_files = sorted(
+        p for directory in cpp_roots for p in directory.rglob("*")
+        if p.is_file() and p.suffix in {".cpp", ".cc", ".h", ".hpp"}
+        and not {".build", "build", "managed_components", "node_modules"}.intersection(p.parts)
+    )
+    cpp_args = ["--dry-run", "--Werror"] if args.check else ["-i"]
+    prettier = root / "tools/firmware/code-style/node_modules/prettier/bin/prettier.cjs"
+    if not prettier.exists():
+        parser.error("Prettier is missing; run npm ci --prefix tools/firmware/code-style")
+    node24 = Path("/opt/homebrew/opt/node@24/bin/node")
+    node = str(node24) if node24.exists() else shutil.which("node")
+    if not node:
+        parser.error("Node.js 24 is required for the pinned Prettier installation")
+    cpp_result = subprocess.run([formatter, "--style=file", *cpp_args, *map(str, cpp_files)], cwd=root)
+    web_roots = [
+        root / "firmware/base/web",
+        root / "firmware/base/simulator",
+        root / "firmware/base/tests/browser",
+        root / "tools/firmware/web-smoke/src",
+        root / "tools/firmware/web-smoke/tests",
+        root / "config",
+    ]
+    web_files = sorted(
+        p for directory in web_roots for p in directory.rglob("*")
+        if p.is_file() and p.suffix in {".js", ".cjs", ".mjs", ".ts", ".tsx", ".css", ".html", ".json"}
+        and not {".artifacts", "node_modules", "dist"}.intersection(p.parts)
+    )
+    web_files += [root / ".prettierrc.json", root / "tools/firmware/code-style/package.json"]
+    web_result = subprocess.run(
+        [node, str(prettier), "--check" if args.check else "--write", *map(str, web_files)],
+        cwd=root,
+    )
+    print(f"FCPLCn: {'checked' if args.check else 'formatted'} {len(cpp_files)} C++ and {len(web_files)} web/config files")
+    return cpp_result.returncode or web_result.returncode
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

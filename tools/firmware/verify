@@ -1,0 +1,8 @@
+#!/bin/sh
+set -eu
+
+FIRMWARE_TOOLS_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+"$FIRMWARE_TOOLS_DIR/test-host"
+"$FIRMWARE_TOOLS_DIR/test-mqtt"
+"$FIRMWARE_TOOLS_DIR/test-web"
+"$FIRMWARE_TOOLS_DIR/build-smoke"

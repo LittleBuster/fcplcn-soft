@@ -1,0 +1,73 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="470" viewBox="0 0 1280 470" role="img" aria-labelledby="title desc">
+  <title id="title">FCPLCn — обновление PLC из облака через локальный хаб</title>
+  <desc id="desc">Браузер загружает бинарник приложения в закрытое временное хранилище облака по HTTPS. Хаб скачивает его по одноразовому разрешению и передаёт PLC подтверждаемыми блоками локального MQTT. PLC записывает неактивный OTA-раздел, проверяет SHA-256 и образ, затем перезапускается и подтверждает новую прошивку. При неподтверждённом запуске выполняется откат. В PostgreSQL бинарники не хранятся, прямое подключение PLC к облаку не требуется.</desc>
+  <defs>
+    <style>
+      text{font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif}
+      .eyebrow{fill:#94bcff;font-size:14px;font-weight:700;letter-spacing:2px}
+      .heading{fill:#e6edf8;font-size:30px;font-weight:700;letter-spacing:-.5px}
+      .label{fill:#e6edf8;font-size:22px;font-weight:600}
+      .body{fill:#a9bad0;font-size:16px}
+      .small{fill:#a9bad0;font-size:14px}
+      .card{fill:#152231;stroke:#32485f;stroke-width:1.2}
+      .icon{fill:none;stroke:currentColor;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
+      .blue{fill:none;stroke:#94bcff;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round}
+      .green{fill:none;stroke:#7ed5ad;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round}
+    </style>
+    <marker id="arrow-blue" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M 1 1 L 9 5 L 1 9" fill="none" stroke="#94bcff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></marker>
+    <marker id="arrow-green" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M 1 1 L 9 5 L 1 9" fill="none" stroke="#7ed5ad" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></marker>
+  </defs>
+  <rect width="1280" height="470" rx="22" fill="#0e1620"/>
+  <text x="40" y="36" class="eyebrow">FCPLCn · ОБНОВЛЕНИЕ ПРОШИВКИ</text>
+  <text x="40" y="78" class="heading">Бинарник из облака — через локальный хаб</text>
+  <path d="M40 98H1240" stroke="#26384b"/>
+
+  <text x="275" y="133" fill="#94bcff" font-size="14" text-anchor="middle">HTTPS</text>
+  <text x="585" y="133" fill="#94bcff" font-size="14" text-anchor="middle">HTTPS</text>
+  <text x="895" y="133" fill="#7ed5ad" font-size="14" text-anchor="middle">MQTT</text>
+  <path class="blue" d="M250 215H296" marker-end="url(#arrow-blue)"/>
+  <path class="blue" d="M560 215H606" marker-end="url(#arrow-blue)"/>
+  <path class="green" d="M870 215H916" marker-end="url(#arrow-green)"/>
+
+  <rect class="card" x="40" y="148" width="210" height="148" rx="16"/>
+  <g transform="translate(70 179)" color="#94bcff" class="icon"><rect x="-11" y="-13" width="22" height="28" rx="3"/><path d="M2-13v9h9M-5 3h10m-10 6h7"/></g>
+  <text x="94" y="185" class="label">Браузер</text>
+  <text x="62" y="229" class="body">Загрузка приложения</text>
+  <rect x="62" y="249" width="119" height="28" rx="7" fill="#20334b"/>
+  <text x="76" y="268" fill="#94bcff" font-size="15" font-weight="600">FCPLCn.bin</text>
+
+  <rect class="card" x="300" y="148" width="260" height="148" rx="16"/>
+  <rect x="300" y="148" width="260" height="4" rx="2" fill="#ba9fff"/>
+  <g transform="translate(332 179)" color="#ba9fff" class="icon"><path d="M-9 11h20a9 9 0 0 0 0-18 12 12 0 0 0-23-1 10 10 0 0 0 3 19Z"/></g>
+  <text x="358" y="185" class="label">Облако / VPS</text>
+  <text x="322" y="229" class="body">Закрытое временное</text>
+  <text x="322" y="254" class="body">хранилище файла</text>
+  <text x="322" y="278" class="small">Одноразовое разрешение хабу</text>
+
+  <rect class="card" x="610" y="148" width="260" height="148" rx="16"/>
+  <g transform="translate(642 179)" color="#94bcff" class="icon"><rect x="-14" y="-10" width="28" height="21" rx="4"/><path d="M-8-3h4m-4 7h4m10-7v7"/></g>
+  <text x="668" y="185" class="label">Linux-хаб</text>
+  <text x="632" y="229" class="body">Сам скачивает бинарник</text>
+  <text x="632" y="254" class="body">и проверяет файл</text>
+  <text x="632" y="278" class="small">Передаёт PLC блоками по LAN</text>
+
+  <rect x="920" y="148" width="320" height="148" rx="16" fill="#162b28" stroke="#365a50" stroke-width="1.2"/>
+  <rect x="920" y="148" width="320" height="4" rx="2" fill="#7ed5ad"/>
+  <g transform="translate(954 179)" color="#7ed5ad" class="icon"><rect x="-17" y="-12" width="34" height="26" rx="4"/><path d="M-10-18v6m10-6v6m10-6v6M-10 14v6m10-6v6m10-6v6"/><rect x="-6" y="-5" width="12" height="12" rx="1"/></g>
+  <text x="986" y="185" class="label">Аппаратный PLC</text>
+  <text x="942" y="229" class="body">Запись неактивного OTA-слота</text>
+  <text x="942" y="254" class="body">Проверка SHA-256 и образа</text>
+  <text x="942" y="278" class="small">Локальный MQTT · без доступа к VPS</text>
+
+  <path class="green" d="M1080 296V322" marker-end="url(#arrow-green)"/>
+  <rect x="610" y="326" width="630" height="76" rx="14" fill="#132922" stroke="#2c5145" stroke-width="1.2"/>
+  <g transform="translate(642 350)" color="#7ed5ad" class="icon"><path d="M0-8 11-3v9c0 8-5 13-11 17C-6 19-11 14-11 6V-3Z"/><path d="m-5 6 4 4 8-9"/></g>
+  <text x="668" y="356" fill="#7ed5ad" font-size="18" font-weight="600">Новый запуск → подтверждение работы</text>
+  <text x="668" y="382" class="body">Если запуск не подтверждён — откат прошивки</text>
+
+  <text x="40" y="351" fill="#e6edf8" font-size="17" font-weight="600">Рабочий образ сохраняется во время загрузки.</text>
+  <text x="40" y="378" class="body">Обрыв передачи не активирует неполный бинарник.</text>
+  <path d="M40 426H1240" stroke="#26384b"/>
+  <circle cx="48" cy="450" r="4" fill="#ba9fff"/>
+  <text x="64" y="455" class="small">Бинарники хранятся отдельно от PostgreSQL. Локальная загрузка через веб PLC и хаб также доступна.</text>
+</svg>

@@ -1,0 +1,10 @@
+#!/bin/sh
+# Check every named production C++ definition, including internal helpers.
+set -eu
+FCPLCN_STYLE_DIR="$(CDPATH= cd -- "$(dirname -- "$0")/code-style" && pwd)"
+FCPLCN_STYLE_PYTHON="${FCPLCN_CODE_STYLE_PYTHON:-$HOME/esp/tools/fcplcn-code-style/bin/python}"
+if [ ! -x "$FCPLCN_STYLE_PYTHON" ]; then
+    printf '%s\n' 'Missing documentation checker environment; see tools/firmware/README.md.' >&2
+    exit 1
+fi
+exec "$FCPLCN_STYLE_PYTHON" "$FCPLCN_STYLE_DIR/check_doxygen.py" "$@"

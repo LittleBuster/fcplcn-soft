@@ -1,0 +1,115 @@
+/* Разрешённые чаты и сохранение настроек */
+
+.telegram-chat-list {
+  display: grid;
+  gap: 12px;
+}
+
+.telegram-chat-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 13px;
+  padding: 17px;
+  border: 1px solid #2d3a4e;
+  border-radius: 11px;
+  background: #131c29;
+}
+
+.telegram-chat-row .telegram-person-avatar {
+  width: 35px;
+  height: 35px;
+  border-radius: 10px;
+  margin-top: 3px;
+}
+
+.telegram-chat-row .telegram-person-avatar .icon {
+  width: 19px;
+  height: 19px;
+}
+
+.telegram-chat-fields {
+  min-width: 0;
+  flex: 1;
+}
+
+.telegram-chat-fields .telegram-label {
+  font-size: 9px;
+  margin-bottom: 8px;
+}
+
+.telegram-chat-fields > small {
+  display: block;
+  color: var(--muted);
+  font-size: 9px;
+  margin-top: 7px;
+}
+
+.telegram-chat-details {
+  display: flex;
+  gap: 15px;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-top: 11px;
+  font-size: 10px;
+  color: var(--muted);
+}
+
+.telegram-chat-details code {
+  color: #bbcee8;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.telegram-chat-details span {
+  overflow-wrap: anywhere;
+}
+
+.telegram-remove-chat {
+  color: #d2a0ad;
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  background: transparent;
+}
+
+.telegram-remove-chat .icon {
+  width: 16px;
+  height: 16px;
+}
+
+.telegram-empty-allowlist {
+  display: flex;
+  gap: 11px;
+  color: var(--muted);
+  font-size: 11px;
+  padding: 6px 0 15px;
+  align-items: center;
+}
+
+.telegram-add-person {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: end;
+  border-top: 1px solid var(--line);
+  padding-top: 21px;
+  margin-top: 21px;
+}
+
+.telegram-add-person > div {
+  min-width: 0;
+}
+
+.telegram-save-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 0;
+  flex-wrap: wrap;
+}
+
+.telegram-save-bar > span {
+  color: var(--muted);
+  font-size: 10px;
+  margin-right: auto;
+}

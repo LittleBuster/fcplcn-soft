@@ -1,0 +1,57 @@
+/* Адаптивная компоновка: (max-width: 360px) */
+
+@media (max-width: 360px) {
+  .scene-run-button {
+    padding: 16px 13px;
+    gap: 12px;
+  }
+
+  .scene-card-copy {
+    padding-right: 9px;
+  }
+
+  .scene-card-copy > strong {
+    font-size: 18px;
+  }
+
+  .scene-art {
+    width: 43px;
+  }
+
+  .scene-art > .icon {
+    width: 43px;
+    height: 43px;
+  }
+
+  .scene-group-tabs > button {
+    padding: 9px 10px;
+    font-size: 11px;
+    gap: 6px;
+  }
+
+  .scene-group-tabs button > span {
+    font-size: 9px;
+  }
+
+  .scene-group-tabs .icon {
+    width: 15px;
+    height: 15px;
+  }
+
+  .scene-editor {
+    padding: 17px 12px;
+  }
+
+  .scene-weekdays span {
+    width: 30px;
+    height: 33px;
+  }
+
+  .scene-weekdays {
+    gap: 4px;
+  }
+
+  .scene-result-status {
+    max-width: 71px;
+  }
+}

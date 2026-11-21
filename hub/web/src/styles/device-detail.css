@@ -1,0 +1,180 @@
+/* Страница PLC и встроенная сервисная панель */
+
+.device-detail-banner {
+  display: flex;
+  align-items: center;
+  gap: 23px;
+  padding: 18px 24px;
+}
+
+.detail-board {
+  width: 180px;
+  flex-shrink: 0;
+}
+
+.detail-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+}
+
+.plc-settings-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 22px;
+  padding: 20px;
+  margin-bottom: 18px;
+}
+
+.plc-settings-heading h2 {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-top: 8px;
+  font-size: 21px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.plc-settings-heading h2 .icon {
+  color: var(--accent);
+}
+
+.plc-settings-heading p {
+  margin-top: 11px;
+  color: #91a6c1;
+  font-size: 11px;
+  line-height: 1.8;
+}
+
+.plc-settings-heading > div:last-child {
+  display: flex;
+  flex-direction: column;
+  align-items: end;
+  gap: 13px;
+  flex-shrink: 0;
+}
+
+.plc-settings-frame {
+  display: block;
+  width: 100%;
+  height: max(920px, 78vh);
+  border: 1px solid #344861;
+  border-radius: 12px;
+  background: #0e1722;
+}
+
+.plc-upgrade-message {
+  display: grid;
+  justify-items: center;
+  gap: 17px;
+  padding: 37px 24px;
+  text-align: center;
+}
+
+.plc-upgrade-message > .icon {
+  width: 56px;
+  height: 56px;
+  color: #87addf;
+}
+
+.plc-upgrade-message h3 {
+  font-size: 19px;
+  font-weight: 600;
+}
+
+.plc-upgrade-message p {
+  max-width: 500px;
+  color: #94a9c3;
+  line-height: 1.8;
+  font-size: 12px;
+}
+
+.detail-identity {
+  flex: 1;
+  min-width: 0;
+}
+
+.detail-identity .eyebrow {
+  font-size: 9px;
+}
+
+.detail-identity h2 {
+  font-size: 23px;
+  margin: 7px 0;
+  overflow-wrap: anywhere;
+  letter-spacing: -0.5px;
+}
+
+.detail-identity > p {
+  color: #7d93b2;
+  font-size: 10px;
+  overflow-wrap: anywhere;
+}
+
+.detail-tags {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  margin-top: 13px;
+  flex-wrap: wrap;
+}
+
+.detail-tags > span:not(.badge) {
+  color: #8a9db8;
+  font-size: 9px;
+}
+
+.device-info-strip {
+  display: flex;
+  align-items: center;
+  gap: 25px;
+  flex-wrap: wrap;
+  padding: 18px 3px 21px;
+  color: #7c90ad;
+  font-size: 10px;
+}
+
+.device-info-strip > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.device-info-strip b {
+  color: #bdcbe0;
+  font-weight: 450;
+}
+
+.device-info-strip .icon {
+  width: 14px;
+  height: 14px;
+}
+
+.device-edit {
+  display: flex;
+  align-items: end;
+  gap: 15px;
+  padding: 20px;
+  margin-top: 15px;
+  flex-wrap: wrap;
+}
+
+.device-edit label {
+  flex: 1;
+  min-width: 150px;
+  color: #a9bad1;
+  font-size: 11px;
+}
+
+.device-edit input {
+  width: 100%;
+  display: block;
+  margin-top: 7px;
+}
+
+.device-edit .inline-error {
+  flex-basis: 100%;
+}

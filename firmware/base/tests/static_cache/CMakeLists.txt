@@ -1,0 +1,11 @@
+cmake_minimum_required(VERSION 3.22)
+project(fcplcn_static_cache_tests LANGUAGES CXX)
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+get_filename_component(FCPLCN_BASE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../.." REALPATH)
+add_executable(fcplcn_static_cache_tests static_cache_test.cpp
+    "${FCPLCN_BASE_DIR}/main/web/static_cache.cpp")
+target_include_directories(fcplcn_static_cache_tests PRIVATE "${FCPLCN_BASE_DIR}/main")
+target_compile_options(fcplcn_static_cache_tests PRIVATE -Wall -Wextra -Werror)
+enable_testing()
+add_test(NAME fcplcn_static_cache_negotiation COMMAND fcplcn_static_cache_tests)

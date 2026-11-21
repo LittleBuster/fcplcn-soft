@@ -1,0 +1,163 @@
+/* Вход, первый запуск и приглашение. */
+.auth-page {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  align-items: center;
+  gap: 7vw;
+  padding: 8vh max(5vw, 24px);
+  max-width: 1600px;
+  margin: auto;
+}
+
+.auth-art {
+  position: relative;
+  padding: 35px;
+  min-width: 0;
+}
+
+.auth-art h1 {
+  font-size: 60px;
+  margin: 24px 0 5px;
+}
+
+.auth-art > p {
+  font-size: 14px;
+  letter-spacing: 1px;
+}
+
+.auth-art h2 {
+  font-size: 44px;
+  line-height: 1.25;
+  letter-spacing: -1.5px;
+  margin-top: 65px;
+  margin-bottom: 28px;
+}
+
+.auth-art > span {
+  font-size: 12px;
+  color: #849cb9;
+}
+
+.art-grid {
+  position: absolute;
+  inset: -50px;
+  background-image:
+    linear-gradient(#8eb1df08 1px, transparent 1px),
+    linear-gradient(90deg, #8eb1df08 1px, transparent 1px);
+  background-size: 40px 40px;
+  pointer-events: none;
+  mask-image: radial-gradient(ellipse, #000, transparent 72%);
+}
+
+.cloud-emblem {
+  width: 140px;
+  height: 140px;
+  border-radius: 35px;
+  background: radial-gradient(circle at 30% 20%, #33577f, #17283e);
+  border: 1px solid #45688e;
+  display: grid;
+  place-items: center;
+  box-shadow: 0 20px 100px #6e98d31c;
+  position: relative;
+}
+
+.cloud-emblem > .icon {
+  width: 74px;
+  height: 74px;
+  color: #b1d4ff;
+}
+
+.cloud-emblem i {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  right: 20px;
+  bottom: 20px;
+  border-radius: 50%;
+  background: #8bd9b6;
+  box-shadow: 0 0 30px #8bd9b66e;
+}
+
+.cloud-emblem i + i {
+  width: 24px;
+  height: 24px;
+  right: -20px;
+  top: 20px;
+  background: #243d5d;
+  box-shadow: none;
+  border: 1px solid #4c6f98;
+}
+
+.auth-card {
+  padding: 36px;
+  display: grid;
+  gap: 21px;
+  width: 100%;
+  max-width: 480px;
+  justify-self: center;
+  box-shadow: 0 30px 100px #0002;
+}
+
+.auth-brand {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 15px;
+}
+
+.auth-brand strong {
+  font-size: 23px;
+}
+
+.auth-brand small {
+  display: block;
+  font-size: 11px;
+  margin-top: 4px;
+}
+
+.auth-card .eyebrow {
+  margin-bottom: -5px;
+}
+
+.auth-card h2 {
+  font-size: 28px;
+  margin: 0;
+}
+
+.auth-card p {
+  margin: 0;
+  font-size: 13px;
+}
+
+.auth-foot {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  align-items: center;
+  color: #7f95b0;
+  font-size: 11px;
+}
+
+.auth-foot .icon {
+  width: 15px;
+  height: 15px;
+}
+
+/* Первичная загрузка и восстановление связи. */
+.loading-page {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  padding: 25px;
+  text-align: center;
+}
+
+.loading-page > .icon {
+  width: 80px;
+  height: 80px;
+  color: #99bff5;
+}

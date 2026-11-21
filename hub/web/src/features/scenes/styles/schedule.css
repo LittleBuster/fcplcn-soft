@@ -1,0 +1,152 @@
+/* Недельное расписание */
+
+.scene-schedule-settings {
+  padding: 21px 0;
+  margin-top: 23px;
+  border-top: 1px solid #344760;
+}
+
+.scene-schedule-settings h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  margin-bottom: 16px;
+  font-weight: 600;
+}
+
+.scene-schedule-settings h3 .icon {
+  width: 18px;
+  height: 18px;
+  color: #91b3df;
+}
+
+.scene-schedule-settings > p:not(.scene-editor-hint) {
+  color: #90a9c7;
+  font-size: 10px;
+  line-height: 1.8;
+  margin-top: 13px;
+}
+
+.scene-mode-picker {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.scene-mode-picker label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #c4d5ee;
+  padding: 10px 13px;
+  border: 1px solid #3d5574;
+  border-radius: 7px;
+  background: #1b2b41;
+}
+
+.scene-mode-picker input {
+  min-height: 0;
+  margin: 0;
+  width: 14px;
+  height: 14px;
+  padding: 0;
+  accent-color: #9dc3ff;
+}
+
+.scene-schedule-fields {
+  border: 0;
+  margin: 16px 0 0;
+  padding: 0;
+  min-width: 0;
+}
+
+.scene-schedule-fields:disabled {
+  opacity: 0.45;
+}
+
+.scene-weekdays {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.scene-weekdays label {
+  display: flex;
+  position: relative;
+  cursor: pointer;
+}
+
+.scene-weekdays input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  opacity: 0;
+  z-index: 1;
+  cursor: pointer;
+}
+
+.scene-weekdays span {
+  display: grid;
+  place-items: center;
+  width: 37px;
+  height: 35px;
+  border: 1px solid #3a506d;
+  border-radius: 7px;
+  background: #1b2a3d;
+  color: #8fa8ca;
+}
+
+.scene-weekdays input:checked + span {
+  border-color: #769ccf;
+  background: #2e4c75;
+  color: #d4e5ff;
+}
+
+.scene-weekdays input:focus-visible + span {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.scene-schedule-time {
+  display: grid;
+  grid-template-columns: 140px minmax(0, 1fr);
+  gap: 14px;
+  margin-top: 16px;
+}
+
+.scene-schedule-time input {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  margin-top: 7px;
+}
+
+.scene-editor-footer {
+  display: flex;
+  align-items: center;
+  justify-content: end;
+  gap: 10px;
+  border-top: 1px solid #344760;
+  padding-top: 20px;
+  margin-top: 16px;
+  flex-wrap: wrap;
+}
+
+.scene-editor-footer > .scene-delete-button {
+  margin-right: auto;
+  color: #ed9aab;
+}
+
+.visually-hidden {
+  position: absolute;
+  height: 1px;
+  width: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}

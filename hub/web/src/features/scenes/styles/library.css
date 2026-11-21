@@ -1,0 +1,197 @@
+/* История и библиотека сценариев */
+
+.scene-history {
+  margin-top: 13px;
+  padding: 11px 14px;
+  border: 1px solid #2f4056;
+  border-radius: 9px;
+  color: #8da3c1;
+  font-size: 10px;
+  background: #151f2d;
+}
+
+.scene-history > summary,
+.scene-history-run > summary {
+  cursor: pointer;
+  line-height: 1.7;
+}
+
+.scene-history-run {
+  padding: 12px 0 2px;
+}
+
+.scene-library {
+  margin-top: 30px;
+  padding-top: 26px;
+  border-top: 1px solid #2d3d53;
+}
+
+.scene-library .section-heading {
+  margin-bottom: 15px;
+}
+
+.scene-group-tabs {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.scene-group-tabs > button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 15px;
+  border: 1px solid #3b4d66;
+  border-radius: 8px;
+  color: #a3b8d4;
+  background: #182437;
+  font-size: 12px;
+}
+
+.scene-group-tabs > button.active {
+  background: #294368;
+  border-color: #7297c8;
+  color: #c4dcff;
+}
+
+.scene-group-tabs .icon {
+  width: 17px;
+  height: 17px;
+}
+
+.scene-group-tabs button > span {
+  font-size: 10px;
+  color: #839dbd;
+  padding-left: 4px;
+}
+
+.scene-library-hint {
+  color: #8298b6;
+  font-size: 11px;
+  line-height: 1.8;
+  margin: 13px 0;
+}
+
+.scene-library-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 15px;
+  margin: 18px 0;
+}
+
+.scene-library-card {
+  min-width: 0;
+  padding: 18px;
+}
+
+.scene-library-card-heading {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  position: relative;
+  padding-right: 28px;
+}
+
+.scene-library-icon {
+  display: grid;
+  place-items: center;
+  width: 37px;
+  height: 37px;
+  border-radius: 10px;
+  color: #a2c4f5;
+  background: #29405e;
+  flex-shrink: 0;
+}
+
+.scene-library-icon .icon {
+  width: 21px;
+  height: 21px;
+}
+
+.scene-library-card h3 {
+  font-size: 15px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+  line-height: 1.6;
+}
+
+.scene-library-card-heading > div > span {
+  display: block;
+  font-size: 9px;
+  color: #879ebd;
+  margin-top: 3px;
+}
+
+.scene-library-card .scene-settings-button {
+  top: 0;
+  right: 0;
+}
+
+.scene-library-card > p {
+  font-size: 11px;
+  color: #97acc7;
+  line-height: 1.8;
+  margin-top: 14px;
+  overflow-wrap: anywhere;
+}
+
+.scene-library-card > .button {
+  margin-top: 17px;
+}
+
+.scene-schedule-caption {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid #365165;
+  background: #1b2d3c;
+  padding: 11px;
+  border-radius: 8px;
+  margin-top: 15px;
+}
+
+.scene-schedule-caption .icon {
+  color: #8fc0d8;
+  width: 18px;
+  height: 18px;
+}
+
+.scene-schedule-caption strong {
+  display: block;
+  font-size: 11px;
+  font-weight: 550;
+  color: #c2d9e8;
+}
+
+.scene-schedule-caption span {
+  display: block;
+  color: #80a2b8;
+  font-size: 10px;
+  margin-top: 5px;
+  overflow-wrap: anywhere;
+}
+
+.scene-schedule-event {
+  padding: 12px 0;
+  border-bottom: 1px solid #2b3d53;
+}
+
+.scene-schedule-event strong {
+  font-size: 11px;
+  display: block;
+  color: #bccee7;
+  font-weight: 550;
+}
+
+.scene-schedule-event span {
+  display: block;
+  font-size: 10px;
+  margin-top: 5px;
+}
+
+.scene-schedule-event p {
+  margin-top: 6px;
+  line-height: 1.6;
+  color: #c1a88b;
+}

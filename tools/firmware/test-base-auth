@@ -1,0 +1,32 @@
+#!/bin/sh
+set -eu
+
+AUTH_TOOLS_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+AUTH_SOURCE_DIR="$AUTH_TOOLS_DIR/../../firmware/base/tests/auth"
+AUTH_BUILD_DIR="$AUTH_SOURCE_DIR/.build"
+
+find_auth_tool() {
+    if command -v "$1" >/dev/null 2>&1; then
+        command -v "$1"
+    elif [ -x "/opt/homebrew/bin/$1" ]; then
+        printf '%s\n' "/opt/homebrew/bin/$1"
+    else
+        printf 'Required auth test tool not found: %s\n' "$1" >&2
+        return 1
+    fi
+}
+
+AUTH_CMAKE_BIN="$(find_auth_tool cmake)"
+AUTH_CTEST_BIN="$(find_auth_tool ctest)"
+AUTH_NINJA_BIN="$(find_auth_tool ninja)"
+AUTH_OPENSSL_ROOT="${OPENSSL_ROOT_DIR:-}"
+if [ -z "$AUTH_OPENSSL_ROOT" ] && [ -d /opt/homebrew/opt/openssl@3 ]; then
+    AUTH_OPENSSL_ROOT=/opt/homebrew/opt/openssl@3
+fi
+
+"$AUTH_CMAKE_BIN" -S "$AUTH_SOURCE_DIR" -B "$AUTH_BUILD_DIR" \
+    -G Ninja "-DCMAKE_MAKE_PROGRAM=$AUTH_NINJA_BIN" \
+    -DCMAKE_BUILD_TYPE=Debug -DFCPLCN_AUTH_SANITIZERS=ON \
+    "-DOPENSSL_ROOT_DIR=$AUTH_OPENSSL_ROOT"
+"$AUTH_CMAKE_BIN" --build "$AUTH_BUILD_DIR" --parallel
+"$AUTH_CTEST_BIN" --test-dir "$AUTH_BUILD_DIR" --output-on-failure "$@"

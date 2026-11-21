@@ -1,0 +1,11 @@
+#!/bin/sh
+set -eu
+
+BASE_TOOLS_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+BASE_SOURCE_DIR="$BASE_TOOLS_DIR/../../firmware/base/tests"
+BASE_BUILD_DIR="$BASE_SOURCE_DIR/.build"
+export PATH="/opt/homebrew/bin:$PATH"
+
+cmake -S "$BASE_SOURCE_DIR" -B "$BASE_BUILD_DIR" -G Ninja "$@"
+cmake --build "$BASE_BUILD_DIR" --parallel
+ctest --test-dir "$BASE_BUILD_DIR" --output-on-failure

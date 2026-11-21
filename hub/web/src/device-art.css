@@ -1,0 +1,455 @@
+/** @file Палитра SVG-иллюстраций, общая для карточек и уменьшенных вариантов выбора. */
+
+.device-art {
+  display: block;
+  width: 100%;
+  max-width: 280px;
+  min-width: 0;
+  line-height: 0;
+  aspect-ratio: 7 / 4;
+}
+
+.device-art > svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-width: 100%;
+  overflow: visible;
+}
+
+.device-art-scene {
+  stroke: #7794b8;
+  stroke-width: 1.65;
+}
+
+.device-art .da-shadow {
+  fill: #090f184a;
+  stroke: none;
+}
+
+.device-art .da-muted-line {
+  stroke: #415e7d;
+  stroke-width: 1.2;
+}
+
+.device-art .da-wall {
+  fill: #24384f;
+  stroke: #7d9ebf;
+}
+
+.device-art .da-wall-side {
+  fill: #1b2c40;
+  stroke: #526f90;
+}
+
+.device-art .da-roof {
+  fill: #385270;
+  stroke: #9ab8da;
+}
+
+.device-art .da-roof-edge {
+  fill: #263e5b;
+  stroke: #6285ac;
+}
+
+.device-art .da-glass {
+  fill: #243f56;
+  stroke: #7ea8c8;
+}
+
+.device-art .da-warm-glass {
+  fill: #6b5b3d;
+  stroke: #e3c38c;
+}
+
+.device-art .da-window-frame {
+  stroke: #7895b2;
+  stroke-width: 1.3;
+}
+
+.device-art .da-reflection {
+  stroke: #a3d6e5;
+  stroke-width: 1.3;
+  opacity: 0.5;
+}
+
+.device-art .da-door {
+  fill: #192c42;
+  stroke: #7694b5;
+}
+
+.device-art .da-floor {
+  fill: #203047;
+  stroke: #496582;
+}
+
+.device-art .da-metal {
+  fill: #294057;
+  stroke: #94b2ce;
+}
+
+.device-art .da-metal-line {
+  stroke: #8ca9c5;
+  stroke-width: 2.2;
+}
+
+.device-art .da-wood {
+  fill: #4b4644;
+  stroke: #ae9b85;
+}
+
+.device-art .da-wood-line {
+  stroke: #b9a18a;
+  stroke-width: 2.3;
+}
+
+.device-art .da-wood-grain {
+  stroke: #a48e72;
+  opacity: 0.62;
+  stroke-width: 1.1;
+}
+
+.device-art .da-pot {
+  fill: #385165;
+  stroke: #95b0bd;
+}
+
+.device-art .da-leaf {
+  fill: #427565;
+  stroke: #80bca1;
+  stroke-width: 1.35;
+}
+
+.device-art .da-tree-back {
+  fill: #2c5148;
+  stroke: #5a8f77;
+}
+
+.device-art .da-green-line {
+  stroke: #85d4af;
+  stroke-width: 2.2;
+}
+
+.device-art .da-green-fill {
+  fill: #86d4b1;
+  stroke: #86d4b1;
+}
+
+.device-art .da-cyan-line {
+  stroke: #75c8d5;
+  stroke-width: 2.4;
+}
+
+.device-art .da-cyan-fill {
+  fill: #7bd5e0;
+  stroke: #a5e4ec;
+}
+
+.device-art .da-amber-line,
+.device-art .da-warm-line {
+  stroke: #f2cc84;
+  stroke-width: 2.2;
+}
+
+.device-art .da-warm-fill,
+.device-art .da-amber-fill {
+  fill: #e8c486;
+  stroke: #f3d6a0;
+}
+
+.device-art .da-dark {
+  fill: #122135;
+  stroke: #4d6b8b;
+}
+
+.device-art .da-blue-face {
+  fill: #2b4866;
+  stroke: #8caed0;
+}
+
+.device-art .da-room-wall {
+  fill: #1b2a3c;
+  stroke: #425d7a;
+  stroke-width: 1.4;
+}
+
+.device-art .da-curtain {
+  fill: #354d69;
+  stroke: #6d8baa;
+}
+
+.device-art .da-sofa-back {
+  fill: #365675;
+  stroke: #96b8d5;
+}
+
+.device-art .da-soft {
+  fill: #416888;
+  stroke: #9abbd4;
+}
+
+.device-art .da-sofa-arm {
+  fill: #2b4764;
+  stroke: #88a7c4;
+}
+
+.device-art .da-cushion {
+  fill: #6d786d;
+  stroke: #c1c7a2;
+  stroke-width: 1.3;
+}
+
+.device-art .da-table {
+  fill: #4d5053;
+  stroke: #a9b4ba;
+}
+
+.device-art .da-mattress {
+  fill: #7b95ac;
+  stroke: #b7c9d8;
+}
+
+.device-art .da-duvet {
+  fill: #315e6d;
+  stroke: #80b8bf;
+}
+
+.device-art .da-pillow {
+  fill: #a6b8c8;
+  stroke: #c7d3df;
+}
+
+.device-art .da-tile {
+  stroke: #3c536e;
+  stroke-width: 1;
+}
+
+.device-art .da-counter {
+  fill: #6b8296;
+  stroke: #a6bacb;
+}
+
+.device-art .da-screen {
+  fill: #163b45;
+  stroke: #7db9bf;
+}
+
+.device-art .da-water {
+  fill: #275a71;
+  stroke: #72bdcf;
+}
+
+.device-art .da-water-line {
+  stroke: #80d5e4;
+  stroke-width: 1.7;
+}
+
+.device-art .da-bath {
+  fill: #7991a6;
+  stroke: #c1d2df;
+}
+
+.device-art .da-coat {
+  fill: #476a72;
+  stroke: #89b5b8;
+}
+
+.device-art .da-tent {
+  fill: #48657e;
+  stroke: #9cb5cc;
+}
+
+.device-art .da-tent-side {
+  fill: #2a435e;
+  stroke: #6c91b6;
+}
+
+.device-art .da-toy-green {
+  fill: #527c6c;
+  stroke: #a2c5ae;
+}
+
+.device-art .da-toy-amber {
+  fill: #8e7150;
+  stroke: #d9b98c;
+}
+
+.device-art .da-ball {
+  fill: #54768e;
+  stroke: #adc5d7;
+}
+
+.device-art .da-book-blue {
+  fill: #6587a6;
+  stroke: #a5c3db;
+}
+
+.device-art .da-book-green {
+  fill: #688c79;
+  stroke: #b3cbb4;
+}
+
+.device-art .da-tire {
+  fill: #101c2b;
+  stroke: #6e87a1;
+}
+
+.device-art .da-hot-line {
+  stroke: #e4a58d;
+  stroke-width: 2.1;
+}
+
+.device-art .da-peg {
+  fill: #8292a0;
+  stroke: none;
+  opacity: 0.5;
+}
+
+.device-art .da-toolbox {
+  fill: #456c68;
+  stroke: #a1c2ad;
+}
+
+.device-art .da-towel {
+  fill: #7797ab;
+  stroke: #bed0d9;
+}
+
+.device-art .da-wood-wall {
+  fill: #3b3b3d;
+  stroke: #978c7d;
+}
+
+.device-art .da-stones {
+  fill: #71818a;
+  stroke: #bac3c6;
+}
+
+.device-art .da-greenhouse-front {
+  fill: #223e43c2;
+  stroke: #8db8bc;
+}
+
+.device-art .da-greenhouse-side {
+  fill: #223a45d9;
+  stroke: #7da7b4;
+}
+
+.device-art .da-glass-roof {
+  fill: #315462b3;
+  stroke: #8bb9ca;
+}
+
+.device-art .da-greenhouse-door {
+  fill: #1d3943a6;
+  stroke: #a4cbd0;
+}
+
+.device-art .da-tomato {
+  fill: #df9a80;
+  stroke: #efb99b;
+}
+
+.device-art .da-garden-path {
+  fill: #445052;
+  stroke: #929d99;
+}
+
+.device-art .da-garden-bed {
+  fill: #454b3f;
+  stroke: #a2a381;
+}
+
+.device-art .da-soil-line {
+  stroke: #8b8b6c;
+  stroke-width: 1.1;
+}
+
+.device-art .da-grass-bed {
+  fill: #24463c;
+  stroke: #608b71;
+}
+
+.device-art .da-grass-line {
+  stroke: #83b38c;
+  stroke-width: 2;
+}
+
+.device-art .da-droplet {
+  fill: #76cbdc;
+  stroke: #a9e5ef;
+  stroke-width: 1;
+}
+
+.device-art .da-stone {
+  fill: #3d5064;
+  stroke: #9eb1c1;
+}
+
+.device-art .da-stone-line {
+  stroke: #8196a9;
+  stroke-width: 1.15;
+}
+
+.device-art .da-gate {
+  fill: #263a4fc9;
+  stroke: #9bb2c8;
+}
+
+.device-art .da-distant-house {
+  fill: #1c2d40;
+  stroke: #4f6c8d;
+}
+
+.device-art .da-light-beam {
+  fill: #dfbc6b12;
+  stroke: none;
+}
+
+.device-art .da-stars {
+  stroke: #b6bb9a;
+  stroke-width: 1.5;
+}
+
+.device-art .da-smoke {
+  stroke: #7794b8;
+  stroke-width: 1.6;
+  opacity: 0.55;
+}
+
+.device-art .da-tank {
+  fill: #2d4d60;
+  stroke: #95b8cd;
+}
+
+.device-art .da-soil {
+  fill: #302f2c;
+  stroke: #746c57;
+}
+
+.device-art .da-deck {
+  fill: #3d4244;
+  stroke: #a29782;
+}
+
+.device-art .da-shield {
+  fill: #224738;
+  stroke: #88d6ae;
+  stroke-width: 2.3;
+}
+
+.device-art .da-signal {
+  stroke: #85b8cc;
+  stroke-width: 1.5;
+  opacity: 0.65;
+}
+
+.device-art .da-duct {
+  fill: #273b4d;
+  stroke: #8ca9c0;
+}
+
+.device-art .da-fan {
+  fill: #638fa4;
+  stroke: #a6cdd9;
+}

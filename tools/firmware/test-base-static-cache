@@ -1,0 +1,9 @@
+#!/bin/sh
+set -eu
+FCPLCN_STATIC_TOOLS="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+FCPLCN_STATIC_SOURCE="$FCPLCN_STATIC_TOOLS/../../firmware/base/tests/static_cache"
+FCPLCN_STATIC_BUILD="${FCPLCN_STATIC_CACHE_BUILD_DIR:-$HOME/esp/build/fcplcn/base-static-cache}"
+export PATH="/opt/homebrew/bin:$PATH"
+cmake -S "$FCPLCN_STATIC_SOURCE" -B "$FCPLCN_STATIC_BUILD" -G Ninja
+cmake --build "$FCPLCN_STATIC_BUILD" --parallel
+ctest --test-dir "$FCPLCN_STATIC_BUILD" --output-on-failure

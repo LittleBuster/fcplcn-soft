@@ -1,0 +1,265 @@
+/* Модули и карточки физического оборудования */
+
+.module-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 15px;
+  margin-bottom: 28px;
+}
+
+.module-tabs button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 12px;
+  border: 1px solid #2d3e56;
+  border-radius: 7px;
+  background: #172232;
+  color: #9bb0cb;
+  font-size: 10px;
+}
+
+.module-tabs button.active {
+  color: #b7d0ff;
+  border-color: #5c7aa5;
+  background: #243a58;
+}
+
+.module-tabs .icon {
+  width: 16px;
+  height: 16px;
+}
+
+.module-tabs button > span {
+  font-size: 9px;
+  color: #7c95b7;
+}
+
+.controller-section {
+  margin-bottom: 30px;
+}
+
+.controller-section .section-heading {
+  margin-bottom: 17px;
+}
+
+.equipment-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 17px;
+}
+
+.equipment-card {
+  border: 1px solid #304158;
+  border-radius: 13px;
+  padding: 13px;
+  background: #182332;
+  min-width: 0;
+}
+
+.equipment-visual {
+  position: relative;
+  width: 100%;
+  min-height: 192px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 10px;
+  padding: 21px 13px;
+  border: 1px solid #304158;
+  border-radius: 9px;
+  background: #131e2c;
+  color: #687d9b;
+  text-align: center;
+}
+
+button.equipment-visual:not(:disabled):hover {
+  border-color: #799fcf;
+  background: #1b2c40;
+}
+
+.equipment-icon {
+  width: 69px;
+  height: 69px;
+  stroke-width: 1.45;
+}
+
+.equipment-state {
+  font-size: 11px;
+  color: #9cadc5;
+  font-weight: 550;
+}
+
+.state-on .equipment-visual {
+  color: var(--green);
+  border-color: #3d665a;
+  background: radial-gradient(ellipse at 50% 35%, #71d3a40f, transparent 65%), #121e2a;
+}
+
+.tone-lights.state-on .equipment-visual {
+  color: #f4d382;
+  border-color: #756446;
+  background: radial-gradient(ellipse at 50% 35%, #ffdc8521, transparent 70%), #171f27;
+}
+
+.state-on .equipment-icon {
+  filter: drop-shadow(0 0 10px #79d1aa24);
+}
+
+.tone-lights.state-on .equipment-icon {
+  filter: drop-shadow(0 0 11px #ffcd6659);
+}
+
+.tone-meteo .equipment-visual {
+  color: var(--cyan);
+  border-color: #365563;
+}
+
+.tone-thermostats .equipment-visual {
+  color: #e9aa7b;
+}
+
+.tone-meteo .equipment-icon,
+.tone-thermostats .equipment-icon {
+  width: 48px;
+  height: 48px;
+}
+
+.state-alarm .equipment-visual {
+  color: var(--red);
+  border-color: #af586c;
+  background: radial-gradient(ellipse at 50% 35%, #f6738c15, transparent 70%), #201f2a;
+}
+
+.state-alarm .equipment-state {
+  color: var(--red);
+}
+
+.state-unknown .equipment-visual {
+  color: #68778c;
+  border-color: #303d50;
+  background: #141e2b;
+}
+
+.state-unknown .equipment-icon {
+  filter: none;
+}
+
+.visual-action {
+  position: absolute;
+  bottom: 12px;
+  right: 12px;
+  border: 1px solid #3c536f;
+  border-radius: 6px;
+  display: grid;
+  place-items: center;
+  padding: 4px;
+  color: #9fb7d5;
+  background: #1f2e43;
+}
+
+.visual-action .icon {
+  width: 14px;
+  height: 14px;
+}
+
+[aria-busy='true'] .visual-action .icon {
+  animation: turn 1s linear infinite;
+}
+
+.equipment-copy {
+  padding: 17px 3px 4px;
+}
+
+.equipment-copy h3 {
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.port-label {
+  display: inline-block;
+  font-size: 9px;
+  color: #7d95b4;
+  margin: 6px 0 0;
+  padding: 3px 6px;
+  background: #213148;
+  border-radius: 4px;
+}
+
+.equipment-copy > p {
+  font-size: 10px;
+  color: #8599b6;
+  line-height: 1.65;
+  margin-top: 11px;
+  overflow-wrap: anywhere;
+}
+
+.reading {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 4px;
+  color: #d7eaf5;
+}
+
+.reading strong {
+  font-size: 35px;
+  font-weight: 650;
+  letter-spacing: -1.5px;
+  line-height: 1.2;
+}
+
+.reading > span {
+  font-size: 12px;
+  color: #8ba4bb;
+}
+
+.humidity {
+  color: #819eb8;
+  font-size: 10px;
+}
+
+.humidity b {
+  color: #bad9e2;
+  margin-left: 6px;
+  font-weight: 550;
+}
+
+.thermo-target {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 13px;
+  padding-top: 12px;
+  border-top: 1px solid #2a3b52;
+  font-size: 9px;
+  color: #8c9fb9;
+}
+
+.thermo-target b {
+  margin-left: 4px;
+  color: #d7e1f1;
+  font-weight: 550;
+}
+
+.inline-error,
+.equipment-copy > .inline-error {
+  color: #ffadb9;
+  font-size: 11px;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+
+.empty-module {
+  padding: 23px;
+  background: #182230;
+  border-radius: 10px;
+  color: #8c9fba;
+  font-size: 12px;
+}

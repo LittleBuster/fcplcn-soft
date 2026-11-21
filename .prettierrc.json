@@ -1,0 +1,19 @@
+{
+  "printWidth": 100,
+  "tabWidth": 2,
+  "useTabs": false,
+  "singleQuote": true,
+  "semi": true,
+  "trailingComma": "all",
+  "htmlWhitespaceSensitivity": "strict",
+  "embeddedLanguageFormatting": "off",
+  "endOfLine": "lf",
+  "overrides": [
+    {
+      "files": ["hub/web/index.html", "cloud/web/index.html"],
+      "options": {
+        "htmlWhitespaceSensitivity": "css"
+      }
+    }
+  ]
+}

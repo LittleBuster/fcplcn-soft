@@ -1,0 +1,143 @@
+/* Стандартная SVG-плата PLC */
+
+.board-art {
+  display: block;
+  width: 100%;
+  max-width: 280px;
+  height: auto;
+}
+
+.board-shell {
+  fill: #1a2f48;
+  stroke: #759fd4;
+  stroke-width: 1.4;
+}
+
+.board-wire {
+  stroke: #557a9a;
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+.board-lines {
+  stroke: #405c7c;
+  stroke-width: 1;
+}
+
+.board-chip {
+  fill: #203d5a;
+  stroke: #86b5f4;
+  stroke-width: 1.5;
+}
+
+.board-chip-lines {
+  stroke: #6e9cc9;
+  stroke-width: 1.2;
+}
+
+.board-terminals {
+  fill: #346155;
+  stroke: #84c7a9;
+  stroke-width: 1.2;
+}
+
+.board-traces {
+  stroke: #497a9c;
+  stroke-width: 1.4;
+}
+
+.board-led {
+  fill: #93e1b7;
+  filter: drop-shadow(0 0 4px #88e6b6);
+}
+
+.board-led-secondary {
+  fill: #8cbaff;
+}
+
+.board-text {
+  stroke: #5f83a7;
+  stroke-width: 1;
+  stroke-linecap: round;
+}
+
+.device-offline .device-illustration {
+  opacity: 0.42;
+  filter: grayscale(1);
+}
+
+.device-card-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.device-card-title h3 {
+  font-size: 16px;
+  line-height: 1.5;
+  letter-spacing: -0.15px;
+  overflow-wrap: anywhere;
+}
+
+.device-card-title .icon {
+  width: 17px;
+  height: 17px;
+  color: #829cc1;
+}
+
+.device-model {
+  font-size: 9px;
+  letter-spacing: 0.3px;
+  color: #7b90ad;
+  margin-top: 5px;
+}
+
+.device-modules {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 20px 0 19px;
+  flex-wrap: wrap;
+}
+
+.device-modules span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: #b7c7de;
+  font-size: 10px;
+}
+
+.device-modules .icon {
+  width: 16px;
+  height: 16px;
+  color: #8aa8d0;
+}
+
+.device-open-label {
+  margin: 0 -19px;
+  padding: 12px 19px;
+  border-top: 1px solid #2a3b52;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: #8fb7ee;
+  font-size: 10px;
+  background: #172334;
+}
+
+.device-open-label .icon {
+  width: 15px;
+  height: 15px;
+}
+
+.has-alarm {
+  border-color: #a65a6d;
+}
+
+.red-text,
+.device-modules span.red-text,
+.device-modules span.red-text .icon {
+  color: var(--red);
+}

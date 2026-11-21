@@ -1,0 +1,35 @@
+# Environment variables are populated from config/product.json by docs-base.
+PROJECT_NAME           = "$(FCPLCN_DOC_PRODUCT)"
+PROJECT_BRIEF          = "$(FCPLCN_DOC_DESCRIPTION)"
+OUTPUT_DIRECTORY       = "$(FCPLCN_DOCS_DIR)"
+OUTPUT_LANGUAGE        = English
+INPUT                  = firmware/base/main
+FILE_PATTERNS          = *.h *.cpp
+RECURSIVE              = YES
+INPUT_ENCODING         = UTF-8
+EXTRACT_ALL            = NO
+EXTRACT_PRIVATE        = NO
+EXTRACT_STATIC         = NO
+EXTRACT_ANON_NSPACES   = NO
+JAVADOC_AUTOBRIEF      = NO
+WARNINGS               = YES
+WARN_IF_UNDOCUMENTED   = YES
+WARN_IF_DOC_ERROR      = YES
+WARN_NO_PARAMDOC       = YES
+WARN_AS_ERROR          = FAIL_ON_WARNINGS
+WARN_LOGFILE           = "$(FCPLCN_DOCS_DIR)/warnings.log"
+QUIET                  = YES
+ENABLE_PREPROCESSING   = YES
+MACRO_EXPANSION        = NO
+SOURCE_BROWSER         = YES
+INLINE_SOURCES         = NO
+STRIP_CODE_COMMENTS    = NO
+# Public contracts are repeated in .cpp for readers of the implementation.
+# Keep the header copy canonical in generated API pages to avoid duplicate params.
+# Source-only algorithm notes remain outside this disabled conditional section.
+ENABLED_SECTIONS       =
+GENERATE_HTML          = YES
+GENERATE_TREEVIEW      = YES
+HTML_OUTPUT            = html
+GENERATE_LATEX         = NO
+HAVE_DOT               = NO

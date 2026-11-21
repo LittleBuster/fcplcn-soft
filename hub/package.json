@@ -1,0 +1,33 @@
+{
+  "name": "fcplcn-hub",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "engines": {
+    "node": ">=24.0.0 <25"
+  },
+  "scripts": {
+    "format:web": "node ../tools/web/format-code.mjs --project hub",
+    "format:web:check": "node ../tools/web/format-code.mjs --project hub --check",
+    "typecheck": "tsc --noEmit",
+    "build:server": "tsc -p tsconfig.server.json && node scripts/copy-product.mjs && node scripts/copy-demo.mjs",
+    "build:web": "vite build && node scripts/copy-plc-web.mjs",
+    "build": "npm run typecheck && npm run build:server && npm run build:web",
+    "start": "node --env-file-if-exists=.env dist/server/main.js",
+    "demo": "npm run build && node --env-file-if-exists=.env dist/server/main.js --demo",
+    "test": "npm run build:server && node --test dist/tests/*.test.js",
+    "test:browser": "node tests/browser.cjs",
+    "check": "npm run build && npm test && npm run test:browser"
+  },
+  "dependencies": {
+    "mqtt": "5.16.1",
+    "preact": "11.2.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.65.0",
+    "@preact/preset-vite": "2.10.6",
+    "@types/node": "24.19.2",
+    "typescript": "7.0.2",
+    "vite": "8.3.8"
+  }
+}

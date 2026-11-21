@@ -1,0 +1,85 @@
+/* Показатели обзора */
+
+.metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+  margin-bottom: 36px;
+}
+
+.metric-card {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr);
+  gap: 10px 13px;
+  align-items: center;
+  padding: 20px 16px 15px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: linear-gradient(145deg, #1b2637, #161f2c);
+}
+
+.metric-icon {
+  display: grid;
+  place-items: center;
+  width: 39px;
+  height: 39px;
+  border-radius: 11px;
+  background: #243a56;
+  color: var(--accent);
+}
+
+.metric-icon.amber {
+  color: var(--amber);
+  background: #3a342b;
+}
+
+.metric-icon.cyan {
+  color: var(--cyan);
+  background: #233b44;
+}
+
+.metric-icon.green {
+  color: var(--green);
+  background: #243d37;
+}
+
+.metric-icon.red {
+  color: var(--red);
+  background: #452a37;
+}
+
+.metric-card strong {
+  display: block;
+  font-size: 27px;
+  font-weight: 680;
+  letter-spacing: -1px;
+  line-height: 1.1;
+}
+
+.metric-card strong small {
+  font-size: 13px;
+  color: #7e90ac;
+  font-weight: 400;
+  letter-spacing: normal;
+  margin-left: 5px;
+}
+
+.metric-card div > span {
+  display: block;
+  font-size: 10px;
+  color: #a6b4c9;
+  margin-top: 7px;
+}
+
+.metric-trend {
+  grid-column: 1 / -1;
+  font-size: 9px;
+  color: #6e829e;
+  border-top: 1px solid #28374d;
+  padding-top: 11px;
+  margin-top: 4px;
+}
+
+.metric-alert {
+  border-color: #784452;
+}

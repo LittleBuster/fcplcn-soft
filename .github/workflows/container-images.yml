@@ -1,0 +1,161 @@
+name: FCPLCn container images
+
+on:
+  push:
+    branches: ['**']
+    tags: ['v*']
+  pull_request:
+    paths:
+      - '.github/workflows/container-images.yml'
+      - 'config/product.json'
+      - 'firmware/base/web/**'
+      - 'firmware/base/tests/browser/**'
+      - 'hub/**'
+      - 'cloud/**'
+  workflow_dispatch:
+
+concurrency:
+  group: fcplcn-images-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: ${{ matrix.app }} / ${{ matrix.arch }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - app: hub
+            arch: amd64
+            platform: linux/amd64
+          - app: hub
+            arch: arm64
+            platform: linux/arm64
+          - app: cloud
+            arch: amd64
+            platform: linux/amd64
+          - app: cloud
+            arch: arm64
+            platform: linux/arm64
+    steps:
+      - name: Check out sources
+        uses: actions/checkout@v6
+
+      - name: Name the image
+        id: image
+        shell: bash
+        env:
+          APP: ${{ matrix.app }}
+          ARCH: ${{ matrix.arch }}
+        run: |
+          image="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/fcplcn-${APP}"
+          printf 'name=%s\ntag=%s:sha-%s-%s\n' \
+            "$image" "$image" "$GITHUB_SHA" "$ARCH" >> "$GITHUB_OUTPUT"
+
+      - name: Enable target CPU emulation
+        uses: docker/setup-qemu-action@v4
+        with:
+          platforms: arm64
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Sign in to GitHub Container Registry
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and publish the platform image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ${{ matrix.app }}/deploy/Dockerfile
+          platforms: ${{ matrix.platform }}
+          push: ${{ github.event_name != 'pull_request' }}
+          load: true
+          tags: ${{ steps.image.outputs.tag }}
+          labels: |
+            org.opencontainers.image.title=FCPLCn ${{ matrix.app }}
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+          cache-from: type=gha,scope=${{ matrix.app }}-${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.app }}-${{ matrix.arch }}
+
+      - name: Verify hub server on the target runtime
+        if: matrix.app == 'hub'
+        env:
+          IMAGE: ${{ steps.image.outputs.tag }}
+          PLATFORM: ${{ matrix.platform }}
+        run: |
+          docker run --rm --platform "$PLATFORM" --entrypoint sh "$IMAGE" \
+            -c 'node --test dist/tests/*.test.js'
+
+  publish:
+    name: Publish ${{ matrix.app }} multi-platform manifest
+    if: github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        app: [hub, cloud]
+    steps:
+      - name: Name the image
+        id: image
+        shell: bash
+        env:
+          APP: ${{ matrix.app }}
+        run: |
+          printf 'name=ghcr.io/%s/fcplcn-%s\n' \
+            "${GITHUB_REPOSITORY_OWNER,,}" "$APP" >> "$GITHUB_OUTPUT"
+
+      - name: Calculate update and release tags
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ steps.image.outputs.name }}
+          flavor: latest=false
+          tags: |
+            type=sha,format=long
+            type=ref,event=branch
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Sign in to GitHub Container Registry
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Publish only after every platform succeeds. A sha tag always represents
+      # one source revision, allowing install.sh to update and roll back exactly.
+      - name: Assemble the multi-platform image
+        shell: bash
+        env:
+          IMAGE: ${{ steps.image.outputs.name }}
+          TAGS: ${{ steps.meta.outputs.tags }}
+        run: |
+          arguments=()
+          while IFS= read -r tag; do
+            [ -z "$tag" ] || arguments+=(--tag "$tag")
+          done <<< "$TAGS"
+          sources=("${IMAGE}:sha-${GITHUB_SHA}-amd64" "${IMAGE}:sha-${GITHUB_SHA}-arm64")
+          docker buildx imagetools create "${arguments[@]}" "${sources[@]}"
+          docker buildx imagetools inspect "${IMAGE}:sha-${GITHUB_SHA}"

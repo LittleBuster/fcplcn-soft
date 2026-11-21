@@ -1,0 +1,8 @@
+**/node_modules/**
+**/managed_components/**
+**/dist/**
+**/.build/**
+**/.artifacts/**
+**/build/**
+**/dependencies.lock
+**/package-lock.json

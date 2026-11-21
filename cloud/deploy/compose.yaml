@@ -1,0 +1,136 @@
+name: ${FCPLCN_PROJECT:?Run cloud/deploy/setup.sh first}
+services:
+  db:
+    image: postgres:18.7-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: fcplcn
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD_FILE: /run/fcplcn/postgres/root-password
+      POSTGRES_INITDB_ARGS: --auth-host=scram-sha-256
+    volumes:
+      - database:/var/lib/postgresql
+      - private:/run/fcplcn:ro
+      - ./postgres-init.sh:/docker-entrypoint-initdb.d/10-fcplcn.sh:ro
+    networks: [database]
+    healthcheck:
+      test: [CMD-SHELL, pg_isready -U postgres -d fcplcn]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    security_opt: [no-new-privileges:true]
+    pids_limit: 256
+
+  broker:
+    image: eclipse-mosquitto:2.0.23
+    user: '1883:1883'
+    restart: unless-stopped
+    ports: ['${FCPLCN_CLOUD_MQTT_PORT:-8883}:8883']
+    volumes:
+      - broker:/mosquitto/data
+      - ./mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+    networks: [edge]
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 64
+    healthcheck:
+      # Inspect the TLS listener without opening an unauthenticated connection
+      # on every check (and filling the broker log with TLS handshake failures).
+      test:
+        - CMD-SHELL
+        - >-
+          awk '$$2 ~ /:22B3$$/ && $$4 == "0A" { listening = 1 }
+          END { exit !listening }' /proc/net/tcp
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 5s
+
+  cloud:
+    image: ${FCPLCN_CLOUD_IMAGE:-${FCPLCN_PROJECT}-app:local}
+    build:
+      context: ../..
+      dockerfile: cloud/deploy/Dockerfile
+    user: '1000:1000'
+    restart: unless-stopped
+    init: true
+    environment:
+      FCPLCN_CLOUD_HOST: 0.0.0.0
+      FCPLCN_CLOUD_PORT: '4100'
+      FCPLCN_CLOUD_PUBLIC_ORIGIN: ${FCPLCN_CLOUD_PUBLIC_ORIGIN:-https://${FCPLCN_DOMAIN}}
+      FCPLCN_CLOUD_DATA_DIR: /var/lib/fcplcn
+      FCPLCN_CLOUD_DATABASE_URL_FILE: /run/fcplcn/cloud/database-url
+      FCPLCN_CLOUD_MASTER_KEY_FILE: /run/fcplcn/cloud/master-key
+      FCPLCN_CLOUD_SETUP_KEY_FILE: /run/fcplcn/cloud/setup-key
+      FCPLCN_CLOUD_MQTT_URL: mqtts://broker:8883
+      FCPLCN_CLOUD_MQTT_USERNAME_FILE: /run/fcplcn/cloud/mqtt-username
+      FCPLCN_CLOUD_MQTT_PASSWORD_FILE: /run/fcplcn/cloud/mqtt-password
+      FCPLCN_CLOUD_MQTT_CA: /run/fcplcn/cloud/broker-ca.crt
+      FCPLCN_CLOUD_PUBLIC_MQTT_URL: mqtts://${FCPLCN_DOMAIN}:${FCPLCN_CLOUD_MQTT_PORT:-8883}
+      FCPLCN_CLOUD_PUBLIC_MQTT_CA: /run/fcplcn/cloud/broker-ca.crt
+      NODE_OPTIONS: --max-old-space-size=384
+    volumes:
+      - cloud:/var/lib/fcplcn
+      - private:/run/fcplcn:ro
+    networks: [edge, database]
+    depends_on:
+      db:
+        condition: service_healthy
+      broker:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        # node:http preserves Host; fetch replaces it with the loopback address.
+        - require('node:http').get('http://127.0.0.1:4100/health',{headers:{Host:new URL(process.env.FCPLCN_CLOUD_PUBLIC_ORIGIN).host}},r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 256
+
+  caddy:
+    image: caddy:2.11.9-alpine
+    restart: unless-stopped
+    environment:
+      FCPLCN_DOMAIN: ${FCPLCN_DOMAIN}
+    ports:
+      - '${FCPLCN_CLOUD_HTTP_PORT:-80}:80'
+      - '${FCPLCN_CLOUD_HTTPS_PORT:-443}:443'
+      - '${FCPLCN_CLOUD_HTTPS_PORT:-443}:443/udp'
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    networks: [edge]
+    depends_on:
+      cloud:
+        condition: service_healthy
+    security_opt: [no-new-privileges:true]
+    pids_limit: 128
+
+networks:
+  edge:
+  database:
+    internal: true
+volumes:
+  private:
+    external: true
+    name: ${FCPLCN_PROJECT}_private
+  broker:
+    external: true
+    name: ${FCPLCN_PROJECT}_broker
+  cloud:
+    external: true
+    name: ${FCPLCN_PROJECT}_cloud
+  database:
+  caddy-data:
+  caddy-config:

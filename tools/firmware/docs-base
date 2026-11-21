@@ -1,0 +1,37 @@
+#!/usr/bin/env python3
+"""Check every source contract, then generate the FCPLCn firmware API reference."""
+
+import json
+import os
+import shutil
+import subprocess
+from pathlib import Path
+
+
+def main():
+    root = Path(__file__).resolve().parents[2]
+    coverage = subprocess.run([str(root / "tools/firmware/check-doxygen")], cwd=root)
+    if coverage.returncode:
+        return coverage.returncode
+    doxygen = shutil.which("doxygen")
+    if not doxygen:
+        raise SystemExit("Doxygen is missing; install it with brew install doxygen")
+    identity = json.loads((root / "config/product.json").read_text())
+    output = Path(os.environ.get("FCPLCN_DOCS_DIR", "~/esp/build/fcplcn/docs")).expanduser().resolve()
+    output.mkdir(parents=True, exist_ok=True)
+    environment = dict(os.environ)
+    environment.update(
+        FCPLCN_DOC_PRODUCT=identity["name"],
+        FCPLCN_DOC_DESCRIPTION=identity["fullName"] + " — firmware API",
+        FCPLCN_DOCS_DIR=str(output),
+    )
+    result = subprocess.run([doxygen, str(root / "firmware/base/Doxyfile")], cwd=root, env=environment)
+    if result.returncode:
+        print(f"Doxygen warnings: {output / 'warnings.log'}")
+    else:
+        print(f"FCPLCn API documentation: {output / 'html/index.html'}")
+    return result.returncode
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

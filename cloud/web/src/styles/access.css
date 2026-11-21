@@ -1,0 +1,54 @@
+/* Участники дома и редактирование их прав. */
+.member-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 17px;
+  border: 1px solid #2c415b;
+  border-radius: 12px;
+  background: #132132;
+}
+
+.person-avatar {
+  width: 35px;
+  height: 35px;
+  border-radius: 50%;
+  background: #29405e;
+  color: #c6dbf8;
+  display: grid;
+  place-items: center;
+  flex: none;
+}
+
+.member-name {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  flex: 1;
+}
+
+.member-name > strong {
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.member-name > span {
+  font-size: 11px;
+  color: #91a7c2;
+  overflow-wrap: anywhere;
+}
+
+.member-row > select {
+  width: 150px;
+  font-size: 12px;
+  min-height: 36px;
+  padding: 8px;
+}
+
+.row-error {
+  color: #f5b2bf;
+  font-size: 12px;
+  width: 100%;
+  margin: 0;
+}

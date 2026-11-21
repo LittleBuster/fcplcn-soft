@@ -1,0 +1,114 @@
+/* Журнал команд и подтверждений */
+
+.command-log {
+  padding: 1px 19px;
+}
+
+.command-row {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  padding: 16px 0;
+  border-bottom: 1px solid #29384c;
+  min-width: 0;
+}
+
+.command-row:last-child {
+  border-bottom: 0;
+}
+
+.command-icon {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  background: #26374e;
+  color: #9ebfec;
+  flex-shrink: 0;
+}
+
+.command-icon .icon {
+  width: 18px;
+  height: 18px;
+}
+
+.command-icon.green {
+  color: var(--green);
+  background: #263d36;
+}
+
+.command-icon.red {
+  color: var(--red);
+  background: #412b37;
+}
+
+.command-copy {
+  flex: 1;
+  min-width: 0;
+}
+
+.command-copy strong {
+  font-weight: 550;
+  font-size: 11px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.command-copy strong > span {
+  color: #839bb9;
+  font-weight: 450;
+}
+
+.command-copy p {
+  font-size: 10px;
+  color: #8094b0;
+  margin-top: 4px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.command-result {
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.command-result > span {
+  font-size: 9px;
+}
+
+.command-result time {
+  display: block;
+  font-size: 9px;
+  margin-top: 5px;
+  color: #7186a3;
+}
+
+.result-applied {
+  color: var(--green);
+}
+
+.result-pending {
+  color: var(--accent);
+}
+
+.result-rejected,
+.result-unknown {
+  color: var(--red);
+}
+
+.activity-note {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 11px;
+  color: #8ca3bc;
+  margin-top: 22px;
+  line-height: 1.8;
+}
+
+.activity-note .icon {
+  width: 18px;
+  height: 18px;
+  color: var(--green);
+}

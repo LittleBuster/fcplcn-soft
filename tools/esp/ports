@@ -1,0 +1,5 @@
+#!/bin/sh
+set -eu
+
+ESP_TOOL_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+exec "$ESP_TOOL_DIR/.venv/bin/python" -m serial.tools.list_ports -v "$@"

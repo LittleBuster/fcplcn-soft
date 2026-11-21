@@ -1,0 +1,1732 @@
+<!doctype html>
+<!--
+  @file index.html
+  @brief Local FCPLCn service UI; scripts and styles remain external for CSP.
+-->
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="dark" />
+    <title>__PRODUCT_NAME__ — __PRODUCT_FULL_NAME__</title>
+    <link rel="stylesheet" href="/style.css" />
+    <script type="module" src="/app.js"></script>
+  </head>
+  <body>
+    <!-- Decorative symbols are local and shared by static and dynamic card headings. -->
+    <svg
+      class="svg-definitions"
+      width="0"
+      height="0"
+      aria-hidden="true"
+      focusable="false"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <defs>
+        <symbol id="icon-wifi" viewBox="0 0 24 24">
+          <path d="M3 8a15 15 0 0 1 18 0M6 12a10 10 0 0 1 12 0M9 16a5 5 0 0 1 6 0" />
+          <circle cx="12" cy="20" r="1" />
+        </symbol>
+        <symbol id="icon-ethernet" viewBox="0 0 24 24">
+          <path d="M4 3h16v12h-4v5H8v-5H4zM7 3v5m3-5v5m4-5v5m3-5v5M10 20v3m4-3v3" />
+        </symbol>
+        <symbol id="icon-hub" viewBox="0 0 24 24">
+          <rect x="7" y="2" width="10" height="7" rx="2" />
+          <path d="M12 9v5M4 14h16M4 14v3m8-3v3m8-3v3" />
+          <rect x="1" y="17" width="6" height="5" rx="1" />
+          <rect x="9" y="17" width="6" height="5" rx="1" />
+          <rect x="17" y="17" width="6" height="5" rx="1" />
+        </symbol>
+        <symbol id="icon-link" viewBox="0 0 24 24">
+          <path d="m10 7 2-2a5 5 0 0 1 7 7l-2 2M14 17l-2 2a5 5 0 0 1-7-7l2-2m1 6 8-8" />
+        </symbol>
+        <symbol id="icon-lock" viewBox="0 0 24 24">
+          <rect x="5" y="10" width="14" height="12" rx="2" />
+          <path d="M8 10V6a4 4 0 0 1 8 0v4m-4 5v3" />
+        </symbol>
+        <symbol id="icon-chip" viewBox="0 0 24 24">
+          <rect x="5" y="5" width="14" height="14" rx="2" />
+          <rect x="9" y="9" width="6" height="6" rx="1" />
+          <path d="M8 1v4m8-4v4M8 19v4m8-4v4M1 8h4m-4 8h4m14-8h4m-4 8h4" />
+        </symbol>
+        <symbol id="icon-board" viewBox="0 0 24 24">
+          <rect x="3" y="3" width="18" height="18" rx="2" />
+          <rect x="7" y="7" width="7" height="7" rx="1" />
+          <path d="M7 18h3m4 0h3m0-11v4M1 8h2m-2 8h2m18-8h2m-2 8h2" />
+        </symbol>
+        <symbol id="icon-settings" viewBox="0 0 24 24">
+          <path d="M4 3v18m8-18v18m8-18v18" />
+          <rect x="1" y="7" width="6" height="4" rx="1" />
+          <rect x="9" y="14" width="6" height="4" rx="1" />
+          <rect x="17" y="5" width="6" height="4" rx="1" />
+        </symbol>
+        <symbol id="icon-activity" viewBox="0 0 24 24"><path d="M2 13h4l3-8 5 15 3-9h5" /></symbol>
+        <symbol id="icon-clock" viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="9" />
+          <path d="M12 6v6l4 2" />
+        </symbol>
+        <symbol id="icon-restart" viewBox="0 0 24 24">
+          <path d="M20 8V3l-3 3a8 8 0 1 0 3 10m0-8h-5" />
+        </symbol>
+        <symbol id="icon-firmware" viewBox="0 0 24 24">
+          <rect x="5" y="5" width="14" height="14" rx="3" />
+          <path d="M9 2v3m6-3v3M9 19v3m6-3v3M2 9h3m-3 6h3m14-6h3m-3 6h3M9 12l3-3 3 3m-3-3v7" />
+        </symbol>
+        <symbol id="icon-backup" viewBox="0 0 24 24">
+          <path d="M5 3h10l4 4v14H5zM15 3v5h4m-7 3v7m-3-3 3 3 3-3" />
+        </symbol>
+        <symbol id="icon-upload" viewBox="0 0 24 24">
+          <path d="M4 15v6h16v-6M12 3v13m-5-8 5-5 5 5" />
+        </symbol>
+        <symbol id="icon-user" viewBox="0 0 24 24">
+          <circle cx="12" cy="7" r="4" />
+          <path d="M4 22v-3a8 8 0 0 1 16 0v3" />
+        </symbol>
+        <symbol id="icon-relay" viewBox="0 0 24 24">
+          <path d="M3 4h18v16H3zM6 15h3m6 0h3m-9 0 6-6M7 7h3" />
+          <circle cx="9" cy="15" r="1" />
+          <circle cx="15" cy="15" r="1" />
+        </symbol>
+        <symbol id="icon-input" viewBox="0 0 24 24">
+          <path d="M14 3h7v18h-7M2 12h14m-5-5 5 5-5 5" />
+        </symbol>
+        <symbol id="icon-bus" viewBox="0 0 24 24">
+          <path d="M3 6h18M3 18h18M7 6v12m10-12v12" />
+          <circle cx="7" cy="6" r="2" />
+          <circle cx="17" cy="18" r="2" />
+        </symbol>
+        <symbol id="icon-led" viewBox="0 0 24 24">
+          <path d="M8 15V8a4 4 0 0 1 8 0v7H8Zm-2 0h12m-8 0v7m4-7v7M3 5l2 2m14-2-2 2M12 1v1" />
+        </symbol>
+        <symbol id="icon-probe" viewBox="0 0 24 24">
+          <path d="M7 3h7v12a4 4 0 1 1-7 0V3Zm3 4v10m6-10h4m-4 4h3m-3 4h4" />
+        </symbol>
+        <symbol id="icon-dht22" viewBox="0 0 24 24">
+          <path
+            d="M5 4a2 2 0 0 1 4 0v10a4 4 0 1 1-4 0V4Zm2 3v10M18 4s-4 5-4 8a4 4 0 0 0 8 0c0-3-4-8-4-8Z"
+          />
+        </symbol>
+        <symbol id="icon-onewire" viewBox="0 0 24 24">
+          <rect x="4" y="2" width="10" height="14" rx="4" />
+          <path d="M7 16v5m4-5v2c0 3 6 3 6 0v-3m2-10h3m-3 4h3M7 6h4m-4 4h4" />
+        </symbol>
+        <symbol id="icon-plug" viewBox="0 0 24 24">
+          <rect x="3" y="3" width="18" height="18" rx="5" />
+          <circle cx="12" cy="12" r="6" />
+          <path d="M9 11v2m6-2v2m-3-7v2m0 8v2" />
+        </symbol>
+        <symbol id="icon-light" viewBox="0 0 24 24">
+          <path
+            d="M8 16c0-3-3-4-3-8a7 7 0 0 1 14 0c0 4-3 5-3 8H8Zm0 3h8m-6 3h4M2 4 0 2m22 2 2-2M2 11H0m24 0h-2"
+          />
+        </symbol>
+        <symbol id="icon-weather" viewBox="0 0 24 24">
+          <circle cx="8" cy="8" r="4" />
+          <path
+            d="M8 1V0M1 8H0m2-6L1 1m14 1 1-1M5 15a5 5 0 0 1 9-3 4 4 0 1 1 3 7H7a3 3 0 0 1-2-4Zm3 7-1 2m7-2-1 2m7-2-1 2"
+          />
+        </symbol>
+        <symbol id="icon-heating" viewBox="0 0 24 24">
+          <path
+            d="M13 2c1 5-5 5-3 10 1-2 3-2 4-5 4 4 7 7 5 11a8 8 0 0 1-14 0C2 12 8 8 8 4c2 2 3 2 5-2Z"
+          />
+        </symbol>
+        <symbol id="icon-cooling" viewBox="0 0 24 24">
+          <path
+            d="M12 1v22M2.5 6.5l19 11m-19 0 19-11M9 3l3 3 3-3M9 21l3-3 3 3M3 10l4-1-1-4m12 14-1-4 4-1M3 14l4 1-1 4M18 5l-1 4 4 1"
+          />
+        </symbol>
+        <!-- Large state illustrations share the same local sprite and require no external assets. -->
+        <symbol id="visual-plug" viewBox="0 0 128 128">
+          <rect class="visual-soft" x="20" y="14" width="88" height="100" rx="21" />
+          <circle cx="64" cy="64" r="30" />
+          <circle class="visual-fill" cx="52" cy="63" r="4.5" />
+          <circle class="visual-fill" cx="76" cy="63" r="4.5" />
+          <path d="M64 34v9m0 42v9" />
+          <path class="visual-soft" d="M46 19h36M46 109h36" />
+        </symbol>
+        <symbol id="visual-light" viewBox="0 0 128 128">
+          <path
+            class="visual-lamp"
+            d="M45 87c0-13-15-19-15-39a34 34 0 0 1 68 0c0 20-15 26-15 39Z"
+          />
+          <path d="M46 94h36m-32 9h28m-23 9h18M55 85V64l-9-10m27 31V64l9-10M55 64h18" />
+          <path
+            class="visual-rays"
+            d="M64 7V1M18 15l-7-7m99 7 7-7M13 49H3m112 0h10M20 83l-7 5m95-5 7 5"
+          />
+        </symbol>
+        <symbol id="visual-dht22" viewBox="0 0 128 128">
+          <rect class="visual-soft" x="21" y="16" width="52" height="88" rx="12" />
+          <path d="M34 34h26M34 46h26M34 58h26M34 70h18m-18 34v13m13-13v13m13-13v13" />
+          <path class="visual-soft" d="M99 43s-16 21-16 33a16 16 0 0 0 32 0c0-12-16-33-16-33Z" />
+          <path d="M91 77a8 8 0 0 0 8 8" />
+        </symbol>
+        <symbol id="visual-onewire" viewBox="0 0 128 128">
+          <rect class="visual-soft" x="40" y="10" width="34" height="77" rx="17" />
+          <path d="M57 87v17c0 16 42 16 42-2V87M48 29h18m-18 11h18m26-9h19m-19 14h12m-12 14h19" />
+          <circle class="visual-fill" cx="57" cy="66" r="5" />
+        </symbol>
+        <symbol id="visual-heating" viewBox="0 0 128 128">
+          <rect class="visual-soft" x="16" y="46" width="96" height="59" rx="13" />
+          <path d="M33 56v39m20-39v39m22-39v39m20-39v39M27 105v10m74-10v10M16 64H8m104 0h8" />
+          <path
+            class="visual-waves"
+            d="M37 34c-13-10 12-15 0-27m27 27c-13-10 12-15 0-27m27 27c-13-10 12-15 0-27"
+          />
+        </symbol>
+        <symbol id="visual-cooling" viewBox="0 0 128 128">
+          <rect class="visual-soft" x="13" y="23" width="102" height="58" rx="15" />
+          <path d="M26 43h76M25 67h78m-16-13h13" />
+          <path class="visual-air" d="M41 83c0 16-12 14-12 29m35-29v32m23-32c0 16 12 14 12 29" />
+        </symbol>
+        <symbol id="icon-security" viewBox="0 0 24 24">
+          <path d="M12 2 3 6v6c0 6 9 10 9 10s9-4 9-10V6Z" />
+          <path d="m8 12 3 3 5-6" />
+        </symbol>
+        <symbol id="icon-security-alarm" viewBox="0 0 24 24">
+          <path d="M12 2 3 6v6c0 6 9 10 9 10s9-4 9-10V6Z" />
+          <path d="M12 7v6" />
+          <circle class="visual-fill" cx="12" cy="16.5" r="1" />
+        </symbol>
+        <symbol id="icon-door" viewBox="0 0 24 24">
+          <path d="M4 22V2h16v20M7 22V5h10v17M14 13h1" />
+        </symbol>
+        <symbol id="icon-motion" viewBox="0 0 24 24">
+          <circle cx="13" cy="4" r="2" />
+          <path d="m10 8 5 2 3 4M10 8l-4 5m6-4-2 7-4 6m4-6 6 6M3 5a10 10 0 0 0 0 14" />
+        </symbol>
+        <symbol id="visual-security" viewBox="0 0 128 128">
+          <path class="visual-soft" d="m64 12 41 16v30c0 33-41 58-41 58S23 91 23 58V28Z" />
+          <path d="m45 62 13 13 27-29" />
+        </symbol>
+        <symbol id="visual-security-alarm" viewBox="0 0 128 128">
+          <path class="visual-soft" d="m64 12 41 16v30c0 33-41 58-41 58S23 91 23 58V28Z" />
+          <path d="M64 37v30" stroke-width="7" />
+          <circle class="visual-fill" cx="64" cy="83" r="4.5" />
+        </symbol>
+        <symbol id="visual-door" viewBox="0 0 128 128">
+          <path class="visual-soft" d="M26 116V13h76v103Z" />
+          <path d="M38 116V26h52v90M76 72h2M17 116h94" />
+          <circle class="visual-fill" cx="77" cy="72" r="3" />
+        </symbol>
+        <symbol id="visual-motion" viewBox="0 0 128 128">
+          <circle class="visual-soft" cx="73" cy="22" r="11" />
+          <path
+            d="m58 45 24 8 16 21M58 45 36 69m29-19-10 35-24 29m24-29 28 29M22 30a56 56 0 0 0 0 68M35 42a36 36 0 0 0 0 44"
+          />
+        </symbol>
+      </defs>
+    </svg>
+    <div class="shell">
+      <header class="header">
+        <div>
+          <p class="eyebrow">Контроллер</p>
+          <h1>__PRODUCT_NAME__</h1>
+          <p class="subtitle">__PRODUCT_FULL_NAME__</p>
+        </div>
+        <div id="header-actions" class="header-actions" hidden>
+          <span id="connection-badge" class="badge">Подключение…</span>
+          <button id="logout" class="button secondary" type="button">Выйти</button>
+        </div>
+      </header>
+
+      <div id="notice" class="notice" role="status" aria-live="polite" hidden></div>
+
+      <main>
+        <!-- Authentication is separate from session-scoped configuration drafts. -->
+        <section id="login-view" class="login-layout">
+          <div class="card login-card">
+            <h2 data-card-icon="lock">Вход в контроллер</h2>
+            <p class="muted">Настройки сети, времени и учётной записи.</p>
+            <form id="login-form">
+              <label for="login-username">Логин</label>
+              <input
+                id="login-username"
+                name="username"
+                autocomplete="username"
+                value="admin"
+                required
+              />
+              <label for="login-password">Пароль</label>
+              <input
+                id="login-password"
+                name="password"
+                type="password"
+                autocomplete="current-password"
+              />
+              <p id="login-error" class="error-text" role="alert" hidden></p>
+              <button class="button primary" type="submit">Войти</button>
+            </form>
+          </div>
+        </section>
+
+        <section id="app-view" hidden>
+          <!-- Only top-level views participate in keyboard tab navigation. -->
+          <nav class="tabs" aria-label="Настройки контроллера" role="tablist">
+            <button
+              id="tab-network"
+              class="tab active"
+              role="tab"
+              aria-selected="true"
+              aria-controls="panel-network"
+              data-tab="network"
+              type="button"
+              >Сеть<span class="dirty-mark" data-dirty="network" hidden> •</span></button
+            >
+            <button
+              id="tab-hub"
+              class="tab"
+              role="tab"
+              aria-selected="false"
+              aria-controls="panel-hub"
+              tabindex="-1"
+              data-tab="hub"
+              type="button"
+              >Хаб<span class="dirty-mark" data-dirty="hub" hidden> •</span></button
+            >
+            <button
+              id="tab-hardware"
+              class="tab"
+              role="tab"
+              aria-selected="false"
+              aria-controls="panel-hardware"
+              tabindex="-1"
+              data-tab="hardware"
+              type="button"
+              >Аппаратная</button
+            >
+            <button
+              id="tab-controllers"
+              class="tab"
+              role="tab"
+              aria-selected="false"
+              aria-controls="panel-controllers"
+              tabindex="-1"
+              data-tab="controllers"
+              type="button"
+              >Контроллеры<span class="dirty-mark" data-dirty="controllers" hidden> •</span></button
+            >
+            <button
+              id="tab-system"
+              class="tab"
+              role="tab"
+              aria-selected="false"
+              aria-controls="panel-system"
+              tabindex="-1"
+              data-tab="system"
+              type="button"
+              >Система<span class="dirty-mark" data-dirty="system" hidden> •</span></button
+            >
+            <button
+              id="tab-users"
+              class="tab"
+              role="tab"
+              aria-selected="false"
+              aria-controls="panel-users"
+              tabindex="-1"
+              data-tab="users"
+              type="button"
+              >Пользователи<span class="dirty-mark" data-dirty="users" hidden> •</span></button
+            >
+          </nav>
+
+          <div class="toolbar">
+            <span id="device-summary" class="muted">Загрузка данных…</span>
+            <button id="reload-config" class="text-button" type="button">Обновить настройки</button>
+          </div>
+
+          <!-- Network landing and nested WiFi/Ethernet forms retain independent drafts. -->
+          <section
+            id="panel-network"
+            class="panel"
+            role="tabpanel"
+            aria-labelledby="tab-network"
+            data-panel="network"
+          >
+            <div id="network-list-view">
+              <div class="network-heading"
+                ><h2 data-card-icon="link">Подключение к сети</h2
+                ><p class="muted"
+                  >Выберите интерфейс, чтобы посмотреть состояние и изменить настройки.</p
+                ></div
+              >
+              <div class="network-grid">
+                <button
+                  id="network-open-wifi"
+                  class="network-card"
+                  data-network-target="wifi"
+                  type="button"
+                >
+                  <span class="network-card-heading"
+                    ><svg
+                      class="ui-icon network-icon"
+                      viewBox="0 0 24 24"
+                      aria-hidden="true"
+                      focusable="false"
+                    >
+                      <use href="#icon-wifi"></use></svg
+                    ><span id="network-wifi-status" class="badge state-unknown"
+                      >Нет данных</span
+                    ></span
+                  >
+                  <span class="network-card-title"
+                    >WiFi<span class="dirty-mark" data-dirty="wifi" hidden> •</span></span
+                  >
+                  <span id="network-wifi-summary" class="network-card-summary"
+                    >Точка доступа и подключение к роутеру</span
+                  >
+                  <span id="network-wifi-details" class="network-card-details"
+                    >Загрузка состояния…</span
+                  >
+                  <span class="network-card-link"
+                    >Настроить WiFi <span aria-hidden="true">→</span></span
+                  >
+                </button>
+                <button
+                  id="network-open-ethernet"
+                  class="network-card"
+                  data-network-target="ethernet"
+                  type="button"
+                >
+                  <span class="network-card-heading"
+                    ><svg
+                      class="ui-icon network-icon"
+                      viewBox="0 0 24 24"
+                      aria-hidden="true"
+                      focusable="false"
+                    >
+                      <use href="#icon-ethernet"></use></svg
+                    ><span id="network-ethernet-status" class="badge state-unknown"
+                      >Нет данных</span
+                    ></span
+                  >
+                  <span class="network-card-title"
+                    >Ethernet<span class="dirty-mark" data-dirty="ethernet" hidden> •</span></span
+                  >
+                  <span id="network-ethernet-summary" class="network-card-summary"
+                    >Проводное подключение W5500</span
+                  >
+                  <span id="network-ethernet-details" class="network-card-details"
+                    >Загрузка состояния…</span
+                  >
+                  <span class="network-card-link"
+                    >Настроить Ethernet <span aria-hidden="true">→</span></span
+                  >
+                </button>
+              </div>
+            </div>
+            <section
+              id="panel-wifi"
+              class="network-detail"
+              aria-labelledby="network-wifi-title"
+              data-network-view="wifi"
+              hidden
+            >
+              <button
+                id="network-back-wifi"
+                class="text-button network-back"
+                data-network-back
+                type="button"
+                >← Назад к сети</button
+              >
+              <div class="content-grid">
+                <form id="wifi-form" class="card config-form" data-config="wifi">
+                  <h2 id="network-wifi-title" tabindex="-1" data-card-icon="wifi"
+                    >Настройки WiFi</h2
+                  >
+                  <label class="check"
+                    ><input id="wifi-enabled" type="checkbox" /><span>WiFi включён</span></label
+                  >
+
+                  <div class="section-title"
+                    ><h3 data-card-icon="wifi">Точка доступа AP</h3
+                    ><label class="check compact"
+                      ><input id="ap-enabled" type="checkbox" /><span>Включена</span></label
+                    ></div
+                  >
+                  <fieldset id="ap-fields">
+                    <label for="ap-ssid">Имя сети SSID</label>
+                    <input id="ap-ssid" maxlength="32" autocomplete="off" />
+                    <div class="field-row">
+                      <div
+                        ><label for="ap-channel">Канал</label
+                        ><input id="ap-channel" type="number" min="1" max="11" inputmode="numeric"
+                      /></div>
+                      <div
+                        ><label for="ap-ip">IP точки доступа</label
+                        ><input
+                          id="ap-ip"
+                          inputmode="decimal"
+                          autocomplete="off"
+                          placeholder="192.168.4.1"
+                      /></div>
+                    </div>
+                    <label for="ap-netmask">Маска подсети AP</label>
+                    <input
+                      id="ap-netmask"
+                      inputmode="decimal"
+                      autocomplete="off"
+                      placeholder="255.255.255.0"
+                    />
+                    <label for="ap-password">Новый пароль сети</label>
+                    <input
+                      id="ap-password"
+                      type="password"
+                      maxlength="63"
+                      autocomplete="new-password"
+                      placeholder="Оставьте пустым, чтобы сохранить"
+                    />
+                    <label class="check"
+                      ><input id="ap-open" type="checkbox" /><span
+                        >Открытая сеть без пароля</span
+                      ></label
+                    >
+                    <p id="ap-password-state" class="hint"></p>
+                  </fieldset>
+
+                  <div class="section-title"
+                    ><h3 data-card-icon="link">Подключение к роутеру STA</h3
+                    ><label class="check compact"
+                      ><input id="sta-enabled" type="checkbox" /><span>Включено</span></label
+                    ></div
+                  >
+                  <fieldset id="sta-fields">
+                    <label for="sta-ssid">Имя сети SSID</label>
+                    <input id="sta-ssid" maxlength="32" autocomplete="off" />
+                    <label for="sta-password">Новый пароль сети</label>
+                    <input
+                      id="sta-password"
+                      type="password"
+                      maxlength="63"
+                      autocomplete="new-password"
+                      placeholder="Оставьте пустым, чтобы сохранить"
+                    />
+                    <label class="check"
+                      ><input id="sta-open" type="checkbox" /><span>Сеть без пароля</span></label
+                    >
+                    <p id="sta-password-state" class="hint"></p>
+                  </fieldset>
+                  <p class="hint"
+                    >Изменение WiFi может прервать текущее соединение. Настройки сохраняются на
+                    контроллере.</p
+                  >
+                  <div class="form-actions"
+                    ><span class="save-state" data-save-state="wifi"></span
+                    ><button class="button primary" type="submit">Применить WiFi</button></div
+                  >
+                </form>
+
+                <aside class="card status-card" aria-labelledby="wifi-status-title">
+                  <h2 id="wifi-status-title" data-card-icon="activity">Состояние WiFi</h2>
+                  <dl class="status-list">
+                    <div><dt>Радиомодуль</dt><dd id="status-wifi-enabled">—</dd></div>
+                    <div><dt>Точка доступа</dt><dd id="status-ap-enabled">—</dd></div>
+                    <div><dt>SSID точки доступа</dt><dd id="status-ap-ssid">—</dd></div>
+                    <div><dt>IP точки доступа</dt><dd id="status-ap-ip">—</dd></div>
+                    <div><dt>Клиентов AP</dt><dd id="status-ap-clients">—</dd></div>
+                    <div><dt>Подключение STA</dt><dd id="status-sta-connected">—</dd></div>
+                    <div><dt>SSID роутера</dt><dd id="status-sta-ssid">—</dd></div>
+                    <div><dt>IP STA</dt><dd id="status-sta-ip">—</dd></div>
+                    <div><dt>Уровень сигнала</dt><dd id="status-sta-rssi">—</dd></div>
+                  </dl>
+                  <p id="status-sta-error" class="field-error" role="status" hidden></p>
+                </aside>
+              </div>
+            </section>
+
+            <section
+              id="panel-ethernet"
+              class="network-detail"
+              aria-labelledby="network-ethernet-title"
+              data-network-view="ethernet"
+              hidden
+            >
+              <button
+                id="network-back-ethernet"
+                class="text-button network-back"
+                data-network-back
+                type="button"
+                >← Назад к сети</button
+              >
+              <div class="content-grid">
+                <form id="ethernet-form" class="card config-form" data-config="ethernet">
+                  <h2 id="network-ethernet-title" tabindex="-1" data-card-icon="ethernet"
+                    >Проводное подключение</h2
+                  >
+                  <label class="check"
+                    ><input id="ethernet-enabled" type="checkbox" /><span
+                      >Ethernet включён</span
+                    ></label
+                  >
+                  <label class="check"
+                    ><input id="ethernet-dhcp" type="checkbox" /><span
+                      >Получать адрес по DHCP</span
+                    ></label
+                  >
+                  <fieldset id="ethernet-static-fields">
+                    <label for="ethernet-ip">IP-адрес</label>
+                    <input
+                      id="ethernet-ip"
+                      inputmode="decimal"
+                      placeholder="192.168.1.50"
+                      autocomplete="off"
+                    />
+                    <label for="ethernet-netmask">Маска подсети</label>
+                    <input
+                      id="ethernet-netmask"
+                      inputmode="decimal"
+                      placeholder="255.255.255.0"
+                      autocomplete="off"
+                    />
+                    <label for="ethernet-gateway">Шлюз</label>
+                    <input
+                      id="ethernet-gateway"
+                      inputmode="decimal"
+                      placeholder="192.168.1.1"
+                      autocomplete="off"
+                    />
+                    <label for="ethernet-dns">DNS-сервер</label>
+                    <input
+                      id="ethernet-dns"
+                      inputmode="decimal"
+                      placeholder="192.168.1.1"
+                      autocomplete="off"
+                    />
+                  </fieldset>
+                  <p class="hint"
+                    >Новый IP-адрес или отключение Ethernet могут прервать текущее соединение.</p
+                  >
+                  <div class="form-actions"
+                    ><span class="save-state" data-save-state="ethernet"></span
+                    ><button class="button primary" type="submit">Применить Ethernet</button></div
+                  >
+                </form>
+
+                <aside class="card status-card" aria-labelledby="ethernet-status-title">
+                  <h2 id="ethernet-status-title" data-card-icon="activity">Состояние Ethernet</h2>
+                  <dl class="status-list">
+                    <div><dt>Интерфейс</dt><dd id="status-ethernet-enabled">—</dd></div>
+                    <div><dt>Кабель / Link</dt><dd id="status-ethernet-link">—</dd></div>
+                    <div><dt>Получение адреса</dt><dd id="status-ethernet-dhcp">—</dd></div>
+                    <div><dt>IP-адрес</dt><dd id="status-ethernet-ip">—</dd></div>
+                    <div><dt>Маска подсети</dt><dd id="status-ethernet-netmask">—</dd></div>
+                    <div><dt>Шлюз</dt><dd id="status-ethernet-gateway">—</dd></div>
+                    <div><dt>DNS-сервер</dt><dd id="status-ethernet-dns">—</dd></div>
+                    <div><dt>MAC-адрес</dt><dd id="status-ethernet-mac">—</dd></div>
+                  </dl>
+                  <p id="status-ethernet-error" class="field-error" role="status" hidden></p>
+                </aside>
+              </div>
+            </section>
+          </section>
+
+          <section
+            id="panel-hub"
+            class="panel"
+            role="tabpanel"
+            aria-labelledby="tab-hub"
+            data-panel="hub"
+            hidden
+          >
+            <div class="content-grid">
+              <form id="hub-form" class="card config-form" data-config="hub">
+                <h2 data-card-icon="hub">Подключение к хабу</h2>
+                <p class="muted"
+                  >Локальный хаб управляет домом и обменивается данными с PLC по MQTT.</p
+                >
+                <label for="linux-host">Адрес хаба</label>
+                <input
+                  id="linux-host"
+                  maxlength="128"
+                  autocomplete="off"
+                  placeholder="192.168.1.10"
+                />
+                <label for="linux-port">Порт MQTT</label>
+                <input
+                  id="linux-port"
+                  type="number"
+                  min="1"
+                  max="65535"
+                  value="1883"
+                  inputmode="numeric"
+                />
+                <label for="linux-username">Пользователь MQTT</label>
+                <input id="linux-username" maxlength="64" autocomplete="off" />
+                <label for="linux-password">Новый пароль MQTT</label>
+                <input
+                  id="linux-password"
+                  type="password"
+                  maxlength="128"
+                  autocomplete="new-password"
+                  placeholder="Оставьте пустым, чтобы сохранить"
+                />
+                <label class="check"
+                  ><input id="linux-clear-password" type="checkbox" /><span
+                    >Удалить пароль MQTT</span
+                  ></label
+                >
+                <p id="linux-password-state" class="hint"></p>
+                <p class="hint">Пустой адрес хаба отключает MQTT-подключение.</p>
+                <div class="form-actions"
+                  ><span class="save-state" data-save-state="hub"></span
+                  ><button class="button primary" type="submit"
+                    >Сохранить настройки хаба</button
+                  ></div
+                >
+              </form>
+              <aside class="card status-card" aria-labelledby="hub-status-title">
+                <h2 id="hub-status-title" data-card-icon="link">Состояние подключения</h2>
+                <dl class="status-list"
+                  ><div><dt>Подключение к хабу</dt><dd id="status-linux">—</dd></div></dl
+                >
+                <p id="status-linux-error" class="field-error" role="status" hidden></p>
+                <p class="hint">Автономная логика PLC продолжает работать, если хаб недоступен.</p>
+              </aside>
+            </div>
+          </section>
+
+          <section
+            id="panel-hardware"
+            class="panel hardware-page"
+            role="tabpanel"
+            aria-labelledby="tab-hardware"
+            data-panel="hardware"
+            hidden
+          >
+            <div class="hardware-heading">
+              <div
+                ><h2 data-card-icon="board">Оборудование платы</h2
+                ><p class="muted">Состояния каналов и управление реле в реальном времени.</p></div
+              >
+              <span id="hardware-live-status" class="badge" role="status">Ожидание данных</span>
+            </div>
+            <p id="hardware-error" class="notice error" role="alert" hidden></p>
+            <p id="hardware-action-notice" class="notice" role="status" hidden></p>
+            <section class="card" aria-labelledby="hardware-relays-title">
+              <div class="hardware-section-heading"
+                ><h2 id="hardware-relays-title" data-card-icon="relay">Релейные выходы</h2
+                ><span id="hardware-relay-count" class="muted"></span
+              ></div>
+              <p class="hint hardware-intro"
+                >Команда сразу изменяет выход. Состояние показано по подтверждённым данным
+                контроллера.</p
+              >
+              <div id="hardware-relays" class="channel-grid"
+                ><p class="muted">Нет данных о реле.</p></div
+              >
+            </section>
+            <section class="card" aria-labelledby="hardware-inputs-title">
+              <div class="hardware-section-heading"
+                ><h2 id="hardware-inputs-title" data-card-icon="input">Дискретные входы</h2
+                ><span id="hardware-input-count" class="muted"></span
+              ></div>
+              <p class="hint hardware-intro"
+                >HIGH и LOW — электрический уровень входа без интерпретации состояния подключённого
+                оборудования.</p
+              >
+              <div id="hardware-inputs" class="channel-grid"
+                ><p class="muted">Нет данных о входах.</p></div
+              >
+            </section>
+            <div class="hardware-detail-grid">
+              <section class="card" aria-labelledby="hardware-i2c-title">
+                <div class="hardware-section-heading"
+                  ><h2 id="hardware-i2c-title" data-card-icon="bus">Шины I²C</h2
+                  ><button id="hardware-scan" class="button secondary" type="button"
+                    >Сканировать шины</button
+                  ></div
+                >
+                <p class="hint hardware-intro"
+                  >Адреса устройств, ответивших при последнем сканировании каждой шины.</p
+                >
+                <div id="hardware-i2c" class="hardware-bus-list"
+                  ><p class="muted">Нет данных о шинах.</p></div
+                >
+              </section>
+              <section class="card" aria-labelledby="hardware-rtc-title">
+                <h2 id="hardware-rtc-title" data-card-icon="clock">Аппаратные часы</h2>
+                <dl class="status-list">
+                  <div><dt>Модель RTC</dt><dd id="hardware-rtc-model">—</dd></div>
+                  <div
+                    ><dt>Состояние</dt
+                    ><dd
+                      ><span id="hardware-rtc-status" class="badge state-unknown"
+                        >Нет данных</span
+                      ></dd
+                    ></div
+                  >
+                  <div><dt>Время RTC</dt><dd id="hardware-rtc-time">Нет данных</dd></div>
+                  <div><dt>Шина и адрес</dt><dd id="hardware-rtc-binding">—</dd></div>
+                </dl>
+                <p id="hardware-rtc-error" class="field-error" role="status" hidden></p>
+                <p class="hint"
+                  >Это время отдельной микросхемы RTC. Системные часы ESP и настройка времени
+                  находятся во вкладке «Система».</p
+                >
+              </section>
+              <section class="card fram-card" aria-labelledby="hardware-fram-title">
+                <div class="hardware-section-heading">
+                  <h2 id="hardware-fram-title" data-card-icon="chip">Память FRAM</h2>
+                  <span id="hardware-fram-status" class="badge state-unknown" role="status"
+                    >Нет данных</span
+                  >
+                </div>
+                <div class="fram-details">
+                  <dl class="status-list">
+                    <div><dt>Микросхема</dt><dd id="hardware-fram-model">—</dd></div>
+                    <div><dt>Шина и адрес</dt><dd id="hardware-fram-binding">—</dd></div>
+                    <div><dt>Данные состояний</dt><dd id="hardware-fram-payload">—</dd></div>
+                  </dl>
+                  <div class="fram-usage">
+                    <p id="hardware-fram-usage-label" class="muted">Занято журналом</p>
+                    <p id="hardware-fram-used" class="fram-usage-value">Нет данных</p>
+                    <progress
+                      id="hardware-fram-progress"
+                      class="fram-progress"
+                      aria-labelledby="hardware-fram-usage-label"
+                      hidden
+                    ></progress>
+                    <p id="hardware-fram-free" class="muted">Свободно: нет данных</p>
+                    <p class="hint"
+                      >В занятое место входят две копии состояний и служебные данные.</p
+                    >
+                  </div>
+                </div>
+                <p id="hardware-fram-error" class="field-error" role="status" hidden></p>
+              </section>
+            </div>
+            <div class="hardware-detail-grid">
+              <section class="card" aria-labelledby="hardware-sensors-title"
+                ><h2 id="hardware-sensors-title" data-card-icon="probe">Выводы датчиков</h2
+                ><p class="hint hardware-intro"
+                  >Назначения GPIO. Показания датчиков здесь не считываются.</p
+                ><div id="hardware-sensors" class="pin-chips"
+                  ><p class="muted">Нет данных о выводах датчиков.</p></div
+                ></section
+              >
+              <section class="card" aria-labelledby="hardware-leds-title"
+                ><h2 id="hardware-leds-title" data-card-icon="led">Светодиоды</h2
+                ><div id="hardware-leds" class="hardware-bus-list"
+                  ><p class="muted">Нет данных о светодиодах.</p></div
+                ></section
+              >
+            </div>
+            <section class="card" aria-labelledby="hardware-pins-title">
+              <h2 id="hardware-pins-title" data-card-icon="board">Карта выводов</h2>
+              <div class="table-scroll"
+                ><table class="pin-table"
+                  ><thead
+                    ><tr
+                      ><th scope="col">Назначение</th><th scope="col">GPIO</th
+                      ><th scope="col">Направление</th></tr
+                    ></thead
+                  ><tbody id="hardware-pin-map"
+                    ><tr><td colspan="3" class="muted">Нет данных о выводах.</td></tr></tbody
+                  ></table
+                ></div
+              >
+            </section>
+          </section>
+
+          <!-- Module pages share rendering and request serialization, with separate revisions. -->
+          <section
+            id="panel-controllers"
+            class="panel"
+            role="tabpanel"
+            aria-labelledby="tab-controllers"
+            data-panel="controllers"
+            hidden
+          >
+            <p id="sockets-error" class="notice error" role="alert" hidden></p>
+            <p id="sockets-notice" class="notice" role="status" hidden></p>
+            <p id="lights-error" class="notice error" role="alert" hidden></p>
+            <p id="lights-notice" class="notice" role="status" hidden></p>
+            <p id="meteo-error" class="notice error" role="alert" hidden></p>
+            <p id="meteo-notice" class="notice" role="status" hidden></p>
+            <p id="thermostats-error" class="notice error" role="alert" hidden></p>
+            <p id="thermostats-notice" class="notice" role="status" hidden></p>
+            <p id="security-error" class="notice error" role="alert" hidden></p
+            ><p id="security-notice" class="notice" role="status" hidden></p>
+            <div id="controllers-list-view">
+              <div class="controllers-heading"
+                ><div
+                  ><h2 data-card-icon="settings">Контроллеры</h2
+                  ><p class="muted">Автономное управление оборудованием на PLC.</p></div
+                ></div
+              >
+              <p class="hint controllers-port-hint"
+                >Порты общие для всех контроллеров. Занятые порты видны в списках с именем
+                владельца; выключение модуля не освобождает его привязки. OneWire позволяет
+                подключить несколько разных датчиков к одному порту.</p
+              >
+              <div class="controller-grid">
+                <article class="controller-tile" data-controller-id="sockets">
+                  <button
+                    id="sockets-open"
+                    class="controller-open"
+                    type="button"
+                    aria-label="Открыть контроллер Розетки"
+                  >
+                    <svg
+                      class="ui-icon tile-icon"
+                      viewBox="0 0 24 24"
+                      aria-hidden="true"
+                      focusable="false"
+                    >
+                      <use href="#icon-plug"></use>
+                    </svg>
+                    <span class="controller-title">Розетки</span>
+                    <span class="controller-description"
+                      >Релейные выходы, ручное управление и кнопки без фиксации.</span
+                    >
+                    <span class="controller-open-link"
+                      >Настроить <span aria-hidden="true">→</span></span
+                    >
+                  </button>
+                  <div class="controller-tile-footer"
+                    ><span id="sockets-tile-status" class="badge state-unknown">Загрузка…</span
+                    ><button
+                      id="sockets-tile-enabled"
+                      class="module-toggle"
+                      type="button"
+                      aria-label="Включить модуль Розетки"
+                      aria-pressed="mixed"
+                      disabled
+                      ><span class="module-switch-track" aria-hidden="true"
+                        ><span class="module-switch-thumb"></span></span></button
+                  ></div>
+                </article>
+                <article class="controller-tile" data-controller-id="lights">
+                  <button
+                    id="lights-open"
+                    class="controller-open"
+                    type="button"
+                    aria-label="Открыть контроллер Свет"
+                  >
+                    <svg
+                      class="ui-icon tile-icon"
+                      viewBox="0 0 24 24"
+                      aria-hidden="true"
+                      focusable="false"
+                    >
+                      <use href="#icon-light"></use>
+                    </svg>
+                    <span class="controller-title">Свет</span>
+                    <span class="controller-description"
+                      >Освещение, ручное управление и кнопки без фиксации.</span
+                    >
+                    <span class="controller-open-link"
+                      >Настроить <span aria-hidden="true">→</span></span
+                    >
+                  </button>
+                  <div class="controller-tile-footer"
+                    ><span id="lights-tile-status" class="badge state-unknown">Загрузка…</span
+                    ><button
+                      id="lights-tile-enabled"
+                      class="module-toggle"
+                      type="button"
+                      aria-label="Включить модуль Свет"
+                      aria-pressed="mixed"
+                      disabled
+                      ><span class="module-switch-track" aria-hidden="true"
+                        ><span class="module-switch-thumb"></span></span></button
+                  ></div>
+                </article>
+                <article class="controller-tile" data-controller-id="meteo">
+                  <button
+                    id="meteo-open"
+                    class="controller-open"
+                    type="button"
+                    aria-label="Открыть контроллер Метео"
+                  >
+                    <svg
+                      class="ui-icon tile-icon"
+                      viewBox="0 0 24 24"
+                      aria-hidden="true"
+                      focusable="false"
+                    >
+                      <use href="#icon-weather"></use>
+                    </svg>
+                    <span class="controller-title">Метео</span>
+                    <span class="controller-description"
+                      >Температура и влажность с DHT22 и датчиков DS18B20 на OneWire.</span
+                    >
+                    <span class="controller-open-link"
+                      >Настроить <span aria-hidden="true">→</span></span
+                    >
+                  </button>
+                  <div class="controller-tile-footer"
+                    ><span id="meteo-tile-status" class="badge state-unknown">Загрузка…</span
+                    ><button
+                      id="meteo-tile-enabled"
+                      class="module-toggle"
+                      type="button"
+                      aria-label="Включить модуль Метео"
+                      aria-pressed="mixed"
+                      disabled
+                      ><span class="module-switch-track" aria-hidden="true"
+                        ><span class="module-switch-thumb"></span></span></button
+                  ></div>
+                </article>
+                <article class="controller-tile" data-controller-id="thermostats">
+                  <button
+                    id="thermostats-open"
+                    class="controller-open"
+                    type="button"
+                    aria-label="Открыть контроллер Термостат"
+                  >
+                    <svg
+                      class="ui-icon tile-icon"
+                      viewBox="0 0 24 24"
+                      aria-hidden="true"
+                      focusable="false"
+                    >
+                      <use href="#icon-probe"></use>
+                    </svg>
+                    <span class="controller-title">Термостат</span>
+                    <span class="controller-description"
+                      >Автономный нагрев или охлаждение по выбранному датчику «Метео».</span
+                    >
+                    <span class="controller-open-link"
+                      >Настроить <span aria-hidden="true">→</span></span
+                    >
+                  </button>
+                  <div class="controller-tile-footer"
+                    ><span id="thermostats-tile-status" class="badge state-unknown">Загрузка…</span
+                    ><button
+                      id="thermostats-tile-enabled"
+                      class="module-toggle"
+                      type="button"
+                      aria-label="Включить модуль Термостат"
+                      aria-pressed="mixed"
+                      disabled
+                      ><span class="module-switch-track" aria-hidden="true"
+                        ><span class="module-switch-thumb"></span></span></button
+                  ></div>
+                </article>
+                <article class="controller-tile" data-controller-id="security">
+                  <button
+                    id="security-open"
+                    class="controller-open"
+                    type="button"
+                    aria-label="Открыть контроллер Охрана"
+                    ><svg class="ui-icon tile-icon" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#icon-security"></use></svg
+                    ><span class="controller-title">Охрана</span
+                    ><span class="controller-description"
+                      >Датчики проникновения, сирена и ключи iButton. Работает автономно.</span
+                    ><span class="controller-open-link"
+                      >Настроить <span aria-hidden="true">→</span></span
+                    ></button
+                  >
+                  <div class="controller-tile-footer"
+                    ><span id="security-tile-status" class="badge state-unknown">Загрузка…</span
+                    ><button
+                      id="security-tile-enabled"
+                      class="module-toggle"
+                      type="button"
+                      aria-label="Включить модуль Охрана"
+                      aria-pressed="mixed"
+                      disabled
+                      ><span class="module-switch-track" aria-hidden="true"
+                        ><span class="module-switch-thumb"></span></span></button
+                  ></div>
+                </article>
+              </div>
+            </div>
+            <div id="sockets-view" hidden>
+              <div class="socket-page-heading">
+                <div
+                  ><button id="sockets-back" class="text-button" type="button"
+                    >← Назад к контроллерам</button
+                  ><h2 id="sockets-page-title" tabindex="-1" data-card-icon="plug">Розетки</h2
+                  ><p class="muted"
+                    >Назначьте реле и, при необходимости, вход кнопки для каждой розетки.</p
+                  ></div
+                >
+                <div class="module-control"
+                  ><span id="sockets-module-status" class="muted">Загрузка…</span
+                  ><button
+                    id="sockets-enabled"
+                    class="module-toggle"
+                    type="button"
+                    aria-label="Включить модуль Розетки"
+                    aria-pressed="mixed"
+                    disabled
+                    ><span class="module-switch-track" aria-hidden="true"
+                      ><span class="module-switch-thumb"></span></span></button
+                ></div>
+              </div>
+              <p class="hint socket-page-hint"
+                >Выключение модуля выключает все розетки. Изменения привязок и удаление применяются
+                кнопкой «Сохранить настройки». Выключенные модули сохраняют занятые порты за
+                собой.</p
+              >
+              <p id="sockets-conflict" class="notice warning" role="status" hidden
+                >Сохранённые настройки изменились. Ваши правки сохранены на странице. Загрузите
+                актуальные настройки перед повторным сохранением.</p
+              >
+              <p id="sockets-resource-warning" class="notice warning" role="status" hidden></p>
+              <form id="sockets-form">
+                <div class="sockets-toolbar"
+                  ><span id="sockets-count" class="muted">0 из 16</span
+                  ><div class="button-row"
+                    ><button id="sockets-reload" class="text-button" type="button"
+                      >Загрузить сохранённые</button
+                    ><button id="sockets-add" class="button secondary" type="button" disabled
+                      >+ Добавить розетку</button
+                    ></div
+                  ></div
+                >
+                <div id="sockets-empty" class="card sockets-empty"
+                  ><h3 data-card-icon="plug">Розетки ещё не добавлены</h3
+                  ><p class="muted">Добавьте розетку и выберите её релейный выход.</p></div
+                >
+                <div id="sockets-items" class="socket-grid"></div>
+                <div class="socket-save-bar"
+                  ><div
+                    ><span class="save-state" data-save-state="controllers"></span
+                    ><p id="sockets-revision" class="hint"></p></div
+                  ><button id="sockets-save" class="button primary" type="submit" disabled
+                    >Сохранить настройки</button
+                  ></div
+                >
+              </form>
+              <p class="hint"
+                >Кнопка без фиксации. Нажатие: HIGH → LOW — переключает розетку один раз. Отпускание
+                LOW → HIGH и удержание не переключают её. После нажатия действует пауза 300 мс; для
+                следующего нажатия кнопку нужно отпустить. Нажатая при запуске кнопка не вызывает
+                переключение. Настройки и состояние сохраняются на PLC.</p
+              >
+            </div>
+            <div id="lights-view" hidden>
+              <div class="socket-page-heading">
+                <div
+                  ><button id="lights-back" class="text-button" type="button"
+                    >← Назад к контроллерам</button
+                  ><h2 id="lights-page-title" tabindex="-1" data-card-icon="light">Свет</h2
+                  ><p class="muted"
+                    >Назначьте реле и, при необходимости, вход кнопки для каждого светильника.</p
+                  ></div
+                >
+                <div class="module-control"
+                  ><span id="lights-module-status" class="muted">Загрузка…</span
+                  ><button
+                    id="lights-enabled"
+                    class="module-toggle"
+                    type="button"
+                    aria-label="Включить модуль Свет"
+                    aria-pressed="mixed"
+                    disabled
+                    ><span class="module-switch-track" aria-hidden="true"
+                      ><span class="module-switch-thumb"></span></span></button
+                ></div>
+              </div>
+              <p class="hint socket-page-hint"
+                >Выключение модуля выключает свет. Изменения привязок и удаление применяются кнопкой
+                «Сохранить настройки». Выключенные модули сохраняют занятые порты за собой.</p
+              >
+              <p id="lights-conflict" class="notice warning" role="status" hidden
+                >Сохранённые настройки изменились. Ваши правки сохранены на странице. Загрузите
+                актуальные настройки перед повторным сохранением.</p
+              >
+              <p id="lights-resource-warning" class="notice warning" role="status" hidden></p>
+              <form id="lights-form">
+                <div class="sockets-toolbar"
+                  ><span id="lights-count" class="muted">0 из 16</span
+                  ><div class="button-row"
+                    ><button id="lights-reload" class="text-button" type="button"
+                      >Загрузить сохранённые</button
+                    ><button id="lights-add" class="button secondary" type="button" disabled
+                      >+ Добавить светильник</button
+                    ></div
+                  ></div
+                >
+                <div id="lights-empty" class="card sockets-empty"
+                  ><h3 data-card-icon="light">Светильники ещё не добавлены</h3
+                  ><p class="muted">Добавьте светильник и выберите его релейный выход.</p></div
+                >
+                <div id="lights-items" class="socket-grid"></div>
+                <div class="socket-save-bar"
+                  ><div
+                    ><span class="save-state" data-save-state="lights"></span
+                    ><p id="lights-revision" class="hint"></p></div
+                  ><button id="lights-save" class="button primary" type="submit" disabled
+                    >Сохранить настройки</button
+                  ></div
+                >
+              </form>
+              <p class="hint"
+                >Нажатие кнопки без фиксации HIGH → LOW переключает свет один раз. Отпускание и
+                удержание не переключают его. После нажатия действует пауза 300 мс; для следующего
+                нажатия кнопку нужно отпустить. Нажатая при запуске кнопка не вызывает переключение.
+                Настройки и состояние сохраняются на PLC.</p
+              >
+            </div>
+            <div id="meteo-view" hidden>
+              <div class="socket-page-heading">
+                <div
+                  ><button id="meteo-back" class="text-button" type="button"
+                    >← Назад к контроллерам</button
+                  ><h2 id="meteo-page-title" tabindex="-1" data-card-icon="weather">Метео</h2
+                  ><p class="muted"
+                    >Выберите порт, тип и конкретный датчик для каждого места измерения.</p
+                  ></div
+                >
+                <div class="module-control"
+                  ><span id="meteo-module-status" class="muted">Загрузка…</span
+                  ><button
+                    id="meteo-enabled"
+                    class="module-toggle"
+                    type="button"
+                    aria-label="Включить модуль Метео"
+                    aria-pressed="mixed"
+                    disabled
+                    ><span class="module-switch-track" aria-hidden="true"
+                      ><span class="module-switch-thumb"></span></span></button
+                ></div>
+              </div>
+              <p class="hint socket-page-hint"
+                >DHT22 занимает порт целиком. Несколько DS18B20 могут работать на одном порту
+                OneWire — выберите отдельный серийный номер для каждой карточки. Выключенный модуль
+                сохраняет привязки портов.</p
+              >
+              <p id="meteo-conflict" class="notice warning" role="status" hidden
+                >Сохранённые настройки изменились. Ваши правки сохранены на странице. Загрузите
+                актуальные настройки перед повторным сохранением.</p
+              >
+              <p id="meteo-resource-warning" class="notice warning" role="status" hidden></p>
+              <form id="meteo-form">
+                <div class="sockets-toolbar"
+                  ><span id="meteo-count" class="muted">0 из 16</span
+                  ><div class="button-row"
+                    ><button id="meteo-reload" class="text-button" type="button"
+                      >Загрузить сохранённые</button
+                    ><button id="meteo-add" class="button secondary" type="button" disabled
+                      >+ Добавить датчик</button
+                    ></div
+                  ></div
+                >
+                <div id="meteo-empty" class="card sockets-empty"
+                  ><h3 data-card-icon="weather">Датчики ещё не добавлены</h3
+                  ><p class="muted">Добавьте датчик и выберите порт для подключения.</p></div
+                >
+                <div id="meteo-items" class="socket-grid"></div>
+                <div class="socket-save-bar"
+                  ><div
+                    ><span class="save-state" data-save-state="meteo"></span
+                    ><p id="meteo-revision" class="hint"></p></div
+                  ><button id="meteo-save" class="button primary" type="submit" disabled
+                    >Сохранить настройки</button
+                  ></div
+                >
+              </form>
+              <p class="hint"
+                >Поиск OneWire доступен и при выключенном модуле. Привязки применяются после
+                сохранения. Временно недоступный датчик остаётся выбранным; отсутствующие показания
+                не заменяются нулями.</p
+              >
+            </div>
+            <div id="thermostats-view" hidden>
+              <div class="socket-page-heading">
+                <div
+                  ><button id="thermostats-back" class="text-button" type="button"
+                    >← Назад к контроллерам</button
+                  ><h2 id="thermostats-page-title" tabindex="-1" data-card-icon="probe"
+                    >Термостат</h2
+                  ><p class="muted">Настройте автономное поддержание температуры на PLC.</p></div
+                >
+                <div class="module-control"
+                  ><span id="thermostats-module-status" class="muted">Загрузка…</span
+                  ><button
+                    id="thermostats-enabled"
+                    class="module-toggle"
+                    type="button"
+                    aria-label="Включить модуль Термостат"
+                    aria-pressed="mixed"
+                    disabled
+                    ><span class="module-switch-track" aria-hidden="true"
+                      ><span class="module-switch-thumb"></span></span></button
+                ></div>
+              </div>
+              <p class="hint socket-page-hint"
+                >Источник температуры выбирается из сохранённых датчиков «Метео». Один датчик может
+                использоваться несколькими термостатами. Каждому выходу нужно отдельное реле.</p
+              >
+              <p id="thermostats-enable-hint" class="hint thermostat-module-hint"
+                >Новый термостат сохраняется выключенным. Для включения входной кнопкой оставьте
+                общий модуль включённым. Общий выключатель останавливает регуляцию и обработку
+                кнопок, сохраняя индивидуальные флаги.</p
+              >
+              <p id="thermostats-conflict" class="notice warning" role="status" hidden
+                >Сохранённые настройки изменились. Ваши правки сохранены на странице. Загрузите
+                актуальные настройки перед повторным сохранением.</p
+              >
+              <p id="thermostats-resource-warning" class="notice warning" role="status" hidden></p>
+              <form id="thermostats-form">
+                <div class="sockets-toolbar"
+                  ><span id="thermostats-count" class="muted">0 из 16</span
+                  ><div class="button-row"
+                    ><button id="thermostats-reload" class="text-button" type="button"
+                      >Загрузить сохранённые</button
+                    ><button id="thermostats-add" class="button secondary" type="button" disabled
+                      >+ Добавить термостат</button
+                    ></div
+                  ></div
+                >
+                <div id="thermostats-empty" class="card sockets-empty"
+                  ><h3 data-card-icon="probe">Термостаты ещё не добавлены</h3
+                  ><p class="muted"
+                    >Добавьте термостат, выберите источник температуры и выходное реле.</p
+                  ></div
+                >
+                <div id="thermostats-items" class="socket-grid"></div>
+                <div class="socket-save-bar"
+                  ><div
+                    ><span class="save-state" data-save-state="thermostats"></span
+                    ><p id="thermostats-revision" class="hint"></p></div
+                  ><button id="thermostats-save" class="button primary" type="submit" disabled
+                    >Сохранить настройки</button
+                  ></div
+                >
+              </form>
+              <p class="hint"
+                >Термостат работает автономно на PLC. Входная кнопка переключает индивидуальное
+                включение, а не реле напрямую. Минимальное время работы и паузы — 60 секунд. После
+                сбоя чтения используется последнее достоверное измерение не старше 15 секунд. При
+                его устаревании, отказе выхода или выключении термостата, «Метео» либо общего модуля
+                реле отключается без ожидания минимального ON. После запуска или восстановления
+                включение происходит при достижении порога температуры и после выдержки минимального
+                OFF.</p
+              >
+            </div>
+
+            <div id="security-view" hidden>
+              <div class="socket-page-heading"
+                ><div
+                  ><button id="security-back" class="text-button" type="button"
+                    >← Назад к контроллерам</button
+                  ><h2 id="security-page-title" tabindex="-1" data-card-icon="security">Охрана</h2
+                  ><p class="muted">Постановка, снятие и тревога работают на PLC без хаба.</p></div
+                ><div class="module-control"
+                  ><span id="security-module-status" class="muted">Загрузка…</span
+                  ><button
+                    id="security-enabled"
+                    class="module-toggle"
+                    type="button"
+                    aria-label="Включить модуль Охрана"
+                    aria-pressed="mixed"
+                    disabled
+                    ><span class="module-switch-track" aria-hidden="true"
+                      ><span class="module-switch-thumb"></span></span></button></div
+              ></div>
+              <div id="security-arm-visual" class="security-arm-visual"></div>
+              <p id="security-arm-error" class="field-error" role="status" hidden></p>
+              <p id="security-conflict" class="notice warning" role="status" hidden
+                >Настройки изменились. Ваши правки сохранены на странице; загрузите актуальные перед
+                сохранением.</p
+              >
+              <p id="security-resource-warning" class="notice warning" role="status" hidden></p>
+              <form id="security-form">
+                <section class="card security-common"
+                  ><h3 data-card-icon="settings">Общие параметры</h3
+                  ><div class="security-common-grid">
+                    <div
+                      ><label for="security-siren">Реле сирены</label
+                      ><select id="security-siren"></select
+                    ></div>
+                    <div
+                      ><label for="security-reader">Порт считывателя iButton</label
+                      ><select id="security-reader"></select
+                    ></div>
+                    <div
+                      ><label for="security-exit-delay">Задержка выхода, с</label
+                      ><input
+                        id="security-exit-delay"
+                        type="number"
+                        min="0"
+                        max="300"
+                        step="1"
+                        value="30"
+                    /></div>
+                    <div
+                      ><label for="security-entry-delay">Задержка входа, с</label
+                      ><input
+                        id="security-entry-delay"
+                        type="number"
+                        min="0"
+                        max="300"
+                        step="1"
+                        value="15"
+                    /></div> </div
+                  ><p class="hint"
+                    >Сирена и считыватель iButton необязательны. Без считывателя охраной можно
+                    управлять из веб-интерфейса или хаба. Для постановки нужен хотя бы один
+                    датчик.</p
+                  ><p class="hint"
+                    >0 — без задержки. Время входа применяется к датчикам с отметкой «Задержка
+                    входа». Остальные вызывают тревогу сразу.</p
+                  ><p id="security-reader-status" class="hint"></p
+                ></section>
+                <section class="card security-keys"
+                  ><h3 data-card-icon="lock">Ключи iButton</h3
+                  ><p class="hint"
+                    >Перед добавлением приложите ключ и найдите его серийный номер. При поиске
+                    постановка ключом временно приостановлена.</p
+                  ><div class="security-key-controls"
+                    ><label for="security-key-name">Имя ключа</label
+                    ><input
+                      id="security-key-name"
+                      maxlength="64"
+                      autocomplete="off"
+                      placeholder="Например, Основной ключ"
+                    /><label for="security-key-address">Найденный серийный номер</label
+                    ><select id="security-key-address"
+                      ><option value="">Сначала найдите ключ</option></select
+                    ><div class="button-row"
+                      ><button id="security-key-scan" class="button secondary" type="button"
+                        >Найти ключ</button
+                      ><button id="security-key-add" class="button secondary" type="button" disabled
+                        >Добавить ключ</button
+                      ></div
+                    ></div
+                  ><p id="security-key-scan-status" class="hint" role="status"></p
+                  ><div id="security-keys-list" class="security-keys-list"></div
+                ></section>
+                <div class="sockets-toolbar"
+                  ><span id="security-count" class="muted">0 из 16</span
+                  ><div class="button-row"
+                    ><button id="security-reload" class="text-button" type="button"
+                      >Загрузить сохранённые</button
+                    ><button id="security-add" class="button secondary" type="button" disabled
+                      >+ Добавить датчик</button
+                    ></div
+                  ></div
+                >
+                <div id="security-empty" class="card sockets-empty"
+                  ><h3 data-card-icon="security">Датчики охраны ещё не добавлены</h3
+                  ><p class="muted">Выберите входы герконов и датчиков движения.</p></div
+                ><div id="security-items" class="socket-grid"></div>
+                <div class="socket-save-bar"
+                  ><div
+                    ><span class="save-state" data-save-state="security"></span
+                    ><p id="security-revision" class="hint"></p></div
+                  ><button id="security-save" class="button primary" type="submit" disabled
+                    >Сохранить настройки</button
+                  ></div
+                >
+              </form>
+              <p class="hint"
+                >Геркон: замкнут (LOW) в норме, разомкнут (HIGH) при проникновении. Движение:
+                разомкнут (HIGH) в норме, замкнут (LOW) при движении. Охрана и возникшая тревога
+                восстанавливаются после перезапуска.</p
+              >
+            </div>
+          </section>
+
+          <!-- System settings, hardware profile, clock actions, and explicit backup/restore. -->
+          <section
+            id="panel-system"
+            class="panel"
+            role="tabpanel"
+            aria-labelledby="tab-system"
+            data-panel="system"
+            hidden
+          >
+            <div class="content-grid">
+              <div class="stack">
+                <form id="hardware-form" class="card config-form" data-config="hardware">
+                  <h2 data-card-icon="board">Модель платы</h2>
+                  <label for="hardware-board-id">Аппаратный профиль</label>
+                  <select id="hardware-board-id" disabled
+                    ><option value="">Загрузка моделей…</option></select
+                  >
+                  <p class="hint"
+                    >Профиль определяет GPIO, шины и периферию платы. Сохранённая модель применяется
+                    после перезагрузки.</p
+                  >
+                  <p class="hint"
+                    >Несохранённые изменения других форм при перезагрузке не применяются.</p
+                  >
+                  <p id="hardware-profiles-error" class="field-error" role="alert" hidden></p>
+                  <button id="hardware-reload" class="text-button" type="button" hidden
+                    >Повторить загрузку</button
+                  >
+                  <p id="hardware-reboot-notice" class="notice warning" role="status" hidden></p>
+                  <div class="form-actions"
+                    ><span class="save-state" data-save-state="hardware"></span
+                    ><button id="hardware-save" class="button primary" type="submit" disabled
+                      >Сохранить и перезагрузить</button
+                    ></div
+                  >
+                </form>
+                <form id="system-form" class="card config-form" data-config="system">
+                  <h2 data-card-icon="settings">Настройки устройства</h2>
+                  <label for="device-name">Название устройства</label>
+                  <input
+                    id="device-name"
+                    maxlength="64"
+                    autocomplete="off"
+                    required
+                    aria-describedby="device-name-hint"
+                  />
+                  <p id="device-name-hint" class="hint"
+                    >Имя для удобного поиска контроллера, не более 64 байт UTF-8.</p
+                  >
+                  <div class="section-title"
+                    ><h3 data-card-icon="clock">Часы и синхронизация</h3></div
+                  >
+                  <label for="time-timezone">Часовой пояс</label>
+                  <input id="time-timezone" maxlength="64" autocomplete="off" placeholder="UTC-7" />
+                  <p class="hint">Формат POSIX: UTC-7 означает UTC+7, время Новосибирска.</p>
+                  <label class="check"
+                    ><input id="time-ntp-enabled" type="checkbox" /><span
+                      >Синхронизировать время по NTP</span
+                    ></label
+                  >
+                  <fieldset id="ntp-fields">
+                    <label for="time-ntp-server">Адрес NTP-сервера</label>
+                    <input
+                      id="time-ntp-server"
+                      maxlength="128"
+                      autocomplete="off"
+                      placeholder="Адрес локального сервера времени"
+                    />
+                  </fieldset>
+                  <div class="form-actions"
+                    ><span class="save-state" data-save-state="system"></span
+                    ><button class="button primary" type="submit">Сохранить настройки</button></div
+                  >
+                </form>
+
+                <form id="manual-time-form" class="card config-form">
+                  <h2 data-card-icon="clock">Установка времени</h2>
+                  <p id="browser-timezone" class="hint"></p>
+                  <label for="manual-time">Дата и время</label>
+                  <input id="manual-time" type="datetime-local" step="1" required />
+                  <div class="button-row"
+                    ><button class="button secondary" id="time-from-browser" type="button"
+                      >Время с компьютера</button
+                    ><button class="button primary" type="submit">Установить на PLC</button></div
+                  >
+                </form>
+              </div>
+
+              <div class="stack">
+                <aside class="card status-card" aria-labelledby="system-status-title">
+                  <h2 id="system-status-title" data-card-icon="activity">Состояние системы</h2>
+                  <dl class="status-list">
+                    <div><dt>Плата</dt><dd id="status-board-name">—</dd></div>
+                    <div><dt>Аппаратный профиль</dt><dd id="status-board-id">—</dd></div>
+                    <div><dt>Версия прошивки</dt><dd id="status-firmware">—</dd></div>
+                    <div><dt>Время работы</dt><dd id="status-uptime">—</dd></div>
+                    <div
+                      ><dt>Температура чипа</dt
+                      ><dd id="status-chip-temperature">Недоступна</dd></div
+                    >
+                    <div><dt>Системное время ESP</dt><dd id="status-time">—</dd></div>
+                    <div><dt>Качество времени</dt><dd id="status-time-valid">—</dd></div>
+                    <div><dt>Источник времени</dt><dd id="status-time-source">—</dd></div>
+                    <div><dt>Внешний RTC</dt><dd id="status-external-rtc">—</dd></div>
+                  </dl>
+                  <p class="hint"
+                    >Температура показывает нагрев ESP32-S3 и не заменяет датчик температуры
+                    помещения.</p
+                  >
+                  <p class="hint"
+                    >Системные часы ESP и внешний RTC показываются отдельно. После полного снятия
+                    питания время ESP требует восстановления.</p
+                  >
+                </aside>
+                <section class="card firmware-card" aria-labelledby="firmware-title">
+                  <div class="hardware-section-heading">
+                    <h2 id="firmware-title" data-card-icon="firmware">Обновление прошивки</h2>
+                    <button id="firmware-refresh" class="text-button" type="button"
+                      >Проверить статус</button
+                    >
+                  </div>
+                  <p class="muted"
+                    >Загрузите бинарник приложения FCPLCn. После проверки контроллер перезагрузится,
+                    сохранённые настройки останутся.</p
+                  >
+                  <dl class="status-list"
+                    ><div><dt>Текущая версия</dt><dd id="firmware-current">—</dd></div></dl
+                  >
+                  <label for="firmware-file">Файл прошивки</label>
+                  <input
+                    id="firmware-file"
+                    type="file"
+                    accept=".bin,application/octet-stream"
+                    aria-describedby="firmware-limit firmware-image-hint"
+                    disabled
+                  />
+                  <p id="firmware-limit" class="hint">Проверка поддержки обновления…</p>
+                  <p id="firmware-image-hint" class="hint"
+                    >Выбирайте FCPLCn.bin для ESP32-S3. Полный образ FCPLCn-full.bin предназначен
+                    для USB и здесь не применяется. На время перезагрузки управление оборудованием
+                    прервётся.</p
+                  >
+                  <p id="firmware-file-details" class="firmware-file-details muted"
+                    >Файл ещё не выбран</p
+                  >
+                  <div id="firmware-progress-wrap" class="firmware-progress-wrap" hidden>
+                    <progress
+                      id="firmware-progress"
+                      max="100"
+                      value="0"
+                      aria-labelledby="firmware-progress-label"
+                    ></progress>
+                    <p id="firmware-progress-label" class="hint" role="status"></p>
+                  </div>
+                  <p id="firmware-notice" class="notice" role="status" hidden></p>
+                  <div class="form-actions firmware-actions">
+                    <button id="firmware-cancel" class="button secondary" type="button" hidden
+                      >Отменить передачу</button
+                    >
+                    <button id="firmware-upload" class="button primary" type="button" disabled
+                      >Загрузить и обновить</button
+                    >
+                  </div>
+                </section>
+                <section class="card">
+                  <h2 data-card-icon="restart">Перезагрузка контроллера</h2>
+                  <p class="muted"
+                    >Сохранённые настройки сохранятся. Соединение с веб-интерфейсом временно
+                    прервётся.</p
+                  >
+                  <button id="reboot" class="button danger" type="button"
+                    >Перезагрузить ESP32</button
+                  >
+                </section>
+                <section class="card backup-card" aria-labelledby="config-backup-title">
+                  <h2 id="config-backup-title" data-card-icon="backup">Конфигурация в файле</h2>
+                  <p class="muted"
+                    >Сохраните конфигурацию контроллера или перенесите её на устройство с таким же
+                    аппаратным профилем.</p
+                  >
+                  <p class="hint"
+                    >Файл содержит пароли WiFi и MQTT, а также веб-учётную запись. Храните его в
+                    надёжном месте.</p
+                  >
+                  <button id="config-backup-download" class="button secondary" type="button"
+                    >Сохранить конфигурацию</button
+                  >
+                  <p class="hint"
+                    >В файл попадут сохранённые на PLC настройки контроллеров, состояния розеток и
+                    света, привязки датчиков и термостатов. Несохранённые правки форм не
+                    включаются.</p
+                  >
+                  <div class="section-title"
+                    ><h3 data-card-icon="upload">Загрузить конфигурацию</h3></div
+                  >
+                  <label for="config-backup-file">Файл JSON, до 32 КБ</label>
+                  <input
+                    id="config-backup-file"
+                    type="file"
+                    accept=".json,application/json"
+                    aria-describedby="config-backup-import-hint"
+                  />
+                  <p id="config-backup-import-hint" class="hint"
+                    >Сначала выберите файл и проверьте сведения. MAC-адрес и идентификатор
+                    устройства сохранятся.</p
+                  >
+                  <p id="config-backup-error" class="field-error" role="alert" hidden></p>
+                  <p id="config-backup-notice" class="notice" role="status" hidden></p>
+                  <div id="config-backup-preview" class="backup-preview" hidden>
+                    <h3 data-card-icon="backup">Выбранная конфигурация</h3>
+                    <dl class="status-list">
+                      <div><dt>Файл</dt><dd id="config-backup-filename">—</dd></div>
+                      <div><dt>Название устройства</dt><dd id="config-backup-device">—</dd></div>
+                      <div><dt>Аппаратный профиль</dt><dd id="config-backup-profile">—</dd></div>
+                      <div><dt>Розеток</dt><dd id="config-backup-sockets">—</dd></div>
+                      <div><dt>Светильников</dt><dd id="config-backup-lights">—</dd></div>
+                      <div><dt>Датчиков «Метео»</dt><dd id="config-backup-meteo">—</dd></div>
+                      <div><dt>Термостатов</dt><dd id="config-backup-thermostats">—</dd></div
+                      ><div><dt>Охрана</dt><dd id="config-backup-security">—</dd></div>
+                    </dl>
+                    <p
+                      id="config-backup-profile-warning"
+                      class="notice warning"
+                      role="status"
+                      hidden
+                    ></p>
+                    <p id="config-backup-thermostat-legacy" class="hint" role="status" hidden></p>
+                    <p class="hint"
+                      >Применение заменит настройки всех контроллеров, привязки датчиков, имя
+                      устройства и веб-учётную запись. Несохранённые правки форм будут потеряны.
+                      Контроллер перезагрузится; затем войдите с логином и паролем из файла. Сеть
+                      может измениться.</p
+                    >
+                    <div class="button-row"
+                      ><button id="config-backup-clear" class="text-button" type="button"
+                        >Отменить выбор</button
+                      ><button
+                        id="config-backup-restore"
+                        class="button primary"
+                        type="button"
+                        disabled
+                        >Применить и перезагрузить</button
+                      ></div
+                    >
+                  </div>
+                </section>
+              </div>
+            </div>
+          </section>
+
+          <section
+            id="panel-users"
+            class="panel"
+            role="tabpanel"
+            aria-labelledby="tab-users"
+            data-panel="users"
+            hidden
+          >
+            <form id="user-form" class="card config-form account-card">
+              <h2 data-card-icon="user">Учётная запись администратора</h2>
+              <label for="user-username">Логин</label>
+              <input
+                id="user-username"
+                name="username"
+                autocomplete="username"
+                required
+                maxlength="64"
+              />
+              <label for="user-current-password">Текущий пароль</label>
+              <input id="user-current-password" type="password" autocomplete="current-password" />
+              <label class="check"
+                ><input id="user-change-password" type="checkbox" /><span
+                  >Изменить пароль</span
+                ></label
+              >
+              <fieldset id="new-password-fields" disabled>
+                <label for="user-new-password">Новый пароль</label>
+                <input
+                  id="user-new-password"
+                  type="password"
+                  autocomplete="new-password"
+                  maxlength="128"
+                />
+                <label for="user-confirm-password">Повторите новый пароль</label>
+                <input
+                  id="user-confirm-password"
+                  type="password"
+                  autocomplete="new-password"
+                  maxlength="128"
+                />
+                <p class="hint">Пустой новый пароль отключит запрос пароля при входе.</p>
+              </fieldset>
+              <p class="hint">После изменения учётных данных потребуется войти снова.</p>
+              <div class="form-actions"
+                ><span></span
+                ><button class="button primary" type="submit">Сохранить учётную запись</button></div
+              >
+            </form>
+          </section>
+        </section>
+      </main>
+      <footer><span>__PRODUCT_NAME__</span><span id="footer-revision"></span></footer>
+    </div>
+  </body>
+</html>

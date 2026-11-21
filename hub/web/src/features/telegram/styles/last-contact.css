@@ -1,0 +1,97 @@
+/* Последний собеседник и добавление доступа */
+
+.telegram-last-contact {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+}
+
+.telegram-person-avatar {
+  width: 43px;
+  height: 43px;
+  border-radius: 14px;
+  display: grid;
+  place-items: center;
+  color: #adc8f2;
+  background: #24364f;
+  flex-shrink: 0;
+}
+
+.telegram-person-info {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.telegram-person-info strong {
+  font-size: 15px;
+  overflow-wrap: anywhere;
+}
+
+.telegram-person-info > span {
+  font-size: 11px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.telegram-person-info code {
+  color: var(--green);
+  font-size: 15px;
+  overflow-wrap: anywhere;
+}
+
+.telegram-person-info small {
+  color: var(--muted);
+  font-size: 9px;
+  margin-top: 2px;
+}
+
+.telegram-contact-actions {
+  margin-left: auto;
+  display: flex;
+  gap: 9px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.telegram-hint {
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.7;
+  margin-top: 21px;
+}
+
+.telegram-contact-empty {
+  display: flex;
+  gap: 15px;
+  align-items: center;
+  color: var(--muted);
+  padding: 4px 0;
+}
+
+.telegram-contact-empty > .icon {
+  width: 35px;
+  height: 35px;
+  color: #708caa;
+}
+
+.telegram-contact-empty > span {
+  font-size: 12px;
+}
+
+.telegram-contact-empty small {
+  display: block;
+  font-size: 10px;
+  margin-top: 8px;
+  line-height: 1.7;
+}
+
+.telegram-count {
+  font-size: 10px;
+  color: var(--muted);
+  margin-left: auto;
+  white-space: nowrap;
+  background: #233047;
+  padding: 5px 9px;
+  border-radius: 7px;
+}

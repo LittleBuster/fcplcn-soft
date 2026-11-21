@@ -1,0 +1,9 @@
+cmake_minimum_required(VERSION 3.22)
+get_filename_component(FCPLCN_IDENTITY_FILE
+    "${CMAKE_CURRENT_LIST_DIR}/../../../config/product.json" REALPATH)
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${FCPLCN_IDENTITY_FILE}")
+file(READ "${FCPLCN_IDENTITY_FILE}" FCPLCN_IDENTITY_JSON)
+string(JSON FCPLCN_PRODUCT_NAME GET "${FCPLCN_IDENTITY_JSON}" name)
+set(PROJECT_VER "0.0.0")
+include($ENV{IDF_PATH}/tools/cmake/project.cmake)
+project(${FCPLCN_PRODUCT_NAME})

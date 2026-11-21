@@ -1,0 +1,10 @@
+/** @file Стили сценариев: порядок импортов сохраняет прежний каскад. */
+
+@import './features/scenes/styles/quick-scenes.css';
+@import './features/scenes/styles/run-result.css';
+@import './features/scenes/styles/library.css';
+@import './features/scenes/styles/editor.css';
+@import './features/scenes/styles/schedule.css';
+@import './features/scenes/styles/responsive-wide.css';
+@import './features/scenes/styles/responsive-mobile.css';
+@import './features/scenes/styles/responsive-compact.css';

@@ -1,0 +1,237 @@
+/* Редактор сценария и действий */
+
+.scene-editor {
+  width: min(790px, calc(100vw - 32px));
+  max-height: calc(100dvh - 42px);
+  margin: auto;
+  border: 1px solid #4a6384;
+  padding: 26px;
+  border-radius: 14px;
+  background: #172232;
+  color: var(--text);
+  overflow: auto;
+}
+
+.scene-editor::backdrop {
+  background: #050b14c9;
+  backdrop-filter: blur(3px);
+}
+
+.scene-editor-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: start;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.scene-editor-heading h2 {
+  font-size: 25px;
+  margin-top: 7px;
+  font-weight: 650;
+  letter-spacing: -0.5px;
+}
+
+.scene-close {
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border-radius: 7px;
+  border: 1px solid #3c5270;
+  color: #a4bbd9;
+  background: #203149;
+  font-size: 23px;
+  line-height: 1;
+}
+
+.scene-name-fields {
+  display: grid;
+  gap: 15px;
+  margin-bottom: 21px;
+}
+
+.scene-editor label {
+  color: #a8bedb;
+  font-size: 11px;
+}
+
+.scene-name-fields input,
+.scene-name-fields textarea {
+  display: block;
+  width: 100%;
+  margin-top: 7px;
+}
+
+.scene-name-fields textarea {
+  resize: vertical;
+  min-height: 65px;
+  font: inherit;
+  border: 1px solid #33445d;
+  background: var(--input);
+  border-radius: 8px;
+  color: #dbe5f4;
+  padding: 10px 12px;
+}
+
+.scene-fixed-action {
+  display: flex;
+  align-items: start;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid #365474;
+  border-radius: 9px;
+  background: #1d3046;
+}
+
+.scene-fixed-action > .icon {
+  width: 23px;
+  height: 23px;
+  color: #9bc5f5;
+}
+
+.scene-fixed-action p {
+  font-size: 11px;
+  line-height: 1.8;
+  color: #a3bcd9;
+}
+
+.scene-editor-section {
+  margin: 23px 0 16px;
+}
+
+.scene-editor-section h3 {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.scene-editor-section h3 span {
+  font-size: 10px;
+  color: #819ab9;
+  font-weight: 400;
+}
+
+.scene-editor-section > p {
+  color: #91a6c2;
+  font-size: 10px;
+  line-height: 1.8;
+  margin-top: 9px;
+}
+
+.scene-action-editor-list {
+  display: grid;
+  gap: 16px;
+}
+
+.scene-action-editor-row {
+  min-width: 0;
+  margin: 0;
+  padding: 13px;
+  border: 1px solid #38506e;
+  border-radius: 10px;
+  background: #142031;
+}
+
+.scene-action-editor-row > legend {
+  color: #88a8d0;
+  font-size: 10px;
+  padding: 0 7px;
+}
+
+.scene-action-row-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 9px;
+  margin-bottom: 12px;
+}
+
+.scene-action-row-heading > span {
+  color: #a8c2e4;
+  font-size: 11px;
+}
+
+.scene-action-row-heading > div {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.scene-action-row-heading button {
+  background: #21334c;
+  border: 1px solid #3a516e;
+  border-radius: 5px;
+  padding: 3px 7px;
+  font-size: 11px;
+  color: #a7bddb;
+}
+
+.scene-action-row-heading button:disabled {
+  opacity: 0.4;
+}
+
+.scene-action-row-heading .scene-remove-action {
+  color: #d29caa;
+  background: none;
+  border-color: transparent;
+  font-size: 10px;
+}
+
+.scene-action-fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+}
+
+.scene-action-fields label {
+  min-width: 0;
+}
+
+.scene-action-fields select {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  margin-top: 6px;
+  min-height: 38px;
+  font-size: 11px;
+}
+
+.scene-empty-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 18px;
+  border: 1px dashed #405675;
+  border-radius: 9px;
+  margin: 17px 0;
+  color: #839dbd;
+}
+
+.scene-empty-actions .icon {
+  width: 25px;
+  height: 25px;
+}
+
+.scene-empty-actions p {
+  font-size: 11px;
+  line-height: 1.8;
+}
+
+.scene-add-action {
+  margin-top: 16px;
+}
+
+.scene-add-action > span {
+  font-size: 17px;
+  line-height: 1;
+}
+
+.scene-editor-hint {
+  font-size: 10px;
+  color: #8299b7;
+  line-height: 1.8;
+  margin-top: 13px;
+}

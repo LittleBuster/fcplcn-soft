@@ -1,0 +1,174 @@
+/* Адаптивная компоновка: (max-width: 1250px) */
+
+@media (max-width: 1250px) {
+  .telegram-layout {
+    grid-template-columns: minmax(0, 1fr) 270px;
+    gap: 20px;
+  }
+
+  .telegram-intro {
+    gap: 19px;
+  }
+
+  .telegram-state {
+    align-self: flex-start;
+  }
+
+  .telegram-add-person {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  .telegram-add-person > button {
+    grid-column: 1 / -1;
+    justify-self: start;
+  }
+
+  .telegram-last-contact {
+    flex-wrap: wrap;
+  }
+
+  .telegram-contact-actions {
+    margin-left: 59px;
+    justify-content: flex-start;
+    width: 100%;
+  }
+}
+
+/* Адаптивная компоновка: (max-width: 1050px) */
+
+@media (max-width: 1050px) {
+  .telegram-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .telegram-preview {
+    position: static;
+    max-width: 430px;
+    width: 100%;
+    justify-self: center;
+  }
+
+  .telegram-state {
+    margin-left: 0;
+  }
+
+  .telegram-intro {
+    flex-wrap: wrap;
+  }
+
+  .telegram-intro > div:nth-child(2) {
+    flex: 1;
+    min-width: 190px;
+  }
+}
+
+/* Адаптивная компоновка: (max-width: 600px) */
+
+@media (max-width: 600px) {
+  .telegram-intro {
+    display: grid;
+    grid-template-columns: 55px minmax(0, 1fr);
+    padding: 21px 18px;
+    gap: 15px 18px;
+  }
+
+  .telegram-intro h2 {
+    font-size: 18px;
+  }
+
+  .telegram-intro > div:nth-child(2) {
+    min-width: 0;
+  }
+
+  .telegram-orbit {
+    width: 55px;
+    height: 55px;
+    border-radius: 17px;
+    align-self: start;
+  }
+
+  .telegram-orbit > .icon {
+    width: 33px;
+    height: 33px;
+  }
+
+  .telegram-intro .telegram-state {
+    grid-column: 2;
+    margin: 0;
+    justify-self: start;
+  }
+
+  .telegram-card {
+    padding: 20px 17px;
+  }
+
+  .telegram-section-title {
+    gap: 11px;
+  }
+
+  .telegram-section-title h2 {
+    font-size: 15px;
+    line-height: 1.4;
+  }
+
+  .telegram-section-title p {
+    font-size: 10px;
+  }
+
+  .telegram-count {
+    padding: 4px 6px;
+    font-size: 9px;
+  }
+
+  .telegram-contact-actions {
+    margin-left: 0;
+  }
+
+  .telegram-contact-actions > .button {
+    flex: 1;
+  }
+
+  .telegram-chat-row {
+    padding: 13px 10px;
+    gap: 10px;
+  }
+
+  .telegram-chat-row .telegram-person-avatar {
+    display: none;
+  }
+
+  .telegram-chat-fields {
+    width: 0;
+  }
+
+  .telegram-add-person {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .telegram-add-person > button {
+    width: 100%;
+  }
+
+  .telegram-save-bar {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .telegram-save-bar > span {
+    margin: 2px 0 5px;
+  }
+
+  .telegram-connection-bottom > .button {
+    width: 100%;
+  }
+
+  .telegram-page > .notice {
+    flex-wrap: wrap;
+  }
+
+  .telegram-page > .notice > .button {
+    margin-left: 0;
+    width: 100%;
+  }
+}

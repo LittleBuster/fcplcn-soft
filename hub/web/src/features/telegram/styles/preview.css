@@ -1,0 +1,135 @@
+/* Предварительный просмотр обычной клавиатуры */
+
+.telegram-preview {
+  padding: 20px 16px;
+  position: sticky;
+  top: 24px;
+  overflow: hidden;
+  background: linear-gradient(160deg, #1b2a3d, #141d2a);
+}
+
+.telegram-preview.panel {
+  background: linear-gradient(160deg, #1b2a3d, #141d2a);
+}
+
+.telegram-preview-heading {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  margin-bottom: 22px;
+  padding: 0 4px;
+}
+
+.telegram-preview-heading > .icon {
+  width: 35px;
+  height: 35px;
+  color: var(--accent);
+  padding: 7px;
+  border-radius: 11px;
+  border: 1px solid #3c5a7c;
+  background: #223e5b;
+}
+
+.telegram-preview-heading strong {
+  display: block;
+  font-size: 13px;
+}
+
+.telegram-preview-heading span {
+  display: block;
+  font-size: 9px;
+  color: var(--muted);
+  margin-top: 5px;
+}
+
+.telegram-bubble {
+  border: 1px solid #3b5068;
+  background: #22334a;
+  border-radius: 14px 14px 14px 3px;
+  padding: 17px 16px;
+  min-height: 156px;
+  font-size: 12px;
+  line-height: 1.75;
+}
+
+.telegram-bubble > strong {
+  display: block;
+  font-size: 14px;
+}
+
+.telegram-bubble > p {
+  color: #a8bbd3;
+  margin-top: 7px;
+}
+
+.telegram-bubble ul {
+  list-style: none;
+  margin: 14px 0 0;
+  padding: 0;
+  font-size: 11px;
+  color: #d2dfef;
+}
+
+.telegram-bubble li {
+  overflow-wrap: anywhere;
+}
+
+.telegram-bubble .telegram-preview-hint {
+  font-size: 11px;
+  margin-top: 17px;
+}
+
+.telegram-keyboard {
+  border-top: 1px solid #35445b;
+  margin: 23px -16px -20px;
+  padding: 13px 10px;
+  background: #101a28;
+  display: grid;
+  gap: 7px;
+}
+
+.telegram-keyboard button,
+.telegram-keyboard span {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 42px;
+  font-size: 10px;
+  line-height: 1.5;
+  border: 1px solid #34465e;
+  background: #26364c;
+  color: #dbe5f4;
+  border-radius: 6px;
+  text-align: center;
+  padding: 7px;
+  overflow-wrap: anywhere;
+}
+
+.telegram-keyboard button:hover {
+  background: #324761;
+}
+
+.telegram-quick-preview {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.telegram-quick-preview span {
+  font-size: 9px;
+  padding: 7px 2px;
+}
+
+.telegram-preview-buttons {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.telegram-preview-caption {
+  color: var(--muted);
+  font-size: 9px;
+  line-height: 1.7;
+  margin-top: 34px;
+  padding: 0 3px;
+}

@@ -1,0 +1,7 @@
+#!/bin/sh
+set -eu
+FCPLCN_PREVIEW_TOOLS="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+if [ -x /opt/homebrew/opt/node@24/bin/node ]; then
+    export PATH="/opt/homebrew/opt/node@24/bin:$PATH"
+fi
+exec node "$FCPLCN_PREVIEW_TOOLS/../../firmware/base/simulator/server.cjs"

@@ -1,0 +1,117 @@
+/** @file Учётная запись хаба: форма входных данных и изменение пароля. */
+
+.account-settings {
+  display: grid;
+  gap: 24px;
+  max-width: 850px;
+}
+
+.account-hero {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  padding: 28px;
+}
+
+.account-hero h2 {
+  margin: 7px 0 10px;
+}
+
+.account-hero p,
+.account-hint {
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.account-symbol {
+  display: grid;
+  place-items: center;
+  width: 96px;
+  height: 96px;
+  flex-shrink: 0;
+  border-radius: 28px;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.account-symbol .icon {
+  width: 55px;
+  height: 55px;
+}
+
+.account-card {
+  padding: 28px;
+  display: grid;
+  gap: 20px;
+}
+
+.account-card h2 {
+  margin: 0 0 4px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.account-card label {
+  display: grid;
+  gap: 10px;
+  color: var(--muted);
+}
+
+.account-card input {
+  width: 100%;
+}
+
+.account-card .account-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.account-checkbox input {
+  width: 20px;
+  height: 20px;
+  accent-color: var(--accent);
+}
+
+.account-passwords {
+  display: grid;
+  gap: 20px;
+}
+
+.account-hint {
+  margin: 0;
+  font-size: 0.85rem;
+}
+
+.account-card .notice {
+  margin: 0;
+}
+
+.account-card > .button {
+  justify-self: start;
+}
+
+/* Адаптивная компоновка: (max-width: 640px) */
+
+@media (max-width: 640px) {
+  .account-hero {
+    padding: 22px;
+    gap: 16px;
+  }
+
+  .account-symbol {
+    width: 66px;
+    height: 66px;
+    border-radius: 20px;
+  }
+
+  .account-symbol .icon {
+    width: 40px;
+    height: 40px;
+  }
+
+  .account-card {
+    padding: 22px;
+  }
+}

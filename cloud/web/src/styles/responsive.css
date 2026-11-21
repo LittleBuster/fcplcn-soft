@@ -1,0 +1,240 @@
+/* Широкие экраны. */
+@media (min-width: 1400px) {
+  .cloud-main {
+    padding-top: 40px;
+  }
+
+  .cloud-topbar {
+    padding: 23px max(34px, calc((100vw - 1532px) / 2));
+  }
+}
+
+/* Компактные настольные экраны и планшеты. */
+@media (max-width: 1100px) {
+  .access-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .member-row > .member-name {
+    min-width: 130px;
+  }
+
+  .account-actions .account-button > span:not(.avatar) {
+    display: none;
+  }
+
+  .auth-page {
+    gap: 30px;
+  }
+
+  .auth-art {
+    padding: 15px;
+  }
+
+  .auth-art h2 {
+    font-size: 36px;
+  }
+
+  .connection-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+/* Мобильная компоновка. */
+@media (max-width: 800px) {
+  .auth-page {
+    grid-template-columns: 1fr;
+    padding: 28px 20px;
+    gap: 30px;
+  }
+
+  .auth-art {
+    display: none;
+  }
+
+  .auth-card {
+    padding: 28px;
+    max-width: 470px;
+  }
+
+  .cloud-topbar {
+    padding: 18px 20px;
+    gap: 18px;
+    flex-wrap: wrap;
+  }
+
+  .cloud-topbar > .brand {
+    flex: 1;
+  }
+
+  .account-actions {
+    margin-left: auto;
+  }
+
+  .home-select {
+    width: 100%;
+    order: 3;
+    margin: 0;
+  }
+
+  .home-select > select {
+    flex: 1;
+  }
+
+  .cloud-main {
+    padding: 22px 20px;
+    gap: 20px;
+  }
+
+  .home-heading {
+    align-items: start;
+    flex-wrap: wrap;
+    gap: 16px;
+  }
+
+  .home-heading .connection-badge {
+    font-size: 11px;
+  }
+
+  .connection-grid,
+  .account-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .home-tabs {
+    gap: 5px;
+  }
+
+  .home-tabs button {
+    padding: 10px 12px;
+    font-size: 12px;
+  }
+
+  .home-tabs .icon {
+    width: 18px;
+    height: 18px;
+  }
+
+  .portal-host {
+    margin-left: -16px;
+    margin-right: -16px;
+  }
+
+  .card {
+    padding: 22px;
+  }
+
+  .audit-row {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .audit-row > div {
+    min-width: 150px;
+  }
+
+  .audit-row time {
+    margin-left: 50px;
+  }
+
+  .cloud-footer {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .section-heading {
+    align-items: start;
+    flex-wrap: wrap;
+  }
+
+  .join-invite {
+    flex-wrap: wrap;
+  }
+
+  .join-invite > .button {
+    margin-left: 0;
+  }
+
+  .member-row > select {
+    width: 100%;
+    order: 3;
+  }
+
+  .member-row > .checkbox {
+    order: 4;
+  }
+
+  .member-row > .button {
+    order: 4;
+  }
+
+  .member-row > .icon-button {
+    margin-left: auto;
+  }
+}
+
+/* Узкие мобильные экраны. */
+@media (max-width: 400px) {
+  .portal-host {
+    margin-left: -14px;
+    margin-right: -14px;
+  }
+
+  .cloud-main {
+    padding: 18px 14px;
+  }
+
+  .cloud-topbar {
+    padding: 16px 14px;
+  }
+
+  .brand strong {
+    font-size: 21px;
+  }
+
+  .account-actions {
+    gap: 7px;
+  }
+
+  .home-tabs button {
+    font-size: 11px;
+    padding: 10px;
+  }
+
+  .card {
+    padding: 18px;
+  }
+
+  .facts > div {
+    grid-template-columns: 1fr;
+  }
+
+  .facts dd {
+    text-align: left;
+  }
+
+  .pair-code > code {
+    font-size: 25px;
+  }
+
+  .auth-card {
+    padding: 22px;
+  }
+
+  .home-heading p {
+    font-size: 12px;
+  }
+
+  .recovery-codes {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Учитываем системное ограничение анимации. */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    scroll-behavior: auto !important;
+    transition: none !important;
+    animation: none !important;
+  }
+}

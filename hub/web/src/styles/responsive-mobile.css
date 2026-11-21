@@ -1,0 +1,394 @@
+/* Адаптивная компоновка: (max-width: 600px) */
+
+@media (max-width: 600px) {
+  .main-content {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
+  .sidebar {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
+  .topbar {
+    padding: 0 16px;
+  }
+
+  .topbar-right {
+    gap: 8px;
+  }
+
+  .breadcrumb {
+    font-size: 10px;
+    gap: 7px;
+  }
+
+  .broker-indicator {
+    font-size: 9px;
+  }
+
+  .local-avatar {
+    width: 26px;
+    height: 26px;
+    border-radius: 8px;
+  }
+
+  .local-avatar .icon {
+    width: 14px;
+    height: 14px;
+  }
+
+  .page-heading {
+    align-items: start;
+    gap: 10px;
+    margin-bottom: 23px;
+  }
+
+  .page-heading h1 {
+    font-size: 28px;
+  }
+
+  .page-heading > div > p:last-child {
+    font-size: 11px;
+  }
+
+  .refresh-button {
+    min-height: 35px;
+    padding: 8px 10px;
+    font-size: 10px;
+    margin-top: 19px;
+  }
+
+  .refresh-button .icon {
+    width: 14px;
+    height: 14px;
+  }
+
+  .metrics-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 11px;
+    margin-bottom: 28px;
+  }
+
+  .metric-card {
+    padding: 16px 13px 12px;
+    gap: 10px;
+  }
+
+  .metric-card div > span {
+    font-size: 10px;
+  }
+
+  .metric-trend {
+    font-size: 8px;
+  }
+
+  .device-grid {
+    grid-template-columns: 1fr;
+    gap: 15px;
+  }
+
+  .device-card {
+    padding: 18px 20px 0;
+  }
+
+  .device-card-title h3 {
+    font-size: 18px;
+  }
+
+  .device-illustration {
+    height: 159px;
+  }
+
+  .device-model {
+    font-size: 10px;
+  }
+
+  .device-open-label {
+    margin: 0 -20px;
+    padding: 13px 20px;
+    font-size: 11px;
+  }
+
+  .device-modules {
+    font-size: 11px;
+    padding-top: 19px;
+  }
+
+  .device-filters {
+    gap: 9px;
+  }
+
+  .search-field {
+    max-width: none;
+  }
+
+  .search-field input {
+    font-size: 11px;
+  }
+
+  .room-filter > .icon {
+    display: none;
+  }
+
+  .room-filter select {
+    width: 143px;
+    font-size: 10px;
+  }
+
+  .section-heading h2 {
+    font-size: 16px;
+  }
+
+  .section-heading {
+    gap: 8px;
+  }
+
+  .section-meta {
+    font-size: 9px;
+  }
+
+  .demo-banner {
+    gap: 8px;
+    padding: 10px 11px;
+    font-size: 10px;
+  }
+
+  .demo-banner > .icon {
+    display: none;
+  }
+
+  .demo-label {
+    align-self: flex-start;
+    margin-top: 2px;
+  }
+
+  .device-detail-banner {
+    display: grid;
+    grid-template-columns: 80px minmax(0, 1fr);
+    padding: 17px;
+    gap: 13px;
+  }
+
+  .detail-board {
+    width: 80px;
+  }
+
+  .device-detail-banner > .button {
+    grid-column: 1 / -1;
+    justify-self: start;
+    margin-left: 0;
+  }
+
+  .device-detail-banner > .detail-actions {
+    grid-column: 1 / -1;
+    width: 100%;
+    margin-left: 0;
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+
+  .detail-actions > .button {
+    flex: 1;
+  }
+
+  .plc-settings-heading {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 17px;
+    padding: 16px;
+  }
+
+  .plc-settings-heading > div:last-child {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+
+  .plc-settings-heading h2 {
+    font-size: 18px;
+  }
+
+  .plc-settings-frame {
+    border-radius: 8px;
+    height: max(980px, 80vh);
+  }
+
+  .detail-identity h2 {
+    font-size: 18px;
+  }
+
+  .detail-identity > p {
+    font-size: 9px;
+  }
+
+  .detail-tags {
+    gap: 7px;
+    margin-top: 9px;
+  }
+
+  .detail-tags > span:not(.badge) {
+    font-size: 8px;
+  }
+
+  .device-info-strip {
+    gap: 11px 17px;
+    font-size: 9px;
+  }
+
+  .module-tabs {
+    gap: 6px;
+    padding-bottom: 15px;
+  }
+
+  .module-tabs button {
+    padding: 8px 9px;
+    font-size: 10px;
+    gap: 6px;
+  }
+
+  .module-tabs .icon {
+    width: 15px;
+    height: 15px;
+  }
+
+  .equipment-grid {
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+
+  .equipment-card {
+    padding: 14px;
+  }
+
+  .equipment-visual {
+    min-height: 200px;
+  }
+
+  .equipment-icon {
+    width: 77px;
+    height: 77px;
+  }
+
+  .equipment-state {
+    font-size: 12px;
+  }
+
+  .equipment-copy h3 {
+    font-size: 15px;
+  }
+
+  .equipment-copy > p {
+    font-size: 11px;
+  }
+
+  .port-label {
+    font-size: 10px;
+  }
+
+  .reading strong {
+    font-size: 39px;
+  }
+
+  .thermo-target {
+    font-size: 10px;
+  }
+
+  .security-panel {
+    padding: 13px;
+  }
+
+  .security-action {
+    min-height: 265px;
+  }
+
+  .security-meta {
+    font-size: 9px;
+    gap: 10px;
+  }
+
+  .command-log {
+    padding: 0 13px;
+  }
+
+  .command-row {
+    gap: 10px;
+    align-items: start;
+    padding: 15px 0;
+  }
+
+  .command-icon {
+    width: 29px;
+    height: 29px;
+    border-radius: 8px;
+  }
+
+  .command-icon .icon {
+    width: 16px;
+    height: 16px;
+  }
+
+  .command-copy strong {
+    font-size: 11px;
+  }
+
+  .command-copy strong > span {
+    display: block;
+    font-size: 10px;
+  }
+
+  .command-copy p {
+    font-size: 10px;
+  }
+
+  .command-result > span {
+    font-size: 8px;
+  }
+
+  .command-result time {
+    font-size: 8px;
+  }
+
+  .autonomy-note {
+    align-items: start;
+  }
+
+  .autonomy-note p {
+    font-size: 10px;
+  }
+
+  .autonomy-note .icon {
+    width: 19px;
+    height: 19px;
+  }
+
+  .notice {
+    align-items: start;
+    font-size: 11px;
+    padding: 12px;
+  }
+
+  .activity-note {
+    align-items: start;
+    font-size: 10px;
+  }
+
+  .device-edit {
+    padding: 17px;
+    gap: 14px;
+  }
+
+  .device-edit label {
+    flex-basis: 100%;
+  }
+
+  .device-edit .button {
+    width: 100%;
+  }
+
+  .login-card {
+    padding: 25px;
+  }
+}

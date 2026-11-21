@@ -1,0 +1,9 @@
+#!/bin/sh
+set -eu
+BACKUP_TOOLS_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+BACKUP_SOURCE_DIR="$BACKUP_TOOLS_DIR/../../firmware/base/tests/backup"
+BACKUP_BUILD_DIR="${FCPLCN_BACKUP_BUILD_DIR:-$HOME/esp/build/fcplcn/base-backup}"
+export PATH="/opt/homebrew/bin:$PATH"
+cmake -S "$BACKUP_SOURCE_DIR" -B "$BACKUP_BUILD_DIR" -G Ninja -DOPENSSL_ROOT_DIR=/opt/homebrew/opt/openssl@3 "$@"
+cmake --build "$BACKUP_BUILD_DIR" --parallel
+ctest --test-dir "$BACKUP_BUILD_DIR" --output-on-failure

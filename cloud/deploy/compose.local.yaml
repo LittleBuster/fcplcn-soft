@@ -1,0 +1,12 @@
+# Explicit local preview only; Compose 2.24.4+ supports !override.
+# HTTPS production configuration stays in compose.yaml.
+services:
+  caddy:
+    profiles: [public-https]
+  broker:
+    ports: !override ['127.0.0.1:18883:8883']
+  cloud:
+    ports: ['127.0.0.1:4100:4100']
+    environment:
+      FCPLCN_CLOUD_PUBLIC_ORIGIN: http://127.0.0.1:4100
+      FCPLCN_CLOUD_PUBLIC_MQTT_URL: mqtts://127.0.0.1:18883

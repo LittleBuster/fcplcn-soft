@@ -1,0 +1,15 @@
+[
+  "index.html",
+  "style.css",
+  "app.js",
+  "modules/core.js",
+  "modules/hardware.js",
+  "modules/controllers.js",
+  "modules/meteo.js",
+  "modules/thermostats.js",
+  "modules/security.js",
+  "modules/settings.js",
+  "modules/backup.js",
+  "modules/firmware.js",
+  "modules/bootstrap.js"
+]

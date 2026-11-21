@@ -1,0 +1,8 @@
+/** @file Стили Telegram в исходном порядке каскада. */
+
+@import './features/telegram/styles/status.css';
+@import './features/telegram/styles/forms.css';
+@import './features/telegram/styles/last-contact.css';
+@import './features/telegram/styles/access.css';
+@import './features/telegram/styles/preview.css';
+@import './features/telegram/styles/responsive.css';

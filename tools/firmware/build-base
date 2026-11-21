@@ -1,0 +1,8 @@
+#!/bin/sh
+set -eu
+FCPLCN_TOOLS_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+FCPLCN_ROOT="$(CDPATH= cd -- "$FCPLCN_TOOLS_DIR/../.." && pwd)"
+FCPLCN_BUILD_DIR="${FCPLCN_BASE_BUILD_DIR:-$HOME/esp/build/fcplcn/base}"
+"$FCPLCN_TOOLS_DIR/idf" -C "$FCPLCN_ROOT/firmware/base" -B "$FCPLCN_BUILD_DIR" build
+"$FCPLCN_TOOLS_DIR/idf" -C "$FCPLCN_ROOT/firmware/base" -B "$FCPLCN_BUILD_DIR" merge-bin -o FCPLCn-full.bin
+/opt/homebrew/bin/python3.12 "$FCPLCN_ROOT/firmware/base/tools/package.py" "$FCPLCN_BUILD_DIR" "$FCPLCN_ROOT/firmware/base/dist"

@@ -1,0 +1,22 @@
+/* Подвал общей оболочки. */
+.cloud-footer {
+  border-top: 1px solid #2b3d54;
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 22px 0 5px;
+  margin-top: 12px;
+  font-size: 10px;
+  color: #6e86a5;
+}
+
+.cloud-footer > span {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.cloud-footer .icon {
+  width: 14px;
+  height: 14px;
+}

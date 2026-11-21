@@ -1,0 +1,9 @@
+#!/bin/sh
+set -eu
+IO_TOOLS_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+IO_SOURCE_DIR="$IO_TOOLS_DIR/../../firmware/base/tests/hardware_io"
+IO_BUILD_DIR="${FCPLCN_HARDWARE_IO_BUILD_DIR:-$HOME/esp/build/fcplcn/base-hardware-io}"
+export PATH="/opt/homebrew/bin:$PATH"
+cmake -S "$IO_SOURCE_DIR" -B "$IO_BUILD_DIR" -G Ninja "$@"
+cmake --build "$IO_BUILD_DIR" --parallel
+ctest --test-dir "$IO_BUILD_DIR" --output-on-failure

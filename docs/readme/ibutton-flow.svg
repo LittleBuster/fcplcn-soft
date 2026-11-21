@@ -1,0 +1,86 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="500" viewBox="0 0 1280 500" role="img" aria-labelledby="title desc">
+  <title id="title">FCPLCn — одна таблетка управляет охраной всего дома</title>
+  <desc id="desc">Разрешённый iButton на любом PLC создаёт локальное MQTT-событие. Координатор хаба сохраняет общий режим и запускает «Я дома» или «Ушел». Охрана всех настроенных активных PLC и дополнительные действия, включая контактор, запускаются параллельно. Недоступный PLC получает только текущий режим после возвращения.</desc>
+  <defs>
+    <style>
+      text{font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif}
+      .eyebrow{fill:#94bcff;font-size:14px;font-weight:700;letter-spacing:2px}
+      .heading{fill:#e6edf8;font-size:30px;font-weight:700;letter-spacing:-.5px}
+      .label{fill:#e6edf8;font-size:20px;font-weight:600}
+      .body{fill:#a9bad0;font-size:15px}
+      .caption{fill:#a9bad0;font-size:14px}
+      .card{fill:#152231;stroke:#32485f;stroke-width:1.2}
+      .blue{fill:none;stroke:#94bcff;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round}
+      .green{fill:none;stroke:#7ed5ad;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round}
+      .lavender{fill:none;stroke:#ba9fff;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round}
+      .icon{fill:none;stroke:currentColor;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
+    </style>
+    <marker id="arrow-blue" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M 1 1 L 9 5 L 1 9" fill="none" stroke="#94bcff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></marker>
+    <marker id="arrow-green" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M 1 1 L 9 5 L 1 9" fill="none" stroke="#7ed5ad" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></marker>
+    <marker id="arrow-lavender" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M 1 1 L 9 5 L 1 9" fill="none" stroke="#ba9fff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></marker>
+    <g id="plc" class="icon"><rect x="-22" y="-14" width="44" height="30" rx="5"/><path d="M-15-21v7m10-7v7m10-7v7m10-7v7M-15 16v7m10-7v7m10-7v7m10-7v7"/><rect x="-8" y="-6" width="16" height="14" rx="2"/><path d="M-17-4h3m0 8h-3m31-8h3m-3 8h3"/></g>
+  </defs>
+  <rect width="1280" height="500" rx="22" fill="#0e1620"/>
+  <text x="40" y="36" class="eyebrow">FCPLCn · ОХРАНА ДОМА</text>
+  <text x="40" y="78" class="heading">Одно касание — режим всего дома</text>
+  <path d="M40 98H1240" stroke="#26384b"/>
+
+  <!-- A physical event is consumed once, then coordinated locally. -->
+  <path class="blue" d="M284 172H316" marker-end="url(#arrow-blue)"/>
+  <path class="blue" d="M520 172H566" marker-end="url(#arrow-blue)"/>
+  <path class="lavender" d="M820 172H866" marker-end="url(#arrow-lavender)"/>
+
+  <rect class="card" x="40" y="122" width="244" height="114" rx="16"/>
+  <g transform="translate(72 151)" color="#94bcff" class="icon"><circle cx="0" cy="0" r="9"/><path d="M7 6l17 17m-7-7 5-5m-11-1 5-5"/></g>
+  <text x="108" y="155" class="label">Таблетка iButton</text>
+  <text x="62" y="190" class="body">Разрешённый ключ</text>
+  <text x="62" y="214" class="body">на любом PLC</text>
+
+  <rect class="card" x="320" y="122" width="200" height="114" rx="16"/>
+  <g transform="translate(349 151)" color="#94bcff" class="icon"><circle cx="0" cy="-5" r="5"/><circle cx="-10" cy="15" r="5"/><circle cx="10" cy="15" r="5"/><path d="M-3-1l-5 11m11-11 5 11"/></g>
+  <text x="375" y="156" class="label">MQTT</text>
+  <text x="342" y="190" class="body">Локальное событие</text>
+  <text x="342" y="214" class="body">касания</text>
+
+  <rect class="card" x="570" y="122" width="250" height="114" rx="16"/>
+  <g transform="translate(602 151)" color="#94bcff" class="icon"><rect x="-13" y="-10" width="26" height="20" rx="4"/><path d="M-7-3h4m-4 7h4m9-7v7"/></g>
+  <text x="628" y="156" class="label">Хаб-координатор</text>
+  <text x="592" y="190" class="body">Сохраняет общий режим</text>
+  <text x="592" y="214" class="body">и его актуальную версию</text>
+
+  <rect class="card" x="870" y="122" width="370" height="114" rx="16"/>
+  <rect x="870" y="122" width="370" height="4" rx="2" fill="#ba9fff"/>
+  <text x="892" y="156" class="label">«Я дома» / «Ушел»</text>
+  <text x="892" y="190" class="body">Снять / поставить охрану</text>
+  <text x="892" y="214" class="body">и выполнить действия сценария</text>
+
+  <!-- Independent branches: guard acknowledgements do not delay a contactor. -->
+  <path class="blue" d="M995 236V264Q995 276 983 276H542Q530 276 530 288V326" marker-end="url(#arrow-blue)"/>
+  <path class="blue" d="M780 276V326" marker-end="url(#arrow-blue)"/>
+  <path class="green" d="M1100 236V326" marker-end="url(#arrow-green)"/>
+  <text x="655" y="308" class="caption" text-anchor="middle">Активные настроенные PLC</text>
+  <text x="1117" y="306" fill="#7ed5ad" font-size="14" font-weight="600">Параллельно</text>
+
+  <g transform="translate(62 339)" color="#7ed5ad" class="icon"><path d="M0-9 13-4v13c0 10-6 17-13 22-7-5-13-12-13-22V-4Z"/><path d="m-6 9 4 4 9-10"/></g>
+  <text x="92" y="338" fill="#7ed5ad" font-size="14" font-weight="700">БЕЗ ХАБА</text>
+  <text x="92" y="363" class="body">Охрана и ключ работают</text>
+  <text x="92" y="387" class="body">на своём PLC.</text>
+
+  <rect class="card" x="420" y="330" width="220" height="94" rx="15"/>
+  <use href="#plc" x="451" y="375" color="#94bcff"/>
+  <text x="488" y="369" class="label">PLC 1</text>
+  <text x="488" y="396" class="body">Гараж</text>
+  <rect class="card" x="670" y="330" width="220" height="94" rx="15"/>
+  <use href="#plc" x="701" y="375" color="#94bcff"/>
+  <text x="738" y="369" class="label">PLC 2</text>
+  <text x="738" y="396" class="body">Котельная</text>
+
+  <rect x="960" y="330" width="280" height="94" rx="15" fill="#162b28" stroke="#365a50" stroke-width="1.2"/>
+  <g transform="translate(990 364)" color="#7ed5ad" class="icon"><path d="M-10-8h20v28h-20zM-5-15v7m10-7v7M-5 20v7m10-7v7M-5 2h10m-10 8h10"/></g>
+  <text x="1014" y="365" class="label">Контактор и действия</text>
+  <text x="1014" y="395" fill="#7ed5ad" font-size="16" font-weight="600">Стартуют сразу</text>
+
+  <path d="M40 449H1240" stroke="#26384b"/>
+  <circle cx="48" cy="476" r="4" fill="#94bcff"/>
+  <text x="64" y="481" class="body">Офлайн PLC после возвращения получает текущий режим — без повтора действий сценария.</text>
+</svg>

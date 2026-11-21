@@ -1,0 +1,9 @@
+#!/bin/sh
+set -eu
+FCPLCN_FRAM_JOURNAL_TOOLS="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+FCPLCN_FRAM_JOURNAL_SOURCE="$FCPLCN_FRAM_JOURNAL_TOOLS/../../firmware/base/tests/fram_journal"
+FCPLCN_FRAM_JOURNAL_BUILD="${FCPLCN_FRAM_JOURNAL_BUILD_DIR:-$HOME/esp/build/fcplcn/base-fram-journal}"
+export PATH="/opt/homebrew/bin:$PATH"
+cmake -S "$FCPLCN_FRAM_JOURNAL_SOURCE" -B "$FCPLCN_FRAM_JOURNAL_BUILD" -G Ninja
+cmake --build "$FCPLCN_FRAM_JOURNAL_BUILD" --parallel
+ctest --test-dir "$FCPLCN_FRAM_JOURNAL_BUILD" --output-on-failure "$@"

@@ -1,0 +1,194 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1700" height="1150" viewBox="0 0 1700 1150">
+<rect width="1700" height="1150" fill="#fff"/>
+<text x="55" y="55" font-family="Arial, sans-serif" font-size="34" text-anchor="start" fill="#162e43">TPS54231DR · 12 В → 3,3 В</text>
+<text x="55" y="90" font-family="Arial, sans-serif" font-size="20" text-anchor="start" fill="#162e43">Пример TI, Fig. 10 · номинал выхода ≈ 3,32 В · до 2 А при подходящих компонентах и разводке</text>
+<rect x="600" y="260" width="330" height="430" rx="3" fill="#f5f8fa" stroke="#245a74" stroke-width="3"/>
+<text x="765" y="300" font-family="Arial, sans-serif" font-size="27" text-anchor="middle" fill="#162e43">TPS54231DR</text>
+<text x="765" y="330" font-family="Arial, sans-serif" font-size="19" text-anchor="middle" fill="#162e43">SOIC-8 · шаг 1,27 мм</text>
+<polyline points="550,380 600,380" fill="none" stroke="#245a74" stroke-width="3" stroke-linejoin="round"/>
+<text x="583" y="372" font-family="Arial, sans-serif" font-size="16" text-anchor="end" fill="#162e43">2</text>
+<text x="618" y="387" font-family="Arial, sans-serif" font-size="22" text-anchor="start" fill="#162e43">VIN</text>
+<polyline points="550,470 600,470" fill="none" stroke="#245a74" stroke-width="3" stroke-linejoin="round"/>
+<text x="583" y="462" font-family="Arial, sans-serif" font-size="16" text-anchor="end" fill="#162e43">3</text>
+<text x="618" y="477" font-family="Arial, sans-serif" font-size="22" text-anchor="start" fill="#162e43">EN</text>
+<polyline points="550,570 600,570" fill="none" stroke="#245a74" stroke-width="3" stroke-linejoin="round"/>
+<text x="583" y="562" font-family="Arial, sans-serif" font-size="16" text-anchor="end" fill="#162e43">4</text>
+<text x="618" y="577" font-family="Arial, sans-serif" font-size="22" text-anchor="start" fill="#162e43">SS</text>
+<polyline points="550,660 600,660" fill="none" stroke="#245a74" stroke-width="3" stroke-linejoin="round"/>
+<text x="583" y="652" font-family="Arial, sans-serif" font-size="16" text-anchor="end" fill="#162e43">7</text>
+<text x="618" y="667" font-family="Arial, sans-serif" font-size="22" text-anchor="start" fill="#162e43">GND</text>
+<polyline points="930,380 980,380" fill="none" stroke="#245a74" stroke-width="3" stroke-linejoin="round"/>
+<text x="946" y="372" font-family="Arial, sans-serif" font-size="16" text-anchor="start" fill="#162e43">1</text>
+<text x="912" y="387" font-family="Arial, sans-serif" font-size="22" text-anchor="end" fill="#162e43">BOOT</text>
+<polyline points="930,470 980,470" fill="none" stroke="#245a74" stroke-width="3" stroke-linejoin="round"/>
+<text x="946" y="462" font-family="Arial, sans-serif" font-size="16" text-anchor="start" fill="#162e43">8</text>
+<text x="912" y="477" font-family="Arial, sans-serif" font-size="22" text-anchor="end" fill="#162e43">PH</text>
+<polyline points="930,570 980,570" fill="none" stroke="#245a74" stroke-width="3" stroke-linejoin="round"/>
+<text x="946" y="562" font-family="Arial, sans-serif" font-size="16" text-anchor="start" fill="#162e43">5</text>
+<text x="912" y="577" font-family="Arial, sans-serif" font-size="22" text-anchor="end" fill="#162e43">VSENSE</text>
+<polyline points="930,660 980,660" fill="none" stroke="#245a74" stroke-width="3" stroke-linejoin="round"/>
+<text x="946" y="652" font-family="Arial, sans-serif" font-size="16" text-anchor="start" fill="#162e43">6</text>
+<text x="912" y="667" font-family="Arial, sans-serif" font-size="22" text-anchor="end" fill="#162e43">COMP</text>
+<polyline points="70,380 550,380" fill="none" stroke="#245a74" stroke-width="3" stroke-linejoin="round"/>
+<text x="70" y="350" font-family="Arial, sans-serif" font-size="24" text-anchor="start" fill="#162e43">+12V_LOGIC</text>
+<circle cx="140" cy="380" r="5" fill="#245a74"/>
+<polyline points="140,380 140,410" fill="none" stroke="#245a74" stroke-width="3" stroke-linejoin="round"/>
+<polyline points="124,410 156,410" fill="none" stroke="#245a74" stroke-width="3" stroke-linejoin="round"/>
+<polyline points="124,422 156,422" fill="none" stroke="#245a74" stroke-width="3" stroke-linejoin="round"/>
+<polyline points="140,422 140,472" fill="none" stroke="#245a74" stroke-width="3" stroke-linejoin="round"/>
+<text x="163" y="410" font-family="Arial, sans-serif" font-size="20" text-anchor="start" fill="#162e43">4,7 мкФ</text>
+<text x="163" y="435" font-family="Arial, sans-serif" font-size="17" text-anchor="start" fill="#162e43">50 В X7R</text>
+<polyline points="140,472 140,482" fill="none" stroke="#245a74" stroke-width="3" stroke-linejoin="round"/>
+<polyline points="126,482 154,482" fill="none" stroke="#245a74" stroke-width="3" stroke-linejoin="round"/>
+<polyline points="131,488 149,488" fill="none" stroke="#245a74" stroke-width="3" stroke-linejoin="round"/>
+<polyline points="136,494 144,494" fill="none" stroke="#245a74" stroke-width="3" stroke-linejoin="round"/>
+<circle cx="280" cy="380" r="5" fill="#245a74"/>
+<polyline points="280,380 280,410" fill="none" stroke="#245a74" stroke-width="3" stroke-linejoin="round"/>
+<polyline points="264,410 296,410" fill="none" stroke="#245a74" stroke-width="3" stroke-linejoin="round"/>
+<polyline points="264,422 296,422" fill="none" stroke="#245a74" stroke-width="3" stroke-linejoin="round"/>
+<polyline points="280,422 280,472" fill="none" stroke="#245a74" stroke-width="3" stroke-linejoin="round"/>
+<text x="303" y="410" font-family="Arial, sans-serif" font-size="20" text-anchor="start" fill="#162e43">4,7 мкФ</text>
+<text x="303" y="435" font-family="Arial, sans-serif" font-size="17" text-anchor="start" fill="#162e43">50 В X7R</text>
+<polyline points="280,472 280,482" fill="none" stroke="#245a74" stroke-width="3" stroke-linejoin="round"/>
+<polyline points="266,482 294,482" fill="none" stroke="#245a74" stroke-width="3" stroke-linejoin="round"/>
+<polyline points="271,488 289,488" fill="none" stroke="#245a74" stroke-width="3" stroke-linejoin="round"/>
+<polyline points="276,494 284,494" fill="none" stroke="#245a74" stroke-width="3" stroke-linejoin="round"/>
+<circle cx="420" cy="380" r="5" fill="#245a74"/>
+<polyline points="420,380 420,410" fill="none" stroke="#245a74" stroke-width="3" stroke-linejoin="round"/>
+<polyline points="404,410 436,410" fill="none" stroke="#245a74" stroke-width="3" stroke-linejoin="round"/>
+<polyline points="404,422 436,422" fill="none" stroke="#245a74" stroke-width="3" stroke-linejoin="round"/>
+<polyline points="420,422 420,472" fill="none" stroke="#245a74" stroke-width="3" stroke-linejoin="round"/>
+<text x="443" y="410" font-family="Arial, sans-serif" font-size="20" text-anchor="start" fill="#162e43">10 нФ</text>
+<text x="443" y="435" font-family="Arial, sans-serif" font-size="17" text-anchor="start" fill="#162e43">50 В</text>
+<polyline points="420,472 420,482" fill="none" stroke="#245a74" stroke-width="3" stroke-linejoin="round"/>
+<polyline points="406,482 434,482" fill="none" stroke="#245a74" stroke-width="3" stroke-linejoin="round"/>
+<polyline points="411,488 429,488" fill="none" stroke="#245a74" stroke-width="3" stroke-linejoin="round"/>
+<polyline points="416,494 424,494" fill="none" stroke="#245a74" stroke-width="3" stroke-linejoin="round"/>
+<polyline points="500,470 550,470" fill="none" stroke="#245a74" stroke-width="3" stroke-linejoin="round"/>
+<text x="490" y="478" font-family="Arial, sans-serif" font-size="21" text-anchor="end" fill="#162e43">EN</text>
+<polyline points="550,570 550,600" fill="none" stroke="#245a74" stroke-width="3" stroke-linejoin="round"/>
+<polyline points="534,600 566,600" fill="none" stroke="#245a74" stroke-width="3" stroke-linejoin="round"/>
+<polyline points="534,612 566,612" fill="none" stroke="#245a74" stroke-width="3" stroke-linejoin="round"/>
+<polyline points="550,612 550,662" fill="none" stroke="#245a74" stroke-width="3" stroke-linejoin="round"/>
+<text x="573" y="600" font-family="Arial, sans-serif" font-size="20" text-anchor="start" fill="#162e43"></text>
+<text x="525" y="600" font-family="Arial, sans-serif" font-size="20" text-anchor="end" fill="#162e43">15 нФ</text>
+<polyline points="550,660 550,670" fill="none" stroke="#245a74" stroke-width="3" stroke-linejoin="round"/>
+<polyline points="536,670 564,670" fill="none" stroke="#245a74" stroke-width="3" stroke-linejoin="round"/>
+<polyline points="541,676 559,676" fill="none" stroke="#245a74" stroke-width="3" stroke-linejoin="round"/>
+<polyline points="546,682 554,682" fill="none" stroke="#245a74" stroke-width="3" stroke-linejoin="round"/>
+<polyline points="980,380 1015,380 1015,210 1060,210" fill="none" stroke="#245a74" stroke-width="3" stroke-linejoin="round"/>
+<polyline points="1060,194 1060,226" fill="none" stroke="#245a74" stroke-width="3" stroke-linejoin="round"/>
+<polyline points="1072,194 1072,226" fill="none" stroke="#245a74" stroke-width="3" stroke-linejoin="round"/>
+<polyline points="1072,210 1150,210 1150,470" fill="none" stroke="#245a74" stroke-width="3" stroke-linejoin="round"/>
+<text x="1070" y="178" font-family="Arial, sans-serif" font-size="21" text-anchor="middle" fill="#162e43">100 нФ</text>
+<polyline points="980,470 1200,470" fill="none" stroke="#245a74" stroke-width="3" stroke-linejoin="round"/>
+<circle cx="1150" cy="470" r="5" fill="#245a74"/>
+<path d="M1200 470 c0 -28 24 -28 24 0 c0 -28 24 -28 24 0 c0 -28 24 -28 24 0 c0 -28 24 -28 24 0" fill="none" stroke="#245a74" stroke-width="3"/>
+<text x="1250" y="407" font-family="Arial, sans-serif" font-size="24" text-anchor="middle" fill="#162e43">10 мкГн</text>
+<text x="1250" y="435" font-family="Arial, sans-serif" font-size="18" text-anchor="middle" fill="#162e43">Isat ≥ 3 А</text>
+<polyline points="1296,470 1610,470" fill="none" stroke="#245a74" stroke-width="3" stroke-linejoin="round"/>
+<text x="1450" y="435" font-family="Arial, sans-serif" font-size="26" text-anchor="middle" fill="#162e43">+3V3</text>
+<circle cx="1050" cy="470" r="5" fill="#245a74"/>
+<polyline points="1050,470 1050,520" fill="none" stroke="#245a74" stroke-width="3" stroke-linejoin="round"/>
+<polyline points="1032,520 1068,520" fill="none" stroke="#245a74" stroke-width="3" stroke-linejoin="round"/>
+<polyline points="1040,520 1040,512" fill="none" stroke="#245a74" stroke-width="3" stroke-linejoin="round"/>
+<polyline points="1060,520 1060,528" fill="none" stroke="#245a74" stroke-width="3" stroke-linejoin="round"/>
+<path d="M1032 551 L1068 551 L1050 520 Z" fill="none" stroke="#245a74" stroke-width="3"/>
+<polyline points="1050,551 1050,590" fill="none" stroke="#245a74" stroke-width="3" stroke-linejoin="round"/>
+<polyline points="1050,590 1050,600" fill="none" stroke="#245a74" stroke-width="3" stroke-linejoin="round"/>
+<polyline points="1036,600 1064,600" fill="none" stroke="#245a74" stroke-width="3" stroke-linejoin="round"/>
+<polyline points="1041,606 1059,606" fill="none" stroke="#245a74" stroke-width="3" stroke-linejoin="round"/>
+<polyline points="1046,612 1054,612" fill="none" stroke="#245a74" stroke-width="3" stroke-linejoin="round"/>
+<text x="1080" y="548" font-family="Arial, sans-serif" font-size="21" text-anchor="start" fill="#162e43">B240A</text>
+<text x="1080" y="574" font-family="Arial, sans-serif" font-size="18" text-anchor="start" fill="#162e43">40 В / 2 А</text>
+<circle cx="1370" cy="470" r="5" fill="#245a74"/>
+<polyline points="1370,470 1370,500" fill="none" stroke="#245a74" stroke-width="3" stroke-linejoin="round"/>
+<polyline points="1354,500 1386,500" fill="none" stroke="#245a74" stroke-width="3" stroke-linejoin="round"/>
+<polyline points="1354,512 1386,512" fill="none" stroke="#245a74" stroke-width="3" stroke-linejoin="round"/>
+<polyline points="1370,512 1370,562" fill="none" stroke="#245a74" stroke-width="3" stroke-linejoin="round"/>
+<text x="1393" y="500" font-family="Arial, sans-serif" font-size="20" text-anchor="start" fill="#162e43">47 мкФ</text>
+<text x="1393" y="525" font-family="Arial, sans-serif" font-size="17" text-anchor="start" fill="#162e43">6,3 В X5R</text>
+<polyline points="1370,562 1370,572" fill="none" stroke="#245a74" stroke-width="3" stroke-linejoin="round"/>
+<polyline points="1356,572 1384,572" fill="none" stroke="#245a74" stroke-width="3" stroke-linejoin="round"/>
+<polyline points="1361,578 1379,578" fill="none" stroke="#245a74" stroke-width="3" stroke-linejoin="round"/>
+<polyline points="1366,584 1374,584" fill="none" stroke="#245a74" stroke-width="3" stroke-linejoin="round"/>
+<circle cx="1510" cy="470" r="5" fill="#245a74"/>
+<polyline points="1510,470 1510,500" fill="none" stroke="#245a74" stroke-width="3" stroke-linejoin="round"/>
+<polyline points="1494,500 1526,500" fill="none" stroke="#245a74" stroke-width="3" stroke-linejoin="round"/>
+<polyline points="1494,512 1526,512" fill="none" stroke="#245a74" stroke-width="3" stroke-linejoin="round"/>
+<polyline points="1510,512 1510,562" fill="none" stroke="#245a74" stroke-width="3" stroke-linejoin="round"/>
+<text x="1533" y="500" font-family="Arial, sans-serif" font-size="20" text-anchor="start" fill="#162e43">47 мкФ</text>
+<text x="1533" y="525" font-family="Arial, sans-serif" font-size="17" text-anchor="start" fill="#162e43">6,3 В X5R</text>
+<polyline points="1510,562 1510,572" fill="none" stroke="#245a74" stroke-width="3" stroke-linejoin="round"/>
+<polyline points="1496,572 1524,572" fill="none" stroke="#245a74" stroke-width="3" stroke-linejoin="round"/>
+<polyline points="1501,578 1519,578" fill="none" stroke="#245a74" stroke-width="3" stroke-linejoin="round"/>
+<polyline points="1506,584 1514,584" fill="none" stroke="#245a74" stroke-width="3" stroke-linejoin="round"/>
+<text x="990" y="578" font-family="Arial, sans-serif" font-size="21" text-anchor="start" fill="#162e43">FB</text>
+<text x="990" y="668" font-family="Arial, sans-serif" font-size="21" text-anchor="start" fill="#162e43">COMP</text>
+<polyline points="55,735 1645,735" fill="none" stroke="#245a74" stroke-width="3" stroke-linejoin="round"/>
+<text x="55" y="782" font-family="Arial, sans-serif" font-size="22" text-anchor="start" fill="#162e43">EN: разрешение запуска</text>
+<text x="590" y="782" font-family="Arial, sans-serif" font-size="22" text-anchor="start" fill="#162e43">FB: напряжение выхода</text>
+<text x="1090" y="782" font-family="Arial, sans-serif" font-size="22" text-anchor="start" fill="#162e43">COMP: устойчивость регулирования</text>
+<text x="170" y="825" font-family="Arial, sans-serif" font-size="21" text-anchor="middle" fill="#162e43">+12V_LOGIC</text>
+<polyline points="170,835 170,848" fill="none" stroke="#245a74" stroke-width="3" stroke-linejoin="round"/>
+<polyline points="170,848 170,862" fill="none" stroke="#245a74" stroke-width="3" stroke-linejoin="round"/>
+<rect x="160" y="862" width="20" height="44" fill="white" stroke="#245a74" stroke-width="3"/>
+<polyline points="170,906 170,920" fill="none" stroke="#245a74" stroke-width="3" stroke-linejoin="round"/>
+<text x="192" y="890" font-family="Arial, sans-serif" font-size="21" text-anchor="start" fill="#162e43">332 кОм</text>
+<circle cx="170" cy="920" r="5" fill="#245a74"/>
+<polyline points="170,920 310,920" fill="none" stroke="#245a74" stroke-width="3" stroke-linejoin="round"/>
+<text x="320" y="928" font-family="Arial, sans-serif" font-size="20" text-anchor="start" fill="#162e43">EN → 3</text>
+<polyline points="170,920 170,934" fill="none" stroke="#245a74" stroke-width="3" stroke-linejoin="round"/>
+<rect x="160" y="934" width="20" height="44" fill="white" stroke="#245a74" stroke-width="3"/>
+<polyline points="170,978 170,992" fill="none" stroke="#245a74" stroke-width="3" stroke-linejoin="round"/>
+<text x="192" y="962" font-family="Arial, sans-serif" font-size="21" text-anchor="start" fill="#162e43">68,1 кОм</text>
+<polyline points="170,992 170,1002" fill="none" stroke="#245a74" stroke-width="3" stroke-linejoin="round"/>
+<polyline points="156,1002 184,1002" fill="none" stroke="#245a74" stroke-width="3" stroke-linejoin="round"/>
+<polyline points="161,1008 179,1008" fill="none" stroke="#245a74" stroke-width="3" stroke-linejoin="round"/>
+<polyline points="166,1014 174,1014" fill="none" stroke="#245a74" stroke-width="3" stroke-linejoin="round"/>
+<text x="700" y="825" font-family="Arial, sans-serif" font-size="21" text-anchor="middle" fill="#162e43">+3V3</text>
+<polyline points="700,835 700,848" fill="none" stroke="#245a74" stroke-width="3" stroke-linejoin="round"/>
+<polyline points="700,848 700,862" fill="none" stroke="#245a74" stroke-width="3" stroke-linejoin="round"/>
+<rect x="690" y="862" width="20" height="44" fill="white" stroke="#245a74" stroke-width="3"/>
+<polyline points="700,906 700,920" fill="none" stroke="#245a74" stroke-width="3" stroke-linejoin="round"/>
+<text x="722" y="890" font-family="Arial, sans-serif" font-size="21" text-anchor="start" fill="#162e43">10,2 кОм</text>
+<circle cx="700" cy="920" r="5" fill="#245a74"/>
+<polyline points="700,920 845,920" fill="none" stroke="#245a74" stroke-width="3" stroke-linejoin="round"/>
+<text x="855" y="928" font-family="Arial, sans-serif" font-size="20" text-anchor="start" fill="#162e43">FB → 5</text>
+<polyline points="700,920 700,934" fill="none" stroke="#245a74" stroke-width="3" stroke-linejoin="round"/>
+<rect x="690" y="934" width="20" height="44" fill="white" stroke="#245a74" stroke-width="3"/>
+<polyline points="700,978 700,992" fill="none" stroke="#245a74" stroke-width="3" stroke-linejoin="round"/>
+<text x="722" y="962" font-family="Arial, sans-serif" font-size="21" text-anchor="start" fill="#162e43">3,24 кОм</text>
+<polyline points="700,992 700,1002" fill="none" stroke="#245a74" stroke-width="3" stroke-linejoin="round"/>
+<polyline points="686,1002 714,1002" fill="none" stroke="#245a74" stroke-width="3" stroke-linejoin="round"/>
+<polyline points="691,1008 709,1008" fill="none" stroke="#245a74" stroke-width="3" stroke-linejoin="round"/>
+<polyline points="696,1014 704,1014" fill="none" stroke="#245a74" stroke-width="3" stroke-linejoin="round"/>
+<text x="1140" y="827" font-family="Arial, sans-serif" font-size="20" text-anchor="start" fill="#162e43">COMP → 6</text>
+<polyline points="1140,840 1140,865 1320,865" fill="none" stroke="#245a74" stroke-width="3" stroke-linejoin="round"/>
+<circle cx="1140" cy="865" r="5" fill="#245a74"/>
+<polyline points="1140,865 1140,879" fill="none" stroke="#245a74" stroke-width="3" stroke-linejoin="round"/>
+<rect x="1130" y="879" width="20" height="44" fill="white" stroke="#245a74" stroke-width="3"/>
+<polyline points="1140,923 1140,937" fill="none" stroke="#245a74" stroke-width="3" stroke-linejoin="round"/>
+<text x="1162" y="907" font-family="Arial, sans-serif" font-size="21" text-anchor="start" fill="#162e43">29,4 кОм</text>
+<polyline points="1140,937 1140,967" fill="none" stroke="#245a74" stroke-width="3" stroke-linejoin="round"/>
+<polyline points="1124,967 1156,967" fill="none" stroke="#245a74" stroke-width="3" stroke-linejoin="round"/>
+<polyline points="1124,979 1156,979" fill="none" stroke="#245a74" stroke-width="3" stroke-linejoin="round"/>
+<polyline points="1140,979 1140,997" fill="none" stroke="#245a74" stroke-width="3" stroke-linejoin="round"/>
+<text x="1163" y="967" font-family="Arial, sans-serif" font-size="20" text-anchor="start" fill="#162e43">1 нФ</text>
+<polyline points="1140,997 1140,1007" fill="none" stroke="#245a74" stroke-width="3" stroke-linejoin="round"/>
+<polyline points="1126,1007 1154,1007" fill="none" stroke="#245a74" stroke-width="3" stroke-linejoin="round"/>
+<polyline points="1131,1013 1149,1013" fill="none" stroke="#245a74" stroke-width="3" stroke-linejoin="round"/>
+<polyline points="1136,1019 1144,1019" fill="none" stroke="#245a74" stroke-width="3" stroke-linejoin="round"/>
+<polyline points="1320,865 1320,895" fill="none" stroke="#245a74" stroke-width="3" stroke-linejoin="round"/>
+<polyline points="1304,895 1336,895" fill="none" stroke="#245a74" stroke-width="3" stroke-linejoin="round"/>
+<polyline points="1304,907 1336,907" fill="none" stroke="#245a74" stroke-width="3" stroke-linejoin="round"/>
+<polyline points="1320,907 1320,997" fill="none" stroke="#245a74" stroke-width="3" stroke-linejoin="round"/>
+<text x="1343" y="895" font-family="Arial, sans-serif" font-size="20" text-anchor="start" fill="#162e43">47 пФ</text>
+<polyline points="1320,997 1320,1007" fill="none" stroke="#245a74" stroke-width="3" stroke-linejoin="round"/>
+<polyline points="1306,1007 1334,1007" fill="none" stroke="#245a74" stroke-width="3" stroke-linejoin="round"/>
+<polyline points="1311,1013 1329,1013" fill="none" stroke="#245a74" stroke-width="3" stroke-linejoin="round"/>
+<polyline points="1316,1019 1324,1019" fill="none" stroke="#245a74" stroke-width="3" stroke-linejoin="round"/>
+<text x="55" y="1070" font-family="Arial, sans-serif" font-size="20" text-anchor="start" fill="#162e43">Крупные детали: пассивы 0805, ёмкие MLCC — 1206; диод B240A — SMA.</text>
+<text x="55" y="1102" font-family="Arial, sans-serif" font-size="18" text-anchor="start" fill="#162e43">Компенсация указана для COUT = 2 × 47 мкФ C3216X5R0J476M; при замене конденсаторов нужен пересчёт.</text>
+<text x="55" y="1130" font-family="Arial, sans-serif" font-size="18" text-anchor="start" fill="#162e43">Источник: TI TPS54231, SLUS851D, Fig. 10. Справочный вариант; текущие платы не изменены.</text>
+</svg>

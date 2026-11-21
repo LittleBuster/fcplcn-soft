@@ -1,0 +1,108 @@
+/* Локальная охрана PLC и признаки автономности */
+
+.security-panel {
+  padding: 18px;
+  border: 1px solid #334761;
+  border-radius: 12px;
+  background: #182434;
+  margin-bottom: 19px;
+}
+
+.security-action {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 15px;
+  width: 100%;
+  min-height: 235px;
+  padding: 22px;
+  background: #121d2a;
+  border: 1px solid #334761;
+  border-radius: 9px;
+  text-align: center;
+  color: #8ca3c2;
+}
+
+.security-shield {
+  width: 95px;
+  height: 95px;
+  stroke-width: 1.1;
+}
+
+.security-action strong {
+  font-size: 18px;
+  color: #dce8f8;
+}
+
+.security-action > span {
+  color: #8fa5c2;
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.security-action:not(:disabled):hover {
+  border-color: #759bcb;
+}
+
+.armed-panel .security-action {
+  color: var(--green);
+  border-color: #42775f;
+}
+
+.alarm-panel .security-action {
+  color: var(--red);
+  border-color: #b45f73;
+  background: radial-gradient(ellipse at 50% 40%, #ff6f8a1a, transparent 65%), #211f2a;
+}
+
+.alarm-panel .security-action strong {
+  color: var(--red);
+  font-size: 23px;
+}
+
+.alarm-panel .security-shield {
+  filter: drop-shadow(0 0 14px #ff65752a);
+}
+
+.security-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 15px;
+  flex-wrap: wrap;
+  padding: 14px 1px 0;
+  color: #7f98b9;
+  font-size: 10px;
+}
+
+.security-meta span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.security-meta .icon {
+  width: 14px;
+  height: 14px;
+}
+
+.autonomy-note {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  margin: 28px 0 9px;
+  padding: 16px;
+  border: 1px solid #2e4855;
+  border-radius: 10px;
+  background: #17272f;
+  color: #8facbc;
+}
+
+.autonomy-note .icon {
+  color: #8ec7b5;
+}
+
+.autonomy-note p {
+  font-size: 11px;
+  line-height: 1.8;
+}

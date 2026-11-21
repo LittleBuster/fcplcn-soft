@@ -1,0 +1,22 @@
+#!/bin/sh
+set -eu
+
+WEB_SETUP_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+WEB_PROJECT_DIR="$WEB_SETUP_DIR/web-smoke"
+
+if [ -x /opt/homebrew/opt/node@24/bin/node ]; then
+    PATH="/opt/homebrew/opt/node@24/bin:$PATH"
+    export PATH
+fi
+
+if ! command -v node >/dev/null 2>&1 || ! command -v npm >/dev/null 2>&1; then
+    printf 'Node.js 24 and npm are required for the web toolchain check.\n' >&2
+    exit 1
+fi
+
+cd "$WEB_PROJECT_DIR"
+npm run typecheck
+npm run test:unit
+npm run build
+# Playwright owns the preview server and stops it when the browser test ends.
+npm run test:browser

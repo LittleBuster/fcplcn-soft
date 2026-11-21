@@ -1,0 +1,84 @@
+name: fcplcn
+
+services:
+  hub:
+    image: ${FCPLCN_HUB_IMAGE:-fcplcn-hub:local}
+    build:
+      context: ../..
+      dockerfile: hub/deploy/Dockerfile
+      args:
+        FCPLCN_NODE_RUNTIME_IMAGE: ${FCPLCN_NODE_RUNTIME_IMAGE:-node:24.22.3-bookworm-slim}
+    restart: unless-stopped
+    init: true
+    environment:
+      FCPLCN_HUB_MODE: mqtt
+      FCPLCN_HUB_HOST: 0.0.0.0
+      FCPLCN_HUB_PORT: 3000
+      FCPLCN_HUB_PASSWORD: ${FCPLCN_HUB_PASSWORD:-}
+      FCPLCN_HUB_MQTT_URL: mqtt://broker:1883
+      FCPLCN_HUB_MQTT_USERNAME: ${FCPLCN_HUB_MQTT_USERNAME:-fcplcn-hub}
+      FCPLCN_HUB_MQTT_PASSWORD: ${FCPLCN_HUB_MQTT_PASSWORD:?Set FCPLCN_HUB_MQTT_PASSWORD in hub/.env}
+      FCPLCN_HUB_DATA_DIR: /var/lib/fcplcn
+    ports:
+      - '${FCPLCN_HUB_BIND:-0.0.0.0}:${FCPLCN_HUB_PORT:-3000}:3000'
+    volumes:
+      - hub-data:/var/lib/fcplcn
+    depends_on:
+      broker:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - fetch('http://127.0.0.1:3000/health').then(async r=>{const s=await r.json();process.exit(r.ok&&s.status==='ok'&&s.brokerConnected?0:1)}).catch(()=>process.exit(1))
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+  broker:
+    image: eclipse-mosquitto:2.0.23
+    restart: unless-stopped
+    user: '1883:1883'
+    entrypoint: [/usr/sbin/mosquitto]
+    command: [-c, /mosquitto/config/mosquitto.conf]
+    ports:
+      - '${FCPLCN_MQTT_BIND:-0.0.0.0}:${FCPLCN_MQTT_PORT:-1883}:1883'
+    volumes:
+      - ./mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - ${FCPLCN_HUB_BROKER_AUTH_DIR:-./runtime/broker}:/mosquitto/auth:ro
+      - broker-data:/mosquitto/data
+    healthcheck:
+      test: [CMD, nc, -z, '127.0.0.1', '1883']
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 5s
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+  broker-setup:
+    image: eclipse-mosquitto:2.0.23
+    profiles: [setup]
+    user: '0:0'
+    entrypoint: [/bin/sh, /setup/setup-broker.sh]
+    command: [hub]
+    environment:
+      FCPLCN_HUB_MQTT_USERNAME: ${FCPLCN_HUB_MQTT_USERNAME:-fcplcn-hub}
+      FCPLCN_HUB_MQTT_PASSWORD: ${FCPLCN_HUB_MQTT_PASSWORD:?Set FCPLCN_HUB_MQTT_PASSWORD in hub/.env}
+      FCPLCN_PLC_ID: ${FCPLCN_PLC_ID:-}
+      FCPLCN_PLC_PASSWORD: ${FCPLCN_PLC_PASSWORD:-}
+    volumes:
+      - ./setup-broker.sh:/setup/setup-broker.sh:ro
+      - ${FCPLCN_HUB_BROKER_AUTH_DIR:-./runtime/broker}:/mosquitto/auth
+
+volumes:
+  hub-data:
+  broker-data:

@@ -1,0 +1,257 @@
+/** @file Общий статус охраны, подтверждения PLC, тревоги и задержки. */
+
+.house-security {
+  padding: 21px 24px;
+  margin-bottom: 24px;
+  border-color: #35504d;
+}
+
+.house-security-heading {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.house-security-icon {
+  width: 46px;
+  height: 46px;
+  display: grid;
+  place-items: center;
+  flex: none;
+  background: #203c35;
+  color: #8bd7b4;
+  border: 1px solid #385d50;
+  border-radius: 14px;
+}
+
+.house-security-icon svg {
+  width: 27px;
+  height: 27px;
+}
+
+.house-security-title {
+  min-width: 0;
+}
+
+.house-security h2 {
+  margin: 3px 0 4px;
+  font-size: 22px;
+}
+
+.house-security p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.house-security-count {
+  margin-left: auto;
+  padding: 8px 11px;
+  border-radius: 999px;
+  background: #203c35;
+  color: #a1dbc2;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.house-security.pending .house-security-icon,
+.house-security.neutral .house-security-icon {
+  background: #26364b;
+  color: #adc8eb;
+  border-color: #3b526d;
+}
+
+.house-security.pending .house-security-count,
+.house-security.neutral .house-security-count {
+  background: #26364b;
+  color: #bdcde4;
+}
+
+.house-security.attention {
+  border-color: #796047;
+}
+
+.house-security.alarm {
+  border-color: #a95461;
+  background: #2a202e;
+}
+
+.house-security.alarm .house-security-icon,
+.house-security.alarm .house-security-count {
+  background: #4a2934;
+  border-color: #87505e;
+  color: #ff899a;
+}
+
+.house-security-phase {
+  margin-left: 12px;
+  font-size: 12px;
+  color: #efc68f;
+}
+
+.house-security.alarm .house-security-phase {
+  color: #ff899a;
+}
+
+.house-security .house-security-details li[data-house-security-phase='alarm'] span:last-child {
+  color: #ff899a;
+}
+
+.house-security .house-security-details li[data-house-security-phase='entry_delay'] span:last-child,
+.house-security .house-security-details li[data-house-security-phase='exit_delay'] span:last-child {
+  color: #efc68f;
+}
+
+.house-security.attention .house-security-count {
+  background: #493b2b;
+  color: #ebcc8f;
+}
+
+.house-security.attention .house-security-icon {
+  background: #493b2b;
+  border-color: #796047;
+  color: #ebcc8f;
+}
+
+.house-security-waiting,
+.house-security-event {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding-top: 13px;
+}
+
+.house-security-waiting svg,
+.house-security-event svg {
+  width: 16px;
+  height: 16px;
+  flex: none;
+}
+
+.house-security-waiting span {
+  color: #778ea7;
+}
+
+.house-security p.house-security-error {
+  color: #efb58e;
+  padding-top: 12px;
+}
+
+.house-security-event {
+  color: #a4b8d0 !important;
+}
+
+.house-security-details {
+  margin-top: 13px;
+  font-size: 11px;
+}
+
+.house-security-details summary {
+  cursor: pointer;
+  color: #9bb5d3;
+}
+
+.house-security-details summary span {
+  margin-left: 5px;
+  color: #6f88a5;
+}
+
+.house-security-details ul {
+  padding: 5px 0 0;
+  margin: 0;
+  list-style: none;
+}
+
+.house-security-details li {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 0;
+  border-top: 1px solid #2b3c50;
+}
+
+.house-security-details li span:last-child {
+  color: #8ea5c0;
+  text-align: right;
+}
+
+.house-security-details small {
+  display: block;
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.house-security-details li[data-house-security-status='confirmed'] span:last-child {
+  color: #8bd7b4;
+}
+
+.house-security-details li[data-house-security-status='rejected'] span:last-child,
+.house-security-details li[data-house-security-status='unknown'] span:last-child {
+  color: #efb58e;
+}
+
+.security-demo-touch {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding-top: 15px;
+  margin-top: 14px;
+  border-top: 1px solid #2b3c50;
+}
+
+.security-demo-touch .badge {
+  font-size: 9px;
+}
+
+.security-demo-touch p {
+  color: var(--muted);
+  font-size: 11px;
+  margin: 0;
+}
+
+/* Адаптивная компоновка: (max-width: 550px) */
+
+@media (max-width: 550px) {
+  .house-security {
+    padding: 18px;
+  }
+
+  .house-security-heading {
+    display: grid;
+    grid-template-columns: 46px minmax(0, 1fr);
+    gap: 12px;
+  }
+
+  .house-security-title {
+    grid-column: 2;
+  }
+
+  .house-security-count {
+    grid-column: 2;
+    margin-left: 0;
+    justify-self: start;
+    max-width: 100%;
+  }
+
+  .house-security-details li {
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .house-security-details li span:last-child {
+    text-align: left;
+  }
+}
+
+.security-panel.delayed-panel .security-action {
+  border-color: #796047;
+  background: linear-gradient(140deg, #312b25, #182333);
+}
+
+.security-panel.delayed-panel .security-action strong,
+.security-panel.delayed-panel .security-shield {
+  color: #efcc90;
+}

@@ -1,0 +1,9 @@
+#!/bin/sh
+set -eu
+METEO_TOOLS_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+METEO_SOURCE_DIR="$METEO_TOOLS_DIR/../../firmware/base/tests/meteo"
+METEO_BUILD_DIR="${FCPLCN_METEO_BUILD_DIR:-$HOME/esp/build/fcplcn/base-meteo}"
+export PATH="/opt/homebrew/bin:$PATH"
+cmake -S "$METEO_SOURCE_DIR" -B "$METEO_BUILD_DIR" -G Ninja "$@"
+cmake --build "$METEO_BUILD_DIR" --parallel
+ctest --test-dir "$METEO_BUILD_DIR" --output-on-failure

@@ -1,0 +1,7 @@
+#!/bin/sh
+set -eu
+
+FIRMWARE_TOOLS_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+FIRMWARE_BUILD_DIR="${ESP_SMOKE_BUILD_DIR:-$HOME/esp/build/fcplcn/esp32s3-smoke}"
+"$FIRMWARE_TOOLS_DIR/idf" -C "$FIRMWARE_TOOLS_DIR/esp32s3-smoke" -B "$FIRMWARE_BUILD_DIR" build
+"$FIRMWARE_TOOLS_DIR/idf" -C "$FIRMWARE_TOOLS_DIR/esp32s3-smoke" -B "$FIRMWARE_BUILD_DIR" merge-bin -o FCPLCn-full.bin
