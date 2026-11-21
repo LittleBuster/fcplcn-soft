@@ -376,7 +376,9 @@ test('availability loss cannot leave a cached live PLC commandable', async () =>
 });
 
 test('demo starts without a broker and updates actual output only with simulated acknowledgement', async () => {
-  const engine = createEngine({ ...settings(), mode: 'demo' });
+  // The acknowledgement includes loopback HTTP and persistence. Allow CPU
+  // emulation to finish while keeping the state-before/after-ACK assertions.
+  const engine = createEngine({ ...settings(), mode: 'demo', commandTimeoutMs: 10_000 });
   await engine.start();
   try {
     assert.equal(engine.snapshot().devices.length, 3);
