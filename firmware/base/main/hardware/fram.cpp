@@ -22,8 +22,8 @@ constexpr std::size_t kChunkBytes = 32;
  */
 esp_err_t validate(std::uint16_t offset, const void* data, std::size_t length)
 {
-    const auto& fram = board_profile_active().fram;
-    if (!fram || fram->capacityBytes != kCapacityBytes)
+    const auto& fram = board_profile_active().stateMemory;
+    if (!fram || fram->kind != BoardMemoryKind::Fram || fram->capacityBytes != kCapacityBytes)
         return ESP_ERR_NOT_SUPPORTED;
     if (data == nullptr || length == 0 || offset >= kCapacityBytes
         || length > kCapacityBytes - offset)
@@ -46,7 +46,7 @@ esp_err_t fram_read(std::uint16_t offset, std::uint8_t* data, std::size_t length
     const auto error = validate(offset, data, length);
     if (error != ESP_OK)
         return error;
-    const auto& fram = *board_profile_active().fram;
+    const auto& fram = *board_profile_active().stateMemory;
     for (std::size_t done = 0; done < length;) {
         const auto count = std::min(kChunkBytes, length - done);
         const auto transfer = hardware_i2c_memory_read(fram.i2cBusId,
@@ -76,7 +76,7 @@ esp_err_t fram_write(std::uint16_t offset, const std::uint8_t* data, std::size_t
     const auto error = validate(offset, data, length);
     if (error != ESP_OK)
         return error;
-    const auto& fram = *board_profile_active().fram;
+    const auto& fram = *board_profile_active().stateMemory;
     for (std::size_t done = 0; done < length;) {
         const auto count = std::min(kChunkBytes, length - done);
         const auto transfer = hardware_i2c_memory_write(fram.i2cBusId,

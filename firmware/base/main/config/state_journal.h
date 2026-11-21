@@ -1,6 +1,6 @@
 /**
  * @file state_journal.h
- * @brief Power-loss-safe FRAM journal for frequently changing controller states.
+ * @brief Power-loss-safe state memory journal for frequently changing controller states.
  * @details Two slots preserve the previous committed record while a replacement is written.
  * The caller supplies an opaque configuration identity so states cannot cross configurations.
  */
@@ -19,7 +19,7 @@ using StateJournalKey = std::array<std::uint8_t, 16>;
 using StateJournalPayload = std::vector<std::uint8_t>;
 /// Maximum opaque state bytes in each independently committed journal slot.
 inline constexpr std::size_t kStateJournalMaxPayloadBytes = 128;
-/// Fixed allocation of two journal slots; remaining FRAM capacity is unassigned.
+/// Fixed allocation of two journal slots; remaining state memory capacity is unassigned.
 inline constexpr std::size_t kStateJournalReservedBytes = 512;
 
 /** @brief Diagnostics from the latest journal operation, without exposing its payload. */
@@ -30,11 +30,11 @@ struct StateJournalStatus {
 };
 
 /**
- * @brief Load the newest complete FRAM snapshot belonging to one configuration.
+ * @brief Load the newest complete state memory snapshot belonging to one configuration.
  * @param[in] key Identity of the durable configuration whose states are requested.
  * @param[out] payload Replaced on success; unchanged for missing, corrupt or unreadable records.
  * @return ESP_OK, NOT_FOUND for blank/unrelated valid slots, INVALID_RESPONSE for corruption,
- * or a FRAM transport error.
+ * or a state memory transport error.
  * @note Thread-safe. An intact matching slot survives corruption of the alternate slot.
  */
 esp_err_t state_journal_load(const StateJournalKey& key, StateJournalPayload& payload);

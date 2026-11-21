@@ -161,6 +161,23 @@ bool known_port(std::string_view id, bool relay)
 }
 
 /**
+ * @brief Translate a physical digital-input level into contact closure using the board wiring.
+ * @param[in] id Known input identifier in the active board profile.
+ * @param[in] level Physical HIGH/LOW from a valid input observation.
+ * @return True for a closed contact; false for an open or unknown input.
+ * @pre Callers reject unavailable observations and validate the input binding first.
+ * @note Pure profile lookup; diagnostic hardware levels remain unchanged.
+ */
+bool input_contact_closed(std::string_view id, bool level)
+{
+    const auto& board = board_profile_active();
+    for (std::size_t i = 0; i < board.inputCount; ++i)
+        if (id == board.inputs[i].name)
+            return level == board.inputs[i].activeHigh;
+    return false;
+}
+
+/**
  * @brief Check whether a logical sensor connector exists on the active board.
  * @param[in] id Exact sensor-port identifier.
  * @return True for a sensor port declared by the active profile.

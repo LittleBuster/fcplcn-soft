@@ -27,3 +27,7 @@ foreach(case defaults persistence edges exclusive_inputs validation reconfigure 
     add_test(NAME fcplcn_sockets_${case} COMMAND fcplcn_socket_tests ${case})
     set_tests_properties(fcplcn_sockets_${case} PROPERTIES TIMEOUT 30)
 endforeach()
+foreach(case legacy_buttons legacy_button_recovery legacy_thermostat_button legacy_security_zones legacy_security_recovery)
+    add_test(NAME fcplcn_sockets_${case} COMMAND fcplcn_socket_tests ${case})
+    set_tests_properties(fcplcn_sockets_${case} PROPERTIES TIMEOUT 30)
+endforeach()

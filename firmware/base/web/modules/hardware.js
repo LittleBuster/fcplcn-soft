@@ -217,8 +217,15 @@ export function createHardwareUI(context) {
       container.append(hardwareElement('p', 'muted', 'Нет данных о шинах.'));
   }
 
-  /** @brief Show verified FRAM health and the journal allocation without stale memory values. */
-  function renderFram(storage) {
+  /** @brief Show the selected memory technology, verified health and current journal allocation. */
+  function renderStateMemory(storage) {
+    const type = typeof storage.type === 'string' ? storage.type.toUpperCase() : '';
+    const memoryType = ['FRAM', 'EEPROM'].includes(type) ? type : '';
+    iconHeading(
+      byId('hardware-fram-title'),
+      memoryType ? `Память ${memoryType}` : 'Постоянная память',
+      'chip',
+    );
     const known = state.ioFresh && typeof storage.available === 'boolean';
     const available = known && storage.available;
     const valid = available && storage.valid === true;
@@ -268,7 +275,7 @@ export function createHardwareUI(context) {
       'hardware-fram-payload',
       valid && number(storage.payloadBytes) ? bytes(storage.payloadBytes) : '—',
     );
-    fieldError('hardware-fram-error', known ? storage.error : '', 'FRAM');
+    fieldError('hardware-fram-error', known ? storage.error : '', memoryType || 'Память');
   }
 
   function renderHardware() {
@@ -310,7 +317,7 @@ export function createHardwareUI(context) {
         : 'Нет данных',
     );
     fieldError('hardware-rtc-error', rtc.error, 'RTC');
-    renderFram(snapshot.stateStorage || {});
+    renderStateMemory(snapshot.stateStorage || {});
 
     const sensors = byId('hardware-sensors');
     sensors.replaceChildren();

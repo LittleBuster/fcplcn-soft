@@ -319,7 +319,7 @@ void thermostats_step_locked()
             std::string input_error;
             if (!thermostat_input(item, input, input_error))
                 runtime.baseline = false;
-            else if (button_press(runtime, input)) {
+            else if (button_press(runtime, input, item.inputId)) {
                 std::string command_error;
                 set_thermostat_enabled_locked(i, !item.enabled, command_error);
             }

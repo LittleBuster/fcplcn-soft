@@ -165,13 +165,13 @@ void append_text(std::vector<std::uint8_t>& bytes, std::string_view text)
     bytes.insert(bytes.end(), text.begin(), text.end());
 }
 
-// Version 8 assigns a new FRAM identity to every durable configuration replacement.
+// Version 8 assigns a new state-memory identity to every durable configuration replacement.
 // The encoded switch values are migration/import seeds, never the live state store.
 /**
  * @brief Encode a bounded, ABI-independent little-endian controller record.
  * @details One CRC covers all modules, revisions and confirmed operative flags.
  * Thermostat demand/measurements are intentionally absent; legacy versions are
- * migrated once by load() after their FRAM seed has been confirmed.
+ * migrated once by load() after their state-memory seed has been confirmed.
  * @param[in] configs Complete validated module set whose profiles resolve to one canonical board.
  * @return Encoded version-8 record with CRC and a fresh state identity, or an empty vector.
  * @pre Row strings and counts satisfy their schema limits; the storage caller enforces the total
@@ -539,16 +539,18 @@ esp_err_t load(Configurations& result)
     StateJournalKey key{};
     if (bytes[8] != kControllerStorageVersion) {
         if (state_record_key(bytes, key)) {
-            // Version 8 already has frequent states in FRAM; its NVS seed is deliberately stale.
+            // Version 8 already has frequent states in state-memory; its NVS seed is deliberately
+            // stale.
             activate_state_record(bytes);
             if (load_states(result) != ESP_OK)
                 clear_states(result);
         }
-        // A one-time migration records the old confirmed flags in FRAM before replacing NVS.
+        // A one-time migration records the old confirmed flags in state-memory before replacing
+        // NVS.
         error = save(result);
         if (error != ESP_OK) {
             clear_states(result);
-            service_error = "Перенос состояний во FRAM не выполнен; выходы выключены";
+            service_error = "Перенос состояний в память не выполнен; выходы выключены";
         }
         return ESP_OK;
     }
@@ -564,7 +566,7 @@ esp_err_t load(Configurations& result)
             security.triggered = true;
         }
         ESP_LOGW(kTag,
-                 "FRAM state unavailable: %s; starting with operative flags OFF",
+                 "State memory unavailable: %s; starting with operative flags OFF",
                  esp_err_to_name(error));
     }
     return ESP_OK;

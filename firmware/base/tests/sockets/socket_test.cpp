@@ -75,12 +75,12 @@ void step(std::int64_t us = 100'000, bool sample = true)
     socket_controller_test_step();
 }
 
-void start()
+void start(const char* boardId = kDefaultBoardProfileId)
 {
+    REQUIRE(board_profile_activate(boardId));
     meteo_fake::reset();
     socket_test::reset();
     ibutton_fake::reset();
-    REQUIRE(board_profile_activate(kDefaultBoardProfileId));
     REQUIRE(socket_controller_init() == ESP_OK);
 }
 
@@ -2147,6 +2147,7 @@ void fram_diagnostics()
 }
 
 #include "security_checks.inc"
+#include "legacy_checks.inc"
 
 }  // namespace
 
@@ -2222,7 +2223,12 @@ int main(int argc, char** argv)
         {"security_hub_fence", security_hub_fence},
         {"security_hub_busy", security_hub_busy},
         {"security_hub_failure_event", security_hub_failure_event},
-        {"security_hub_contact_before_lease", security_hub_contact_before_lease}};
+        {"security_hub_contact_before_lease", security_hub_contact_before_lease},
+        {"legacy_buttons", legacy_buttons},
+        {"legacy_button_recovery", legacy_button_recovery},
+        {"legacy_thermostat_button", legacy_thermostat_button},
+        {"legacy_security_zones", legacy_security_zones},
+        {"legacy_security_recovery", legacy_security_recovery}};
     try {
         REQUIRE(argc == 2);
         for (const auto& t : tests)

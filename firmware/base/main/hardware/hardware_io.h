@@ -49,6 +49,8 @@ esp_err_t hardware_io_read_input(std::string_view id, HardwareIoChannelState& st
  * @details Call after board activation/safe boot setup and before RTC services.
  * Missing peripherals remain invalid and are retried independently; cold boot
  * starts all relay intents OFF. The active hardware profile must remain immutable.
+ * A RESET GPIO of -1 skips only the physical reset pulse; all MCP register and
+ * profile pull-up checks still run before any relay/input is declared valid.
  */
 void hardware_io_init();
 
@@ -144,6 +146,19 @@ esp_err_t hardware_i2c_write(std::string_view busId,
                              std::uint8_t reg,
                              const std::uint8_t* data,
                              std::size_t length);
+
+/**
+ * @brief Send an address-only write-direction probe on a profile I2C bus.
+ * @param busId Profile bus identifier.
+ * @param address Seven-bit slave address 0x08..0x77.
+ * @param timeoutMs Requested individual probe wait, 1..20 milliseconds.
+ * @return ESP_OK for ACK, ESP_ERR_NOT_FOUND for NACK, or an argument/state/bus error.
+ * @details The ESP-IDF wait is rounded up to at least one RTOS tick. Tick periods
+ * above 20 ms are unsupported. Acquires the shared mutex for this transaction only. EEPROM
+ * ACK polling must release it between probes; no retry is performed here.
+ */
+esp_err_t
+hardware_i2c_probe(std::string_view busId, std::uint8_t address, std::uint32_t timeoutMs = 1);
 
 /**
  * @brief Read one bounded transfer with a 16-bit big-endian memory address.

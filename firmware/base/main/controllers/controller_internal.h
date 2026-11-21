@@ -66,7 +66,7 @@ enum class ThermostatMode { Heating, Cooling };
 /** @brief Physical Meteo protocol represented internally as an enum. */
 enum class SensorProtocol { Dht22, OneWire };
 
-/** @brief Fixed contact polarity of a security zone on active-low digital inputs. */
+/** @brief Normally-closed/open contact semantics, independent of the board's input polarity. */
 enum class SecuritySensorType { Reed, Motion };
 
 /** @brief One named, CRC-checked DS1990A-family credential in the local allowlist. */
@@ -122,8 +122,8 @@ struct Configuration {
 struct Runtime {
     bool baseline = false;
     bool armed = false;
-    std::int64_t highSinceUs = -1;
-    unsigned lowSamples = 0;
+    std::int64_t highSinceUs = -1;  ///< Logical release interval, independent of raw GPIO polarity.
+    unsigned lowSamples = 0;  ///< Distinct pressed-contact samples after profile normalization.
     std::int64_t lockoutUntilUs = 0;
     std::int64_t lastInputUs = -1;
     std::uint32_t inputGeneration = 0;
@@ -306,9 +306,13 @@ SocketResult set_state_locked(ControllerKind kind,
                               std::string& error,
                               std::int64_t deadlineUs = 0);
 
+bool input_contact_closed(std::string_view id, bool level);
+
 void baseline(Runtime& transient, const HardwareIoChannelState& input);
 
-bool button_press(Runtime& transient, const HardwareIoChannelState& input);
+bool button_press(Runtime& transient,
+                  const HardwareIoChannelState& rawInput,
+                  std::string_view inputId);
 
 void worker_step();
 

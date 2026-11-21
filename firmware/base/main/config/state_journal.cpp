@@ -1,6 +1,6 @@
 /**
  * @file state_journal.cpp
- * @brief Bounded two-slot FRAM state transactions with configuration keys and CRC validation.
+ * @brief Bounded two-slot state transactions with configuration keys and CRC validation.
  */
 #include "config/state_journal.h"
 
@@ -10,20 +10,21 @@
 #include <limits>
 #include <mutex>
 
-#include "hardware/fram.h"
+#include "hardware/state_memory.h"
 #include "util/checksum.h"
 
 namespace {
 constexpr std::size_t kSlotBytes = kStateJournalReservedBytes / 2;
 constexpr std::size_t kHeaderBytes = 40;
 constexpr std::size_t kCommitOffset = kSlotBytes - 8;
+// Preserve the original on-media format on both memory technologies and across updates.
 constexpr std::array<std::uint8_t, 8> kMagic{{'F', 'C', 'F', 'R', 'A', 'M', '0', '1'}};
 constexpr std::array<std::uint8_t, 8> kCommit{{'F', 'C', 'C', 'M', 'T', '0', '1', 0xa5}};
 constexpr std::array<std::uint8_t, 8> kInvalidCommit{};
 constexpr std::size_t kMaxRecordBytes = kHeaderBytes + kStateJournalMaxPayloadBytes + 4;
 static_assert(kMaxRecordBytes <= kCommitOffset);
 
-/** @brief Independently validated metadata and bytes from one physical FRAM slot. */
+/** @brief Independently validated metadata and bytes from one physical state memory slot. */
 struct Slot {
     bool blank = false;
     bool valid = false;
@@ -81,13 +82,13 @@ esp_err_t finish(esp_err_t result, std::uint64_t generation = 0)
  * @brief Distinguish entirely erased/zeroed storage from an interrupted or unknown record.
  * @param[in] slot Physical slot index, zero or one.
  * @param[out] blank True only when every slot byte is uniformly zero or 0xff.
- * @return ESP_OK or the FRAM read error.
+ * @return ESP_OK or the state memory read error.
  */
 esp_err_t is_blank(unsigned slot, bool& blank)
 {
     std::array<std::uint8_t, kSlotBytes> bytes{};
-    const auto result =
-        fram_read(static_cast<std::uint16_t>(slot * kSlotBytes), bytes.data(), bytes.size());
+    const auto result = state_memory_read(
+        static_cast<std::uint16_t>(slot * kSlotBytes), bytes.data(), bytes.size());
     if (result != ESP_OK)
         return result;
     const auto first = bytes.front();
@@ -102,19 +103,19 @@ esp_err_t is_blank(unsigned slot, bool& blank)
  * @brief Read and validate one independently committed record without exposing partial data.
  * @param[in] slot Physical slot index, zero or one.
  * @param[out] parsed Metadata and complete body; invalid bodies remain marked invalid.
- * @return ESP_OK after classification, or a FRAM transport error.
+ * @return ESP_OK after classification, or a state memory transport error.
  */
 esp_err_t read_slot(unsigned slot, Slot& parsed)
 {
     parsed = Slot{};
     const auto base = static_cast<std::uint16_t>(slot * kSlotBytes);
-    auto result = fram_read(base, parsed.bytes.data(), kHeaderBytes);
+    auto result = state_memory_read(base, parsed.bytes.data(), kHeaderBytes);
     if (result != ESP_OK)
         return result;
     if (!std::equal(kMagic.begin(), kMagic.end(), parsed.bytes.begin()))
         return is_blank(slot, parsed.blank);
     std::array<std::uint8_t, kCommit.size()> marker{};
-    result = fram_read(base + kCommitOffset, marker.data(), marker.size());
+    result = state_memory_read(base + kCommitOffset, marker.data(), marker.size());
     if (result != ESP_OK)
         return result;
     if (marker != kCommit)
@@ -129,8 +130,8 @@ esp_err_t read_slot(unsigned slot, Slot& parsed)
                 return byte == 0;
             }))
         return ESP_OK;
-    result =
-        fram_read(base + kHeaderBytes, parsed.bytes.data() + kHeaderBytes, parsed.payloadBytes + 4);
+    result = state_memory_read(
+        base + kHeaderBytes, parsed.bytes.data() + kHeaderBytes, parsed.payloadBytes + 4);
     if (result != ESP_OK)
         return result;
     const auto checked = kHeaderBytes + parsed.payloadBytes;
@@ -142,7 +143,7 @@ esp_err_t read_slot(unsigned slot, Slot& parsed)
 /**
  * @brief Read both slots before selecting an authoritative record or a write target.
  * @param[out] slots Independent slot classifications and validated bytes.
- * @return ESP_OK or the first FRAM transport error; uncertain media is never overwritten.
+ * @return ESP_OK or the first state memory transport error; uncertain media is never overwritten.
  */
 esp_err_t read_slots(std::array<Slot, 2>& slots)
 {
@@ -172,13 +173,13 @@ int newest(const std::array<Slot, 2>& slots, const StateJournalKey* key = nullpt
 
 /**
  * @brief Invalidate an uncertain candidate after commit/writeback failure when the bus permits.
- * @param[in] base Candidate slot's physical FRAM base address.
+ * @param[in] base Candidate slot's physical state memory base address.
  * @note The previous authoritative slot is never touched. A failing bus can make rollback
  * uncertain, so the public save result still reports the original error.
  */
 void abandon(std::uint16_t base)
 {
-    (void)fram_write(base + kCommitOffset, kInvalidCommit.data(), kInvalidCommit.size());
+    (void)state_memory_write(base + kCommitOffset, kInvalidCommit.data(), kInvalidCommit.size());
 }
 }  // namespace
 
@@ -187,7 +188,7 @@ void abandon(std::uint16_t base)
  * @brief Load the newest CRC-checked committed snapshot for one configuration key.
  * @param[in] key Configuration identity requested by the caller.
  * @param[out] payload Replaced only after complete matching-record verification.
- * @return ESP_OK, NOT_FOUND, INVALID_RESPONSE or a FRAM read error.
+ * @return ESP_OK, NOT_FOUND, INVALID_RESPONSE or a state memory read error.
  * @endcond
  */
 esp_err_t state_journal_load(const StateJournalKey& key, StateJournalPayload& payload)
@@ -212,11 +213,13 @@ esp_err_t state_journal_load(const StateJournalKey& key, StateJournalPayload& pa
 
 /**
  * @cond FCPLCN_SOURCE_CONTRACTS
- * @brief Stage, verify and commit one bounded FRAM snapshot while preserving the protected slot.
+ * @brief Stage, verify and commit one bounded state memory snapshot while preserving the protected
+ * slot.
  * @param[in] key Configuration identity owning the replacement.
  * @param[in] payload Validated nonempty controller-state bytes, up to the public maximum.
  * @param[in] protectedKey Optional durable configuration identity whose newest slot survives.
- * @return ESP_OK after readback, or an argument, generation-exhaustion or FRAM transaction error.
+ * @return ESP_OK after readback, or an argument, generation-exhaustion or state memory transaction
+ * error.
  * @endcond
  */
 esp_err_t state_journal_save(const StateJournalKey& key,
@@ -250,25 +253,25 @@ esp_err_t state_journal_save(const StateJournalKey& key,
     const auto checked = kHeaderBytes + payload.size();
     write_number(bytes.data() + checked, 4, fcplcn::util::crc32(bytes.data(), checked));
     const auto record_bytes = checked + 4;
-    result = fram_write(base + kCommitOffset, kInvalidCommit.data(), kInvalidCommit.size());
+    result = state_memory_write(base + kCommitOffset, kInvalidCommit.data(), kInvalidCommit.size());
     if (result != ESP_OK)
         return finish(result);
-    result = fram_write(base, bytes.data(), record_bytes);
+    result = state_memory_write(base, bytes.data(), record_bytes);
     if (result != ESP_OK)
         return finish(result);
     std::array<std::uint8_t, kMaxRecordBytes> verified{};
-    result = fram_read(base, verified.data(), record_bytes);
+    result = state_memory_read(base, verified.data(), record_bytes);
     if (result != ESP_OK)
         return finish(result);
     if (!std::equal(bytes.begin(), bytes.begin() + record_bytes, verified.begin()))
         return finish(ESP_ERR_INVALID_RESPONSE);
-    result = fram_write(base + kCommitOffset, kCommit.data(), kCommit.size());
+    result = state_memory_write(base + kCommitOffset, kCommit.data(), kCommit.size());
     if (result != ESP_OK) {
         abandon(base);
         return finish(result);
     }
     std::array<std::uint8_t, kCommit.size()> marker{};
-    result = fram_read(base + kCommitOffset, marker.data(), marker.size());
+    result = state_memory_read(base + kCommitOffset, marker.data(), marker.size());
     if (result != ESP_OK || marker != kCommit) {
         abandon(base);
         return finish(result == ESP_OK ? ESP_ERR_INVALID_RESPONSE : result);

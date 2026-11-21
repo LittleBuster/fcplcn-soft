@@ -31,6 +31,7 @@ constexpr char kTag[] = FCPLCN_PRODUCT_NAME ".recovery";
 std::array<char, 33> reboot_token{};
 const char* failed_stage = "startup";
 esp_err_t failed_error = ESP_FAIL;
+RecoveryBootState boot_status{};
 
 /**
  * @brief Apply cache and browser restrictions to an isolated recovery response.
@@ -48,6 +49,21 @@ void headers(httpd_req_t* request)
 }
 
 /**
+ * @brief Describe only the safe-start operations established before the failure.
+ * @return Borrowed static explanatory text; physical outputs are never assumed OFF.
+ */
+const char* safety_note()
+{
+    if (boot_status.boardId == nullptr)
+        return "Модель платы не подтверждена. GPIO оставлены без переназначения; состояние физических выходов не подтверждено.";
+    if (!boot_status.safeGpiosConfigured)
+        return "Модель платы известна, но безопасные уровни GPIO не подтверждены. Состояние физических выходов не подтверждено.";
+    if (boot_status.expanderResetRequested)
+        return "Установлены безопасные уровни GPIO выбранной платы и запрошен RESET расширителя. Физическое выключение нагрузок не проверено.";
+    return "Установлены безопасные уровни GPIO выбранной платы. Аппаратный RESET расширителя недоступен; состояние физических выходов не подтверждено.";
+}
+
+/**
  * @brief Serve recovery instructions and a per-boot-token restart form without JavaScript.
  * @param[in] request Borrowed ESP-IDF HTTP request.
  * @return SDK response-send status.
@@ -56,21 +72,22 @@ esp_err_t index(httpd_req_t* request)
 {
     headers(request);
     httpd_resp_set_type(request, "text/html; charset=utf-8");
-    char page[2600];
+    char page[3600];
     std::snprintf(
         page,
         sizeof(page),
         "<!doctype html><html lang=ru><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'>"
         "<title>%s — восстановление</title><style>body{color:#edf2fa;background:#101820;font:18px system-ui;max-width:720px;margin:8vh auto;padding:24px}"
         "main{background:#1b2836;padding:28px;border-radius:20px}button,a{color:#a5dfed}button{background:#263b4b;padding:14px;border:1px solid #5f8b9c;border-radius:10px;font:inherit}code{word-break:break-all}</style>"
-        "<main><h1>%s</h1><h2>Аварийный режим</h2><p>Запуск остановлен до включения I/O и автономных контроллеров."
-        " Запрошены безопасные уровни GPIO. Настройки и учётная запись не удалены.</p>"
+        "<main><h1>%s</h1><h2>Аварийный режим</h2><p>Аппаратные драйверы и автономные контроллеры не запущены. Настройки и учётная запись сохранены.</p>"
+        "<p>%s</p>"
         "<p>Этап: <code>%s</code><br>Ошибка: <code>%s</code></p>"
         "<p>Доступны только диагностика и перезапуск. Для исправления повреждённых настроек используйте сервисное подключение; автоматического стирания Flash нет.</p>"
         "<p><a href='/api/v1/status'>Открыть диагностику JSON</a></p>"
         "<form method=post action='/api/v1/reboot'><input type=hidden name=token value='%s'><button>Перезапустить PLC</button></form></main></html>",
         FCPLCN_PRODUCT_NAME,
         FCPLCN_PRODUCT_NAME,
+        safety_note(),
         failed_stage,
         esp_err_to_name(failed_error),
         reboot_token.data());
@@ -94,7 +111,16 @@ esp_err_t status(httpd_req_t* request)
     cJSON_AddStringToObject(json, "stage", failed_stage);
     cJSON_AddStringToObject(json, "error", esp_err_to_name(failed_error));
     cJSON_AddBoolToObject(json, "storagePreserved", true);
-    cJSON_AddBoolToObject(json, "expanderResetRequested", true);
+    cJSON_AddBoolToObject(json, "boardProfileKnown", boot_status.boardId != nullptr);
+    if (boot_status.boardId != nullptr)
+        cJSON_AddStringToObject(json, "boardId", boot_status.boardId);
+    else
+        cJSON_AddNullToObject(json, "boardId");
+    cJSON_AddBoolToObject(json, "hardwareDriversStarted", false);
+    cJSON_AddBoolToObject(json, "safeGpiosAttempted", boot_status.safeGpiosAttempted);
+    cJSON_AddBoolToObject(json, "safeGpiosConfigured", boot_status.safeGpiosConfigured);
+    cJSON_AddBoolToObject(json, "expanderResetRequested", boot_status.expanderResetRequested);
+    cJSON_AddBoolToObject(json, "physicalOutputsOffConfirmed", false);
     auto* metrics = system_metrics_json();
     if (!cJSON_AddItemToObject(json, "system", metrics))
         cJSON_Delete(metrics);
@@ -274,16 +300,20 @@ esp_err_t start_server()
 
 /**
  * @cond FCPLCN_SOURCE_CONTRACTS
- * @brief Hold safe GPIO levels and serve an isolated recovery AP without loading saved secrets.
+ * @brief Preserve known safe-level requests and serve an isolated recovery AP without saved
+ * secrets.
  * @param[in] stage Static startup-stage label that failed before hardware/control task creation.
  * @param[in] error Failure code shown without exposing saved settings.
+ * @param[in] boot Established boot facts; boardId must have static lifetime when nonnull.
  * @note Never returns. Only diagnostics and an explicit token-protected reboot are offered;
  * no NVS erase, configuration export, control API or authentication bypass is provided.
- * @pre Invoke before starting profile-bound I/O/control workers; safe GPIOs were attempted first.
+ * @pre Invoke before starting profile-bound I/O/control workers. Unknown profiles leave GPIOs
+ * untouched.
  * @endcond
  */
-[[noreturn]] void recovery_mode_run(const char* stage, esp_err_t error)
+[[noreturn]] void recovery_mode_run(const char* stage, esp_err_t error, RecoveryBootState boot)
 {
+    boot_status = boot;
     failed_stage = stage;
     failed_error = error;
     runtime_supervisor_record_error(stage, error);

@@ -85,7 +85,7 @@ bool deadline_expired(std::int64_t deadlineUs)
 
 /**
  * @brief Execute a serialized static-switch transaction while the controller lock is held.
- * @details Order: fresh observation, deadline-aware write/readback, FRAM journal
+ * @details Order: fresh observation, deadline-aware write/readback, state memory journal
  * commit, then RAM/ACK. Failure retains the last durable state and requests its
  * physical rollback. The hardware service never queues a failed new ON.
  * @param[in] kind Static-switch module (Sockets or Lights).
@@ -146,7 +146,7 @@ SocketResult set_state_locked(ControllerKind kind,
         // Physical readback precedes persistence; RAM/ACK follows persistence.
         // Failed persistence rolls hardware back to the last durable state.
         hardware_io_set_relay(item.relayId, previous);
-        transient.error = "Не удалось сохранить состояние во FRAM";
+        transient.error = "Не удалось сохранить состояние в памяти состояний";
         transient.lastAttemptUs = -1;
         error = transient.error;
         return SocketResult::StorageError;
@@ -160,14 +160,14 @@ SocketResult set_state_locked(ControllerKind kind,
 /**
  * @brief Establish input generation and release state without synthesizing a button press.
  * @param[in,out] transient Row debounce state to reset from this observation.
- * @param[in] input Valid fresh physical input snapshot.
- * @note A boot/recovery LOW stays disarmed; only an observed released HIGH can arm a later press.
+ * @param[in] input Valid fresh snapshot whose value is normalized to logical release.
+ * @note A held contact at boot/recovery stays disarmed until its release is observed.
  */
 void baseline(Runtime& transient, const HardwareIoChannelState& input)
 {
     transient.baseline = true;
-    // The board's optocoupler input has an external pull-up: released=HIGH,
-    // pressed=LOW. A LOW at boot/recovery is never interpreted as a press.
+    // value is normalized to release; level still contains the physical HIGH/LOW.
+    // A held contact at boot/recovery is never interpreted as a new press.
     transient.armed = input.value;
     transient.lowSamples = 0;
     transient.highSinceUs = input.value ? input.updatedAtUs : -1;
@@ -177,20 +177,25 @@ void baseline(Runtime& transient, const HardwareIoChannelState& input)
 }
 
 /**
- * @brief Consume exactly one active-low press from distinct fresh input samples.
- * @details First/recovered LOW is only a baseline. An armed HIGH->LOW toggles
- * after three consecutive distinct LOW observations, then locks out for 300 ms.
- * Rearming requires released HIGH over
+ * @brief Consume one contact press from distinct fresh samples using profile polarity.
+ * @details First/recovered closed contact is only a baseline. An armed release->press toggles
+ * after three consecutive distinct pressed observations, then locks out for 300 ms.
+ * Rearming requires released contact over
  * at least two observations and 50 ms. A failed action still consumes the press;
- * held LOW and release never repeat it. Shared by switches and thermostat flags.
+ * held contact and release never repeat it. Shared by switches and thermostat flags.
  * @param[in,out] transient Row debounce state updated even when a press is rejected or consumed.
- * @param[in] input Valid fresh input observation, including its acquisition timestamp and
+ * @param[in] rawInput Valid fresh physical input observation, including acquisition timestamp and
  * generation.
- * @return True only once after three distinct LOW samples outside the lockout period.
+ * @param[in] inputId Known input identifier used to obtain the board's contact polarity.
+ * @return True only once after three distinct pressed samples outside the lockout period.
  * @pre The caller serializes access to transient and has rejected unavailable input snapshots.
  */
-bool button_press(Runtime& transient, const HardwareIoChannelState& input)
+bool button_press(Runtime& transient,
+                  const HardwareIoChannelState& rawInput,
+                  std::string_view inputId)
 {
+    auto input = rawInput;
+    input.value = !input_contact_closed(inputId, rawInput.level);
     if (!transient.baseline || transient.inputGeneration != input.generation
         || input.updatedAtUs < transient.lastInputUs) {
         baseline(transient, input);
@@ -302,7 +307,7 @@ void worker_step()
                 transient.baseline = false;
                 continue;
             }
-            if (!button_press(transient, observation.input))
+            if (!button_press(transient, observation.input, item.inputId))
                 continue;
             std::string error;
             set_state_locked(static_cast<ControllerKind>(module), i, !item.state, error);

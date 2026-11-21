@@ -1,11 +1,11 @@
 /**
  * @file controller_states.cpp
- * @brief FRAM operative states bound to the exact durable controller configuration.
+ * @brief state-memory operative states bound to the exact durable controller configuration.
  * @details Flash holds configuration and a unique identity. Only user switch states and
  * thermostat permissions enter this journal; physical thermostat demand is always RAM-only.
  */
 #include "controllers/controller_internal.h"
-#include "hardware/fram.h"
+#include "hardware/state_memory.h"
 
 /** @cond FCPLCN_CONTROLLER_INTERNALS */
 namespace fcplcn::controllers::detail {
@@ -160,14 +160,14 @@ esp_err_t load_states(Configurations& configs)
         active_key_valid ? state_journal_load(active_key, payload) : ESP_ERR_INVALID_STATE;
     if (result == ESP_OK)
         result = apply_states(payload, configs, active_legacy);
-    storage_error = result == ESP_OK ? "" : "Состояния FRAM недоступны или повреждены";
+    storage_error = result == ESP_OK ? "" : "Состояния памяти недоступны или повреждены";
     storage_available = result == ESP_OK;
     storage_result = result;
     return result;
 }
 
 /**
- * @brief Check whether the active operative flags have a confirmed FRAM snapshot.
+ * @brief Check whether the active operative flags have a confirmed state-memory snapshot.
  * @return True after a successful state load or commit without a later storage failure.
  * @pre Hold the controller mutex; no I2C access occurs.
  */
@@ -179,7 +179,7 @@ bool state_storage_healthy()
 /**
  * @brief Persist a frequently changing state snapshot without accessing flash.
  * @param[in] configs Proposed confirmed states with the active configuration's bindings.
- * @return ESP_OK after verified FRAM commit, or an identity/storage error.
+ * @return ESP_OK after verified state-memory commit, or an identity/storage error.
  * @pre Hold the controller mutex and an outer settings write guard.
  * @note On ambiguous failure, attempt to restore the previously confirmed payload. Failure
  * never falls back to flash. The caller retains RAM and applies its physical fault policy.
@@ -187,7 +187,7 @@ bool state_storage_healthy()
 esp_err_t save_states(const Configurations& configs)
 {
     if (!active_key_valid || active_legacy) {
-        storage_error = "Состояния FRAM не привязаны к сохранённой конфигурации";
+        storage_error = "Состояния памяти не привязаны к сохранённой конфигурации";
         storage_result = ESP_ERR_INVALID_STATE;
         return ESP_ERR_INVALID_STATE;
     }
@@ -198,7 +198,7 @@ esp_err_t save_states(const Configurations& configs)
         storage_error.clear();
     else {
         state_journal_save(active_key, encode_states(configurations));
-        storage_error = "Не удалось подтвердить сохранение состояний во FRAM";
+        storage_error = "Не удалось подтвердить сохранение состояний в памяти";
     }
     return result;
 }
@@ -214,26 +214,31 @@ const std::string& state_storage_error()
 }
 
 /**
- * @brief Describe the fitted FRAM and its last confirmed operative-state transaction.
+ * @brief Describe the fitted state-memory and its last confirmed operative-state transaction.
  * @return Owned diagnostic JSON without operative payload bytes, or nullptr on allocation failure.
  * @pre Hold the controller mutex; cached journal diagnostics require no I2C traffic.
  */
 cJSON* state_storage_json_locked()
 {
     Json root(cJSON_CreateObject(), cJSON_Delete);
-    const auto& fram = board_profile_active().fram;
+    const auto& memory = board_profile_active().stateMemory;
     const auto journal = state_journal_status();
-    const auto capacity = fram ? fram->capacityBytes : 0;
+    const auto capacity = memory ? memory->capacityBytes : 0;
     const auto reserved = std::min<std::size_t>(capacity, kStateJournalReservedBytes);
-    if (!root || !cJSON_AddStringToObject(root.get(), "type", "FRAM")
-        || !cJSON_AddStringToObject(root.get(), "model", fram ? fram->model : "")
+    if (!root
+        || !cJSON_AddStringToObject(root.get(),
+                                    "type",
+                                    !memory                                 ? "none"
+                                    : memory->kind == BoardMemoryKind::Fram ? "FRAM"
+                                                                            : "EEPROM")
+        || !cJSON_AddStringToObject(root.get(), "model", memory ? memory->model : "")
         || !cJSON_AddBoolToObject(root.get(), "available", storage_available)
         || !cJSON_AddBoolToObject(root.get(), "valid", state_storage_healthy() && journal.valid)
         || !cJSON_AddNumberToObject(root.get(), "lastError", storage_result)
         || !cJSON_AddNumberToObject(
             root.get(), "generation", static_cast<double>(journal.generation))
-        || !cJSON_AddStringToObject(root.get(), "busId", fram ? fram->i2cBusId : "")
-        || !cJSON_AddNumberToObject(root.get(), "address", fram ? fram->address : 0)
+        || !cJSON_AddStringToObject(root.get(), "busId", memory ? memory->i2cBusId : "")
+        || !cJSON_AddNumberToObject(root.get(), "address", memory ? memory->address : 0)
         || !cJSON_AddNumberToObject(root.get(), "capacityBytes", capacity)
         || !cJSON_AddNumberToObject(root.get(), "reservedBytes", reserved)
         || !cJSON_AddNumberToObject(root.get(), "usedBytes", reserved)
@@ -249,7 +254,7 @@ cJSON* state_storage_json_locked()
 
 /**
  * @brief Clear volatile state storage identity for a simulated reboot.
- * @pre No controller or journal operation runs concurrently; FRAM itself is retained.
+ * @pre No controller or journal operation runs concurrently; state-memory itself is retained.
  */
 void reset_state_storage()
 {
@@ -268,7 +273,7 @@ using namespace fcplcn::controllers::detail;
 
 /**
  * @cond FCPLCN_SOURCE_CONTRACTS
- * @brief Copy FRAM state-storage health for service diagnostics without touching I2C.
+ * @brief Copy state-memory state-storage health for service diagnostics without touching I2C.
  * @return Owned JSON object, or nullptr on allocation failure.
  * @note Thread-safe; does not expose saved operative payload bytes.
  * @endcond
@@ -281,7 +286,7 @@ cJSON* controllers_state_storage_json()
 
 /**
  * @cond FCPLCN_SOURCE_CONTRACTS
- * @brief Read and validate FRAM for an explicit hardware-page snapshot.
+ * @brief Read and validate state-memory for an explicit hardware-page snapshot.
  * @return Owned health/allocation JSON, or nullptr on allocation failure.
  * @note Thread-safe. Bounded I2C reads validate the active identity and confirmed RAM flags;
  * this diagnostic never writes memory, restores outputs or changes configured operative flags.
@@ -292,7 +297,7 @@ cJSON* controllers_probe_state_storage_json()
     std::lock_guard<std::mutex> lock(controller_mutex);
     StateJournalPayload payload;
     std::uint8_t byte = 0;
-    auto result = fram_read(0, &byte, 1);
+    auto result = state_memory_read(0, &byte, 1);
     const bool available = result == ESP_OK;
     storage_available = available;
     if (available && active_key_valid) {
@@ -306,10 +311,10 @@ cJSON* controllers_probe_state_storage_json()
         result = ESP_ERR_INVALID_STATE;
     storage_result = result;
     storage_error = result == ESP_OK ? ""
-                    : !available     ? "Нет связи с FRAM"
+                    : !available     ? "Нет связи с памятью состояний"
                     : !active_key_valid
-                        ? "Состояния FRAM не привязаны к сохранённой конфигурации"
-                        : "Записи FRAM повреждены или не соответствуют подтверждённым состояниям";
+                        ? "Состояния памяти не привязаны к сохранённой конфигурации"
+                        : "Записи памяти повреждены или не соответствуют подтверждённым состояниям";
     Json root(state_storage_json_locked(), cJSON_Delete);
     if (!root)
         return nullptr;
@@ -321,10 +326,10 @@ cJSON* controllers_probe_state_storage_json()
 
 /**
  * @cond FCPLCN_SOURCE_CONTRACTS
- * @brief Stage replacement states in FRAM while preserving the current flash identity.
+ * @brief Stage replacement states in state-memory while preserving the current flash identity.
  * @param[in] replacement Validated new current-format controller record.
  * @param[in] current Current flash controller section, possibly empty or legacy.
- * @return ESP_OK after verified FRAM staging, or a record/transport error.
+ * @return ESP_OK after verified state-memory staging, or a record/transport error.
  * @note Does not publish controller RAM or write flash. Call with all controller writers
  * excluded, before committing the replacement flash record. Repeated failed commits keep
  * the current identity's last valid state slot intact.
@@ -343,10 +348,10 @@ esp_err_t controllers_prepare_restore_states(const SettingsBytes& replacement,
 
 /**
  * @cond FCPLCN_SOURCE_CONTRACTS
- * @brief Export coherent flash settings together with their latest FRAM operative states.
+ * @brief Export coherent flash settings together with their latest state-memory operative states.
  * @param[out] snapshot Complete flash snapshot used for the returned controller data.
  * @param[out] error Failure diagnostic, cleared on success.
- * @return Owned controller JSON, or nullptr if flash/FRAM cannot be read coherently.
+ * @return Owned controller JSON, or nullptr if flash/state-memory cannot be read coherently.
  * @note A writer guard prevents restore staging during the snapshot. The controller mutex
  * serializes state/config changes; after a completed restore, its staged identity is exported.
  * @endcond

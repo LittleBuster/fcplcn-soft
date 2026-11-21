@@ -5,6 +5,8 @@
 #include "test_driver.h"
 #include "esp_timer.h"
 #include "driver/i2c_master.h"
+#include "driver/gpio.h"
+#include "freertos/FreeRTOS.h"
 #include <array>
 #include <atomic>
 #include <cstdio>
@@ -630,8 +632,9 @@ void json_stale()
 void fram_transfer()
 {
     const auto& profile = board_profile_active();
-    CHECK(profile.fram && profile.fram->address == 0x50 && profile.fram->capacityBytes == 8192);
-    CHECK(std::string(profile.fram->i2cBusId) == "io-expanders");
+    CHECK(profile.stateMemory && profile.stateMemory->kind == BoardMemoryKind::Fram
+          && profile.stateMemory->address == 0x50 && profile.stateMemory->capacityBytes == 8192);
+    CHECK(std::string(profile.stateMemory->i2cBusId) == "io-expanders");
     Json metadata(board_profile_json(profile), cJSON_Delete);
     CHECK(metadata && cJSON_IsTrue(field(field(metadata.get(), "capabilities"), "fram")));
     CHECK(field(field(metadata.get(), "fram"), "address")->valueint == 0x50);
@@ -724,10 +727,155 @@ void fram_concurrent()
     confirmed("rly-0/1", true);
 }
 
+void probe_adapter()
+{
+    CHECK(hardware_i2c_probe("io-expanders", 0x20) == ESP_ERR_INVALID_STATE);
+    hardware_io_init();
+    const auto baseline = io_test::transfers().size();
+    CHECK(hardware_i2c_probe("io-expanders", 0x07) == ESP_ERR_INVALID_ARG);
+    CHECK(hardware_i2c_probe("io-expanders", 0x78) == ESP_ERR_INVALID_ARG);
+    CHECK(hardware_i2c_probe("io-expanders", 0x20, 0) == ESP_ERR_INVALID_ARG);
+    CHECK(hardware_i2c_probe("io-expanders", 0x20, 21) == ESP_ERR_INVALID_ARG);
+    CHECK(hardware_i2c_probe("missing-bus", 0x20) == ESP_ERR_INVALID_STATE);
+    CHECK(io_test::transfers().size() == baseline);
+    CHECK(hardware_i2c_probe("io-expanders", 0x20) == ESP_OK);
+    CHECK(hardware_i2c_probe("io-expanders", 0x50) == ESP_ERR_NOT_FOUND);
+    const auto history = io_test::transfers();
+    CHECK(history[baseline].operation == "probe"
+          && history[baseline].timeout == static_cast<int>(portTICK_PERIOD_MS));
+    CHECK(history[baseline + 1].operation == "probe"
+          && history[baseline + 1].timeout == static_cast<int>(portTICK_PERIOD_MS));
+    CHECK(io_test::max_parallel(0) == 1);
+}
+
+void legacy_safe_init()
+{
+    CHECK(board_profile_active().expanderResetGpio == -1);
+    hardware_io_init();
+    auto j = status();
+    CHECK(cJSON_GetArraySize(field(j.get(), "relays")) == 8);
+    CHECK(cJSON_GetArraySize(field(j.get(), "inputs")) == 8);
+    CHECK(io_test::register_pair(0, 0x20, 0) == 0x7f01);
+    CHECK(io_test::register_pair(0, 0x20, 0x0c) == 0x7f01);
+    CHECK(io_test::register_pair(0, 0x20, 0x14) == 0);
+    bool off_written = false, pullups_written = false;
+    for (const auto& t : io_test::transfers()) {
+        if (t.operation != "write")
+            continue;
+        CHECK(t.address == 0x20);
+        if (t.reg == 0x14) {
+            CHECK((t.data == std::vector<std::uint8_t>{0, 0}));
+            off_written = true;
+        }
+        if (t.reg == 0x0c) {
+            CHECK((t.data == std::vector<std::uint8_t>{0x01, 0x7f}));
+            pullups_written = true;
+        }
+        if (t.reg == 0)
+            CHECK(off_written && pullups_written);
+    }
+    CHECK(off_written && pullups_written);
+    CHECK(hardware_io_set_relay("rly-0/1", true) == ESP_OK);
+    CHECK(io_test::register_pair(0, 0x20, 0x14) == 0x0080);
+    CHECK(hardware_io_set_relay("rly-0/7", true) == ESP_OK);
+    CHECK(hardware_io_set_relay("rly-0/8", true) == ESP_OK);
+    CHECK(io_test::register_pair(0, 0x20, 0x14) == 0x8082);
+    CHECK(hardware_io_set_relay("rly-0/9", true) == ESP_ERR_NOT_FOUND);
+    CHECK(hardware_io_set_led("led-status", true) == ESP_OK);
+    CHECK(gpio_get_level(static_cast<gpio_num_t>(39)) == 1);
+    CHECK(hardware_io_set_led("led-status", false) == ESP_OK);
+    CHECK(gpio_get_level(static_cast<gpio_num_t>(39)) == 0);
+}
+
+void legacy_raw_inputs()
+{
+    hardware_io_init();
+    io_test::input_levels(0, 0x20, 0x0101);
+    step(100);
+    HardwareIoChannelState input;
+    CHECK(hardware_io_read_input("in-0/1", input) == ESP_OK && input.valid && input.fresh);
+    CHECK(input.level && input.value);  // Raw HIGH is retained; the profile defines closure.
+    CHECK(hardware_io_read_input("in-0/2", input) == ESP_OK && input.valid);
+    CHECK(!input.level && !input.value);
+    auto j = status();
+    auto* high = channel(j.get(), "inputs", "in-0/1");
+    CHECK(cJSON_IsTrue(field(high, "level")) && cJSON_IsTrue(field(high, "active")));
+    auto* low = channel(j.get(), "inputs", "in-0/2");
+    CHECK(cJSON_IsFalse(field(low, "level")) && cJSON_IsFalse(field(low, "active")));
+    CHECK(hardware_io_set_relay("rly-0/1", true) == ESP_OK);
+    CHECK(hardware_io_set_relay("rly-0/8", true) == ESP_OK);
+    CHECK(hardware_io_read_input("in-0/8", input) == ESP_OK && input.valid && input.level);
+    CHECK(io_test::register_pair(0, 0x20, 0x0c) == 0x7f01);
+}
+
+void legacy_repair()
+{
+    hardware_io_init();
+    CHECK(hardware_io_set_relay_recovery("rly-0/2", HardwareRelayRecovery::Controller) == ESP_OK);
+    CHECK(hardware_io_set_relay("rly-0/1", true) == ESP_OK);
+    CHECK(hardware_io_set_relay("rly-0/2", true) == ESP_OK);
+    HardwareIoChannelState input;
+    CHECK(hardware_io_read_input("in-0/1", input) == ESP_OK && input.valid);
+    const auto generation = input.generation;
+    io_test::reset_mcp(0, 0x20);
+    step(100);
+    confirmed("rly-0/1", true);
+    confirmed("rly-0/2", false);
+    CHECK(io_test::register_pair(0, 0x20, 0x0c) == 0x7f01);
+    CHECK(hardware_io_read_input("in-0/1", input) == ESP_OK && input.valid);
+    CHECK(input.generation > generation);
+    // A missing pull-up write must fail profile readback before any buffered ON is restored.
+    io_test::reset_mcp(0, 0x20);
+    io_test::ignore_next_write_to(0, 0x20, 0x0c);
+    step(100);
+    invalid("rly-0/1");
+    CHECK(io_test::register_pair(0, 0x20, 0x14) == 0);
+    CHECK(io_test::register_pair(0, 0x20, 0x0c) == 0);
+    step(1000);
+    confirmed("rly-0/1", true);
+    confirmed("rly-0/2", false);
+    CHECK(io_test::register_pair(0, 0x20, 0x0c) == 0x7f01);
+    // An unexpected pull-up on a relay pin is drift too, even when inputs look plausible.
+    io_test::corrupt_pair(0, 0x20, 0x0c, 0x7f03);
+    step(100);
+    confirmed("rly-0/1", true);
+    CHECK(io_test::register_pair(0, 0x20, 0x0c) == 0x7f01);
+    CHECK(io_test::register_pair(0, 0x20, 0x14) == 0x0080);
+}
+
+void legacy_missing_recovery()
+{
+    io_test::set_present(0, 0x20, false);
+    hardware_io_init();
+    invalid("rly-0/1");
+    CHECK(hardware_io_set_relay("rly-0/1", true) != ESP_OK);
+    io_test::set_present(0, 0x20, true);
+    step(1000);
+    confirmed("rly-0/1", false);
+    confirmed("rly-0/8", false);
+    CHECK(io_test::register_pair(0, 0x20, 0x0c) == 0x7f01);
+    CHECK(io_test::register_pair(0, 0x20, 0x14) == 0);
+}
+
+void reset_failure()
+{
+    CHECK(board_profile_active().expanderResetGpio == 6);
+    io_test::fail_next_gpio_write(6);
+    hardware_io_init();
+    invalid("rly-0/1");
+    CHECK(hardware_io_set_relay("rly-0/1", true) != ESP_OK);
+    step(1000);
+    invalid("rly-0/1");
+    for (const auto& t : io_test::transfers())
+        CHECK(t.address != 0x20 && t.address != 0x21);
+}
+
 int main(int argc, char** argv)
 {
     CHECK(argc == 2);
     const std::string name = argv[1];
+    if (name.rfind("legacy_", 0) == 0)
+        CHECK(board_profile_activate("fcplc-080806-3v1"));
     if (name == "fake_map")
         fake_map();
     else if (name == "safe_init")
@@ -772,6 +920,18 @@ int main(int argc, char** argv)
         fram_failures();
     else if (name == "fram_concurrent")
         fram_concurrent();
+    else if (name == "probe_adapter")
+        probe_adapter();
+    else if (name == "legacy_safe_init")
+        legacy_safe_init();
+    else if (name == "legacy_raw_inputs")
+        legacy_raw_inputs();
+    else if (name == "legacy_repair")
+        legacy_repair();
+    else if (name == "legacy_missing_recovery")
+        legacy_missing_recovery();
+    else if (name == "reset_failure")
+        reset_failure();
     else
         CHECK(false);
     std::printf("FCPLCn hardware I/O: %s passed\n", argv[1]);

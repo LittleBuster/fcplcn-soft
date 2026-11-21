@@ -27,6 +27,8 @@ const {
   legacyBoardId,
   normalizeBoardId,
   framProfile,
+  eepromBoardId,
+  eepromBoardProfile,
 } = require('./board_profiles_mock.cjs');
 
 const repository = path.resolve(__dirname, '../../../..');
@@ -42,6 +44,7 @@ const defaultProfiles = [
     flashBytes: 16 * 1024 * 1024,
     psramBytes: 8 * 1024 * 1024,
     fram: { ...framProfile },
+    stateMemory: { type: 'fram', ...framProfile, pageSizeBytes: 0, writeCycleTimeoutMs: 0 },
     capabilities: {
       ethernet: true,
       relays: 16,
@@ -50,6 +53,8 @@ const defaultProfiles = [
       sensorPorts: 8,
       rs485: true,
       fram: true,
+      stateMemory: true,
+      eeprom: false,
     },
     driversImplemented: {
       ethernet: true,
@@ -59,8 +64,11 @@ const defaultProfiles = [
       sensorPorts: true,
       rs485: false,
       fram: true,
+      stateMemory: true,
+      eeprom: false,
     },
   },
+  eepromBoardProfile,
 ];
 /**
  * @brief Create one isolated simulated PLC and its HTTP server.
@@ -69,6 +77,7 @@ const defaultProfiles = [
 function createMock({
   interactive = false,
   profiles = defaultProfiles,
+  boardId = canonicalBoardId,
   statePath,
   deviceId,
   mac = 'AA:BB:CC:11:22:33',
@@ -112,7 +121,7 @@ function createMock({
   const config = {
     revision: 1,
     device: { name: 'FCPLCn' },
-    hardware: { boardId: canonicalBoardId },
+    hardware: { boardId },
     wifi: {
       enabled: true,
       ap: {
@@ -176,7 +185,12 @@ function createMock({
   }
 
   const unixTime = () => (interactive ? Math.floor((Date.now() + clockOffset) / 1000) : 1794480000);
-  const hardware = createHardwareMock({ interactive, unixTime, localTime });
+  const hardware = createHardwareMock({
+    interactive,
+    unixTime,
+    localTime,
+    profile: () => registry.find((item) => item.boardId === activeBoardId),
+  });
   const controllers = createControllersMock({
     hardware,
     statePath,
@@ -939,8 +953,8 @@ async function checkAsyncLifecycle(browser) {
 }
 
 async function checkBoardSelection(browser) {
-  // This second profile exists only in this test invocation. The simulator's
-  // default registry and server.cjs continue to expose the actual board only.
+  // This extra profile exists only in this test invocation. Both supported
+  // physical boards remain in the default registry; the UI must use the API list.
   const testProfile = {
     ...defaultProfiles[0],
     boardId: 'test-only-board-profile',
@@ -985,7 +999,7 @@ async function checkBoardSelection(browser) {
     mock.setFaults({ registry: '' });
     await page.locator('#hardware-reload').click();
     await page.waitForFunction(() => !document.getElementById('hardware-board-id').disabled);
-    assert.equal(await page.locator('#hardware-board-id option').count(), 2);
+    assert.equal(await page.locator('#hardware-board-id option').count(), 3);
     assert.equal(await page.locator('#hardware-board-id').inputValue(), defaultProfiles[0].boardId);
 
     const unknown = await page.request.post(
@@ -1148,7 +1162,7 @@ async function checkBoardSelection(browser) {
     assert.equal(mock.restorePending, false);
     assert.deepEqual(errors, []);
     console.log(
-      'FCPLCn hardware selection checks passed: registry failure/retry, test-only second profile, unknown ID, dirty forms/polling, cancelled discard, save failure, stale CAS, pending active/configured status, failed reboot and virtual activation.',
+      'FCPLCn hardware selection checks passed: registry failure/retry, two physical boards and an extra test-only profile, unknown ID, dirty forms/polling, cancelled discard, save failure, stale CAS, pending active/configured status, failed reboot and virtual activation.',
     );
   } finally {
     await context.close();
@@ -1194,6 +1208,7 @@ async function checkHardware(browser) {
     assert.match(await page.locator('#hardware-rtc-binding').textContent(), /io-expanders.*0x68/);
     await waitText(page.locator('#hardware-rtc-status'), 'Время установлено');
     await waitText(page.locator('#hardware-fram-status'), 'Исправна');
+    assert.equal(await page.locator('#hardware-fram-title').textContent(), 'Память FRAM');
     assert.equal(await page.locator('#hardware-fram-model').textContent(), 'FM24CL64B-GTR');
     assert.match(await page.locator('#hardware-fram-binding').textContent(), /io-expanders.*0x50/);
     assert.match(await page.locator('#hardware-fram-used').textContent(), /512\s*Б.*8\s*КиБ.*6,25/);
@@ -1473,8 +1488,22 @@ async function run() {
       });
       return;
     }
+    if (process.env.FCPLCN_UI_BOARDS_ONLY === '1') {
+      await checkBoardSelection(browser);
+      await require('./state_memory_checks.cjs').checkStateMemory({
+        browser,
+        createMock,
+        artifacts,
+      });
+      return;
+    }
     if (process.env.FCPLCN_UI_HARDWARE_ONLY === '1') {
       await checkHardware(browser);
+      await require('./state_memory_checks.cjs').checkStateMemory({
+        browser,
+        createMock,
+        artifacts,
+      });
       return;
     }
     if (process.env.FCPLCN_UI_SOCKETS_ONLY === '1') {
@@ -1574,8 +1603,8 @@ async function run() {
     await page.waitForFunction(() => !document.getElementById('hardware-board-id').disabled);
     assert.equal(
       await page.locator('#hardware-board-id option').count(),
-      1,
-      'Default/live registry contains only the actual board',
+      2,
+      'Default registry exposes both supported physical boards',
     );
     assert.equal(await page.locator('#hardware-board-id').inputValue(), canonicalBoardId);
     assert.equal(await page.locator('#status-chip-temperature').textContent(), '43.5 °C');
@@ -1787,7 +1816,7 @@ async function run() {
     assert.equal(
       mock.rebootCount,
       2,
-      'Save and reboot remains usable with one already-selected profile',
+      'Save and reboot remains usable with an already-selected profile',
     );
     assert.equal(await page.locator('#hardware-board-id').inputValue(), canonicalBoardId);
     assert.deepEqual(errors, []);
@@ -1798,6 +1827,7 @@ async function run() {
     await checkAsyncLifecycle(browser);
     await checkBoardSelection(browser);
     await checkHardware(browser);
+    await require('./state_memory_checks.cjs').checkStateMemory({ browser, createMock, artifacts });
     await require('./sockets_checks.cjs').checkSockets({ browser, createMock, artifacts });
     await require('./controllers_checks.cjs').checkControllers({ browser, createMock, artifacts });
     await require('./controller_notices_checks.cjs').checkControllerNotices({

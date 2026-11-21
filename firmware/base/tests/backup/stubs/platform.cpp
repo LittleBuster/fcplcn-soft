@@ -1,7 +1,7 @@
 #include "test_platform.h"
 #include "hardware/hardware_io.h"
 #include "hardware/board_profile.h"
-#include "hardware/fram.h"
+#include "hardware/state_memory.h"
 #include "nvs.h"
 #include "esp_mac.h"
 #include "freertos/task.h"
@@ -430,7 +430,7 @@ void nvs_close(nvs_handle_t id)
     handles.erase(id);
 }
 
-esp_err_t fram_read(std::uint16_t offset, std::uint8_t* data, std::size_t length)
+esp_err_t state_memory_read(std::uint16_t offset, std::uint8_t* data, std::size_t length)
 {
     std::lock_guard<std::mutex> lock(mutex);
     if (!fram_present)
@@ -441,7 +441,7 @@ esp_err_t fram_read(std::uint16_t offset, std::uint8_t* data, std::size_t length
     return ESP_OK;
 }
 
-esp_err_t fram_write(std::uint16_t offset, const std::uint8_t* data, std::size_t length)
+esp_err_t state_memory_write(std::uint16_t offset, const std::uint8_t* data, std::size_t length)
 {
     std::lock_guard<std::mutex> lock(mutex);
     if (!fram_present)

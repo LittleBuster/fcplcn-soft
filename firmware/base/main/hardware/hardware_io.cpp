@@ -329,7 +329,8 @@ esp_err_t read_expander(ExpanderState& expander, std::uint16_t expected_latch)
     if (word_at(bytes, kIodir) != expected_direction || word_at(bytes, kIpol) != 0
         || word_at(bytes, kGpinten) != 0 || word_at(bytes, kDefval) != 0
         || word_at(bytes, kIntcon) != 0 || bytes[kIocon] != 0 || bytes[kIocon + 1] != 0
-        || word_at(bytes, kGppu) != 0 || word_at(bytes, kOlat) != expected_latch
+        || word_at(bytes, kGppu) != profile.inputPullupMask
+        || word_at(bytes, kOlat) != expected_latch
         || (gpio & profile.relayMask) != (expected_latch & profile.relayMask)) {
         return ESP_ERR_INVALID_RESPONSE;
     }
@@ -347,7 +348,7 @@ esp_err_t read_expander(ExpanderState& expander, std::uint16_t expected_latch)
  * @brief Perform one bounded profile repair before restoring permitted RAM intent.
  * @param[in] index Valid entry index in the initialized expanders vector.
  * @return ESP_OK after profile/intent readback, or the first state/I2C/verification error.
- * @pre Hold state_mutex; the shared reset must have been released.
+ * @pre Hold state_mutex; a fitted shared reset must have been successfully released.
  * @details Single-byte BANK/SEQOP normalization is verified before paired writes.
  * OLAT is OFF before output direction is restored; the OFF profile is read back
  * before Buffered desired bits are applied. Controller ON has already been revoked.
@@ -360,6 +361,9 @@ esp_err_t initialize_expander(std::size_t index)
         invalidate(expander, ESP_ERR_INVALID_STATE);
     if (!reset_ready)
         return ESP_ERR_INVALID_STATE;
+    if ((expander.profile->inputPullupMask & ~expander.profile->inputMask) != 0
+        || (expander.profile->inputMask & expander.profile->relayMask) != 0)
+        return ESP_ERR_INVALID_ARG;
     auto* bus = find_bus(expander.profile->i2cBusId);
     if (bus == nullptr)
         return ESP_ERR_INVALID_STATE;
@@ -393,9 +397,9 @@ esp_err_t initialize_expander(std::size_t index)
         return error;
     if ((error = write_word(*bus, address, kIntcon, 0)) != ESP_OK)
         return error;
-    // TLP2363 outputs have external 10k pull-ups before the 470R/100nF filters.
-    // An MCP pull-up after the series resistor would raise the active LOW level.
-    if ((error = write_word(*bus, address, kGppu, 0)) != ESP_OK)
+    // Modern TLP2363 inputs use external pull-ups; legacy open collectors require
+    // the profile's internal pull-ups. Neither policy may enable pulls on relays.
+    if ((error = write_word(*bus, address, kGppu, expander.profile->inputPullupMask)) != ESP_OK)
         return error;
     if ((error = write_word(
              *bus, address, kIodir, static_cast<std::uint16_t>(~expander.profile->relayMask)))
@@ -720,13 +724,19 @@ void hardware_io_init()
             if (!bus.ready)
                 ESP_LOGW(kTag, "I2C %s: %s", bus.profile->id, esp_err_to_name(bus.error));
         }
-        const auto reset_gpio = static_cast<gpio_num_t>(board.expanderResetGpio);
-        esp_err_t reset_error = configure_gpio(board.expanderResetGpio, GPIO_MODE_OUTPUT, false);
-        if (reset_error == ESP_OK) {
-            esp_rom_delay_us(board.expanderResetMinUs < 100 ? 100 : board.expanderResetMinUs);
-            reset_error = gpio_set_level(reset_gpio, 1);
-            if (reset_error == ESP_OK)
-                esp_rom_delay_us(1);
+        // -1 means RESET is held HIGH by the PCB, not an ESP-controlled signal.
+        // Skip only its electrical pulse: full register normalization, safe OFF,
+        // pull-up policy and readback are still mandatory for every MCP below.
+        esp_err_t reset_error = ESP_OK;
+        if (board.expanderResetGpio != -1) {
+            const auto reset_gpio = static_cast<gpio_num_t>(board.expanderResetGpio);
+            reset_error = configure_gpio(board.expanderResetGpio, GPIO_MODE_OUTPUT, false);
+            if (reset_error == ESP_OK) {
+                esp_rom_delay_us(board.expanderResetMinUs < 100 ? 100 : board.expanderResetMinUs);
+                reset_error = gpio_set_level(reset_gpio, 1);
+                if (reset_error == ESP_OK)
+                    esp_rom_delay_us(1);
+            }
         }
         reset_ready = reset_error == ESP_OK;
         for (std::size_t i = 0; i < board.expanderCount; ++i) {
@@ -832,6 +842,35 @@ esp_err_t hardware_i2c_write(std::string_view busId,
     if (bus == nullptr)
         return ESP_ERR_INVALID_STATE;
     return write_locked(*bus, address, reg, data, length);
+}
+
+/**
+ * @cond FCPLCN_SOURCE_CONTRACTS
+ * @brief Send one address-only write-direction probe under the shared hardware lock.
+ * @param busId Profile bus identifier.
+ * @param address Seven-bit slave address 0x08..0x77.
+ * @param timeoutMs Requested individual transaction wait, 1..20 milliseconds.
+ * @return ESP_OK for ACK, ESP_ERR_NOT_FOUND for NACK, or an argument/state/bus error.
+ * @endcond
+ */
+esp_err_t hardware_i2c_probe(std::string_view busId, std::uint8_t address, std::uint32_t timeoutMs)
+{
+    if (address < kFirstScanAddress || address > kLastScanAddress || timeoutMs == 0
+        || timeoutMs > static_cast<std::uint32_t>(kTransactionTimeoutMs))
+        return ESP_ERR_INVALID_ARG;
+    // ESP-IDF converts this wait with pdMS_TO_TICKS before awaiting the ISR.
+    // A sub-tick wait becomes zero and can report timeout before an ordinary ACK.
+    auto effective_timeout = timeoutMs;
+    while (pdMS_TO_TICKS(effective_timeout) == 0
+           && effective_timeout < static_cast<std::uint32_t>(kTransactionTimeoutMs))
+        ++effective_timeout;
+    if (pdMS_TO_TICKS(effective_timeout) == 0)
+        return ESP_ERR_NOT_SUPPORTED;
+    std::lock_guard<std::mutex> lock(state_mutex);
+    auto* bus = find_bus(busId);
+    if (bus == nullptr || !bus->ready)
+        return ESP_ERR_INVALID_STATE;
+    return i2c_master_probe(bus->handle, address, static_cast<int>(effective_timeout));
 }
 
 /**

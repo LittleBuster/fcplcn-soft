@@ -40,6 +40,7 @@ std::atomic<std::int64_t> nextReadElapsedUs{0};
 std::atomic<unsigned> workers{0}, busCount{0}, delayMs{0};
 std::array<std::atomic<unsigned>, 2> active{}, peak{};
 std::array<int, 64> gpioLevels{};
+int failedGpio = -1;
 
 struct Defaults {
     Defaults()
@@ -168,6 +169,12 @@ void fail_next_write(int bus, std::uint8_t address)
 {
     std::lock_guard<std::mutex> l(mutex);
     devices[bus][address].failWrite = true;
+}
+
+void fail_next_gpio_write(int gpio)
+{
+    std::lock_guard<std::mutex> l(mutex);
+    failedGpio = gpio;
 }
 
 void fail_write_after(int bus, std::uint8_t address, int successfulWrites)
@@ -323,6 +330,10 @@ void esp_rom_delay_us(std::uint32_t us)
 
 esp_err_t gpio_set_level(gpio_num_t gpio, std::uint32_t level)
 {
+    if (failedGpio == gpio) {
+        failedGpio = -1;
+        return ESP_FAIL;
+    }
     gpioLevels.at(gpio) = level != 0;
     return ESP_OK;
 }
@@ -356,7 +367,11 @@ void vTaskDelay(TickType_t ticks)
 
 esp_err_t i2c_new_master_bus(const i2c_master_bus_config_t* config, i2c_master_bus_handle_t* output)
 {
-    const int index = config->sda_io_num == 4 ? 0 : config->sda_io_num == 41 ? 1 : -1;
+    const bool internal = (config->sda_io_num == 4 && config->scl_io_num == 5)
+                          || (config->sda_io_num == 2 && config->scl_io_num == 1);
+    const bool external = (config->sda_io_num == 41 && config->scl_io_num == 42)
+                          || (config->sda_io_num == 6 && config->scl_io_num == 7);
+    const int index = internal ? 0 : external ? 1 : -1;
     if (index < 0)
         return ESP_ERR_INVALID_ARG;
     *output = &buses[index];
@@ -512,6 +527,9 @@ esp_err_t i2c_master_transmit_receive(i2c_master_dev_handle_t handle,
 
 esp_err_t i2c_master_probe(i2c_master_bus_handle_t bus, std::uint16_t address, int timeout)
 {
+    // Like ESP-IDF, a zero-tick ISR wait cannot wait for an ordinary wire ACK.
+    if (pdMS_TO_TICKS(timeout) == 0)
+        return ESP_ERR_TIMEOUT;
     Transaction transaction(bus->index);
     std::lock_guard<std::mutex> l(mutex);
     history.push_back({"probe", bus->index, static_cast<std::uint8_t>(address), 0, {}, timeout});

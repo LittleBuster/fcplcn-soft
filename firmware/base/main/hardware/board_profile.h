@@ -13,10 +13,21 @@
 
 struct cJSON;
 
-/// Canonical technical ID used by new settings and exports.
-inline constexpr const char* kDefaultBoardProfileId = "fcplcn-161608-1v0";
+/// Fixed canonical identity of the current-generation F-RAM board.
+inline constexpr const char* kCurrentBoardProfileId = "fcplcn-161608-1v0";
 /// Only the explicitly registered historical alias is accepted during migration.
 inline constexpr const char* kLegacyBoardProfileId = "wifi-relay-16-r2-stack";
+/// Previous-generation test board with EEPROM state storage.
+inline constexpr const char* kFcplc080806BoardProfileId = "fcplc-080806-3v1";
+
+#ifndef FCPLCN_BOOT_BOARD_ID
+#define FCPLCN_BOOT_BOARD_ID "fcplcn-161608-1v0"
+#endif
+/// First-boot default only; a valid persisted profile always takes precedence.
+inline constexpr const char* kDefaultBoardProfileId = FCPLCN_BOOT_BOARD_ID;
+static_assert(std::string_view(kDefaultBoardProfileId) == kCurrentBoardProfileId
+                  || std::string_view(kDefaultBoardProfileId) == kFcplc080806BoardProfileId,
+              "FCPLCN_BOOT_BOARD_ID must select a registered physical board");
 
 /** @brief Hardware SPI controller selection, independent of the PCB signal pins. */
 enum class BoardSpiBus {
@@ -74,7 +85,8 @@ struct BoardMcp23017 {
     const char* i2cBusId;  ///< Identifier of the owning profile I2C bus.
     std::uint8_t address;  ///< Seven-bit I2C slave address.
     std::uint16_t relayMask;  ///< MCP pins assigned as relay outputs.
-    std::uint16_t inputMask;  ///< Raw input pins; external pull-ups are on the PCB.
+    std::uint16_t inputMask;  ///< Pins receiving external input levels.
+    std::uint16_t inputPullupMask = 0;  ///< Internal pull-ups required by open-collector inputs.
 };
 
 // MCP bit numbering: GPA0..7 = 0..7, GPB0..7 = 8..15.
@@ -129,12 +141,21 @@ struct BoardRtc {
     int resetGpio;  ///< Reset GPIO, or -1 when not connected.
 };
 
-/** @brief Optional byte-addressed I2C F-RAM fitted to the controller board. */
-struct BoardFram {
-    const char* model;  ///< Static F-RAM component model.
+/** @brief Profile-selected nonvolatile memory technology. */
+enum class BoardMemoryKind {
+    Fram,  ///< Byte-writable F-RAM without a programming delay.
+    Eeprom24lc512  ///< 24LC512 EEPROM with page writes and a bounded programming cycle.
+};
+
+/** @brief Optional byte-addressed I2C state memory fitted to the controller board. */
+struct BoardStateMemory {
+    BoardMemoryKind kind;  ///< Backend selected by the immutable board profile.
+    const char* model;  ///< Static nonvolatile memory component model.
     const char* i2cBusId;  ///< Identifier of the owning profile I2C bus.
     std::uint8_t address;  ///< Seven-bit I2C slave address.
     std::size_t capacityBytes;  ///< Accessible byte count; transfers may not wrap.
+    std::size_t pageSizeBytes;  ///< EEPROM write-page size; zero for F-RAM.
+    std::uint32_t writeCycleTimeoutMs;  ///< EEPROM readiness deadline; zero for F-RAM.
 };
 
 /** @brief Complete immutable wiring/capability descriptor; all arrays have static lifetime. */
@@ -152,7 +173,7 @@ struct BoardProfile {
     std::size_t i2cBusCount;  ///< Number of I2C bus entries.
     const BoardMcp23017* expanders;  ///< Borrowed MCP23017 table.
     std::size_t expanderCount;  ///< Number of MCP23017 entries.
-    int expanderResetGpio;  ///< Shared MCP hardware-reset GPIO.
+    int expanderResetGpio;  ///< Shared MCP reset GPIO, or -1 when reset is tied HIGH.
     std::uint32_t expanderResetMinUs;  ///< Minimum MCP reset assertion time in microseconds.
     bool expanderDriverImplemented;  ///< Whether MCP relay/input drivers are implemented.
     const BoardExpanderChannel* relays;  ///< Borrowed stable relay channel table.
@@ -169,7 +190,7 @@ struct BoardProfile {
     const BoardNamedGpio* namedGpios;  ///< Borrowed diagnostic semantic-pin table.
     std::size_t namedGpioCount;  ///< Number of semantic-pin entries.
     std::optional<BoardRtc> rtc;  ///< Optional external RTC descriptor.
-    std::optional<BoardFram> fram;  ///< Optional external nonvolatile state memory.
+    std::optional<BoardStateMemory> stateMemory;  ///< Optional profile-selected state memory.
 };
 
 /** @brief Resolve a registered canonical board ID or explicitly listed legacy alias.

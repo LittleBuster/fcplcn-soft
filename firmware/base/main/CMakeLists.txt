@@ -12,6 +12,8 @@ idf_component_register(
         "hardware/board_profile.cpp"
         "hardware/hardware_io.cpp"
         "hardware/fram.cpp"
+        "hardware/eeprom.cpp"
+        "hardware/state_memory.cpp"
         ${FCPLCN_CONTROLLER_SOURCES}
         "network/network.cpp"
         "network/socket_mqtt.cpp"

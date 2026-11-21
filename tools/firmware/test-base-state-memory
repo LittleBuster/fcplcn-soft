@@ -1,0 +1,9 @@
+#!/bin/sh
+set -eu
+MEMORY_TOOLS_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+MEMORY_SOURCE_DIR="$MEMORY_TOOLS_DIR/../../firmware/base/tests/state_memory"
+MEMORY_BUILD_DIR="${FCPLCN_STATE_MEMORY_BUILD_DIR:-$HOME/esp/build/fcplcn/base-state-memory}"
+export PATH="/opt/homebrew/bin:$PATH"
+cmake -S "$MEMORY_SOURCE_DIR" -B "$MEMORY_BUILD_DIR" -G Ninja "$@"
+cmake --build "$MEMORY_BUILD_DIR" --parallel
+ctest --test-dir "$MEMORY_BUILD_DIR" --output-on-failure

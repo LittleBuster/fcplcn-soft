@@ -2,7 +2,26 @@
 set -eu
 FCPLCN_TOOLS_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 FCPLCN_ROOT="$(CDPATH= cd -- "$FCPLCN_TOOLS_DIR/../.." && pwd)"
-FCPLCN_BUILD_DIR="${FCPLCN_BASE_BUILD_DIR:-$HOME/esp/build/fcplcn/base}"
-"$FCPLCN_TOOLS_DIR/idf" -C "$FCPLCN_ROOT/firmware/base" -B "$FCPLCN_BUILD_DIR" build
+FCPLCN_BOARD_PROFILE="${FCPLCN_BOARD_PROFILE:-fcplcn-161608-1v0}"
+case "$FCPLCN_BOARD_PROFILE" in
+    fcplcn-161608-1v0)
+        FCPLCN_DEFAULT_BUILD_DIR="$HOME/esp/build/fcplcn/base"
+        FCPLCN_DEFAULT_DIST_DIR="$FCPLCN_ROOT/firmware/base/dist"
+        ;;
+    fcplc-080806-3v1)
+        FCPLCN_DEFAULT_BUILD_DIR="$HOME/esp/build/fcplcn/base-$FCPLCN_BOARD_PROFILE"
+        FCPLCN_DEFAULT_DIST_DIR="$FCPLCN_ROOT/firmware/base/dist/$FCPLCN_BOARD_PROFILE"
+        ;;
+    *)
+        printf 'Unsupported FCPLCN_BOARD_PROFILE: %s\n' "$FCPLCN_BOARD_PROFILE" >&2
+        exit 1
+        ;;
+esac
+FCPLCN_BUILD_DIR="${FCPLCN_BASE_BUILD_DIR:-$FCPLCN_DEFAULT_BUILD_DIR}"
+FCPLCN_DIST_DIR="${FCPLCN_BASE_DIST_DIR:-$FCPLCN_DEFAULT_DIST_DIR}"
+printf 'Building FCPLCn for first-boot profile %s\n' "$FCPLCN_BOARD_PROFILE"
+"$FCPLCN_TOOLS_DIR/idf" -C "$FCPLCN_ROOT/firmware/base" -B "$FCPLCN_BUILD_DIR" \
+    "-DFCPLCN_BOOT_BOARD_ID=$FCPLCN_BOARD_PROFILE" build
 "$FCPLCN_TOOLS_DIR/idf" -C "$FCPLCN_ROOT/firmware/base" -B "$FCPLCN_BUILD_DIR" merge-bin -o FCPLCn-full.bin
-/opt/homebrew/bin/python3.12 "$FCPLCN_ROOT/firmware/base/tools/package.py" "$FCPLCN_BUILD_DIR" "$FCPLCN_ROOT/firmware/base/dist"
+"${FCPLCN_PYTHON:-python3}" "$FCPLCN_ROOT/firmware/base/tools/package.py" \
+    "$FCPLCN_BUILD_DIR" "$FCPLCN_DIST_DIR" --board-id "$FCPLCN_BOARD_PROFILE"

@@ -122,7 +122,7 @@ template <typename T, std::size_t N> constexpr std::size_t count(const T (&)[N])
 
 const BoardProfile kCurrentBoard = [] {
     BoardProfile board{};
-    board.id = kDefaultBoardProfileId;
+    board.id = kCurrentBoardProfileId;
     board.name = "FCPLCN-161608-1v0";
     board.mcu = "esp32s3";
     board.flashBytes = 16U * 1024U * 1024U;
@@ -158,11 +158,132 @@ const BoardProfile kCurrentBoard = [] {
     board.namedGpioCount = count(kNamedGpios);
     board.rtc = BoardRtc{"DS3231MZ+", "io-expanders", 0x68, -1, -1};
     // Lower U9: A0/A1/A2 and WP are grounded; SDA/SCL share the internal bus.
-    board.fram = BoardFram{"FM24CL64B-GTR", "io-expanders", 0x50, 8192};
+    board.stateMemory =
+        BoardStateMemory{BoardMemoryKind::Fram, "FM24CL64B-GTR", "io-expanders", 0x50, 8192, 0, 0};
     return board;
 }();
 
-const BoardProfile* const kProfiles[] = {&kCurrentBoard};
+// Previous-generation hardware: Schematic_FCPLC-3v1_2026-11-21.pdf, sheets 1..5.
+// MCP RESET# is tied HIGH. Preload auxiliary outputs OFF and deselect the shared SPI SD card.
+constexpr BoardSafeBootGpio kFcplc080806SafeBootGpios[] = {
+    {14, true, "SD_SS"},
+    {39, false, "STATUS"},
+    {38, false, "BUZZER"},
+    {5, true, "UART1_TX"},
+};
+constexpr BoardI2cBus kFcplc080806I2cBuses[] = {
+    {"io-expanders", 2, 1, false, 100000, true},
+    {"isolated-sensors", 6, 7, true, 100000, true},
+};
+// U1 A2/A1/A0 = 000. The relay order is GPA7..GPA1, then GPB7.
+// TLP281 collectors have no external pull-ups: enable GPPU only on input pins.
+constexpr BoardMcp23017 kFcplc080806Expanders[] = {
+    {"U1", "io-expanders", 0x20, 0x80fe, 0x7f01, 0x7f01},
+};
+constexpr BoardExpanderChannel kFcplc080806Relays[] = {
+    {0, 7, true, "rly-0/1"},
+    {0, 6, true, "rly-0/2"},
+    {0, 5, true, "rly-0/3"},
+    {0, 4, true, "rly-0/4"},
+    {0, 3, true, "rly-0/5"},
+    {0, 2, true, "rly-0/6"},
+    {0, 1, true, "rly-0/7"},
+    {0, 15, true, "rly-0/8"},
+};
+// Closing DI to GND shunts the optocoupler LED: collector HIGH means contact closed.
+constexpr BoardExpanderChannel kFcplc080806Inputs[] = {
+    {0, 8, true, "in-0/1"},
+    {0, 9, true, "in-0/2"},
+    {0, 10, true, "in-0/3"},
+    {0, 11, true, "in-0/4"},
+    {0, 12, true, "in-0/5"},
+    {0, 13, true, "in-0/6"},
+    {0, 14, true, "in-0/7"},
+    {0, 0, true, "in-0/8"},
+};
+constexpr BoardLed kFcplc080806Leds[] = {{"led-status", 39, false}};
+constexpr BoardSensorPort kFcplc080806SensorPorts[] = {
+    {"sens-0/1", 15, true, true, true},
+    {"sens-0/2", 16, true, true, true},
+    {"sens-0/3", 17, true, true, true},
+    {"sens-0/4", 18, true, true, true},
+    {"sens-0/5", 8, true, true, true},
+    {"sens-0/6", 9, true, true, true},
+    {"sens-0/7", 47, true, true, true},  // Dedicated OW_SEC connector U30.
+    {"sens-0/8", 48, true, true, true},  // Dedicated OW_TEMP connector U30.
+};
+constexpr BoardNamedGpio kFcplc080806NamedGpios[] = {
+    {"boot", 0, "input"},
+    {"i2c-sda", 2, "i2c"},
+    {"i2c-scl", 1, "i2c"},
+    {"rtc-sda", 2, "i2c"},
+    {"rtc-scl", 1, "i2c"},
+    {"eeprom-sda", 2, "i2c"},
+    {"eeprom-scl", 1, "i2c"},
+    {"i2c-ext-sda", 6, "i2c"},
+    {"i2c-ext-scl", 7, "i2c"},
+    {"uart1-rx", 4, "input"},
+    {"uart1-tx", 5, "uart"},
+    {"sd-cs", 14, "output"},
+    {"spi-mosi", 11, "spi"},
+    {"spi-miso", 12, "spi"},
+    {"spi-sck", 13, "spi"},
+    {"led-status", 39, "output"},
+    {"buzzer", 38, "output"},
+    {"sens-0/1", 15, "open-drain"},
+    {"sens-0/2", 16, "open-drain"},
+    {"sens-0/3", 17, "open-drain"},
+    {"sens-0/4", 18, "open-drain"},
+    {"sens-0/5", 8, "open-drain"},
+    {"sens-0/6", 9, "open-drain"},
+    {"sens-0/7", 47, "open-drain"},
+    {"sens-0/8", 48, "open-drain"},
+    {"onewire-security", 47, "open-drain"},
+    {"onewire-temperature", 48, "open-drain"},
+    {"usb-dm", 19, "usb"},
+    {"usb-dp", 20, "usb"},
+};
+
+const BoardProfile kFcplc080806Board = [] {
+    BoardProfile board{};
+    board.id = kFcplc080806BoardProfileId;
+    board.name = "FCPLC-080806-3v1";
+    board.mcu = "esp32s3";
+    board.flashBytes = 16U * 1024U * 1024U;
+    board.psramBytes = 8U * 1024U * 1024U;
+    board.w5500 = {false, BoardSpiBus::Spi2, -1, -1, -1, -1, -1, -1, 0, 0, 0, 0};
+    board.recoveryButton = {0, true, true, 5000};
+    board.safeBootGpios = kFcplc080806SafeBootGpios;
+    board.safeBootGpioCount = count(kFcplc080806SafeBootGpios);
+    board.i2cBuses = kFcplc080806I2cBuses;
+    board.i2cBusCount = count(kFcplc080806I2cBuses);
+    board.expanders = kFcplc080806Expanders;
+    board.expanderCount = count(kFcplc080806Expanders);
+    board.expanderResetGpio = -1;
+    board.expanderResetMinUs = 0;
+    board.expanderDriverImplemented = true;
+    board.relays = kFcplc080806Relays;
+    board.relayCount = count(kFcplc080806Relays);
+    board.inputs = kFcplc080806Inputs;
+    board.inputCount = count(kFcplc080806Inputs);
+    board.leds = kFcplc080806Leds;
+    board.ledCount = count(kFcplc080806Leds);
+    board.ledDriverImplemented = true;
+    board.sensorPorts = kFcplc080806SensorPorts;
+    board.sensorPortCount = count(kFcplc080806SensorPorts);
+    board.rs485 = std::nullopt;
+    board.usbVbusSenseGpio = -1;
+    board.namedGpios = kFcplc080806NamedGpios;
+    board.namedGpioCount = count(kFcplc080806NamedGpios);
+    board.rtc = BoardRtc{"DS3231MZ+", "io-expanders", 0x68, -1, -1};
+    // U42 A0/A1/A2 are grounded. The schematic swaps the U42 SDA/SCL net labels;
+    // this profile requires the EEPROM wired to the same SDA/SCL as MCP and RTC.
+    board.stateMemory = BoardStateMemory{
+        BoardMemoryKind::Eeprom24lc512, "24LC512-I/SM", "io-expanders", 0x50, 65536, 128, 10};
+    return board;
+}();
+
+const BoardProfile* const kProfiles[] = {&kCurrentBoard, &kFcplc080806Board};
 std::atomic<const BoardProfile*> selected{nullptr};
 using Json = std::unique_ptr<cJSON, decltype(&cJSON_Delete)>;
 }  // namespace
@@ -178,7 +299,7 @@ using Json = std::unique_ptr<cJSON, decltype(&cJSON_Delete)>;
 std::string_view board_profile_canonical_id(std::string_view id)
 {
     if (id == kLegacyBoardProfileId)
-        id = kDefaultBoardProfileId;
+        id = kCurrentBoardProfileId;
     for (const auto* profile : kProfiles) {
         if (id == profile->id)
             return profile->id;
@@ -214,7 +335,7 @@ const BoardProfile* board_profile_find(std::string_view id)
 const BoardProfile& board_profile_active()
 {
     const auto* profile = selected.load(std::memory_order_acquire);
-    return profile != nullptr ? *profile : kCurrentBoard;
+    return profile != nullptr ? *profile : *board_profile_find(kDefaultBoardProfileId);
 }
 
 /**
@@ -258,7 +379,7 @@ cJSON* board_profile_json(const BoardProfile& profile)
     auto* legacy_ids = cJSON_AddArrayToObject(root.get(), "legacyIds");
     if (legacy_ids == nullptr)
         return nullptr;
-    if (std::string_view(profile.id) == kDefaultBoardProfileId) {
+    if (std::string_view(profile.id) == kCurrentBoardProfileId) {
         Json legacy_id(cJSON_CreateString(kLegacyBoardProfileId), cJSON_Delete);
         if (!legacy_id || !cJSON_AddItemToArray(legacy_ids, legacy_id.get()))
             return nullptr;
@@ -275,14 +396,34 @@ cJSON* board_profile_json(const BoardProfile& profile)
         || !cJSON_AddBoolToObject(capabilities, "rs485", profile.rs485.has_value()))
         return nullptr;
     cJSON_AddBoolToObject(capabilities, "rtc", profile.rtc.has_value());
-    if (!cJSON_AddBoolToObject(capabilities, "fram", profile.fram.has_value()))
+    const auto& memory = profile.stateMemory;
+    const bool is_fram = memory && memory->kind == BoardMemoryKind::Fram;
+    const bool is_eeprom = memory && memory->kind == BoardMemoryKind::Eeprom24lc512;
+    if (!cJSON_AddBoolToObject(capabilities, "stateMemory", memory.has_value())
+        || !cJSON_AddBoolToObject(capabilities, "fram", is_fram)
+        || !cJSON_AddBoolToObject(capabilities, "eeprom", is_eeprom))
         return nullptr;
-    if (profile.fram) {
+    if (memory) {
+        auto* descriptor = cJSON_AddObjectToObject(root.get(), "stateMemory");
+        if (descriptor == nullptr
+            || !cJSON_AddStringToObject(descriptor, "type", is_fram ? "fram" : "eeprom")
+            || !cJSON_AddStringToObject(descriptor, "model", memory->model)
+            || !cJSON_AddStringToObject(descriptor, "bus", memory->i2cBusId)
+            || !cJSON_AddStringToObject(descriptor, "i2cBus", memory->i2cBusId)
+            || !cJSON_AddNumberToObject(descriptor, "address", memory->address)
+            || !cJSON_AddNumberToObject(descriptor, "capacityBytes", memory->capacityBytes)
+            || !cJSON_AddNumberToObject(descriptor, "pageSizeBytes", memory->pageSizeBytes)
+            || !cJSON_AddNumberToObject(
+                descriptor, "writeCycleTimeoutMs", memory->writeCycleTimeoutMs))
+            return nullptr;
+    }
+    // Keep the original F-RAM metadata for clients predating stateMemory.
+    if (is_fram) {
         auto* fram = cJSON_AddObjectToObject(root.get(), "fram");
-        if (fram == nullptr || !cJSON_AddStringToObject(fram, "model", profile.fram->model)
-            || !cJSON_AddStringToObject(fram, "i2cBus", profile.fram->i2cBusId)
-            || !cJSON_AddNumberToObject(fram, "address", profile.fram->address)
-            || !cJSON_AddNumberToObject(fram, "capacityBytes", profile.fram->capacityBytes))
+        if (fram == nullptr || !cJSON_AddStringToObject(fram, "model", memory->model)
+            || !cJSON_AddStringToObject(fram, "i2cBus", memory->i2cBusId)
+            || !cJSON_AddNumberToObject(fram, "address", memory->address)
+            || !cJSON_AddNumberToObject(fram, "capacityBytes", memory->capacityBytes))
             return nullptr;
     }
     cJSON_AddItemToObject(root.get(), "pinMap", board_profile_pin_map_json(profile));
@@ -297,7 +438,9 @@ cJSON* board_profile_json(const BoardProfile& profile)
         || !cJSON_AddBoolToObject(drivers, "inputs", profile.expanderDriverImplemented)
         || !cJSON_AddBoolToObject(drivers, "leds", profile.ledDriverImplemented)
         || !cJSON_AddBoolToObject(drivers, "sensorPorts", sensors_implemented)
-        || !cJSON_AddBoolToObject(drivers, "fram", profile.fram.has_value())
+        || !cJSON_AddBoolToObject(drivers, "stateMemory", memory.has_value())
+        || !cJSON_AddBoolToObject(drivers, "fram", is_fram)
+        || !cJSON_AddBoolToObject(drivers, "eeprom", is_eeprom)
         || !cJSON_AddBoolToObject(
             drivers, "rs485", profile.rs485.has_value() && profile.rs485->driverImplemented))
         return nullptr;

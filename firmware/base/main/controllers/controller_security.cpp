@@ -2,7 +2,7 @@
  * @file controller_security.cpp
  * @brief Autonomous intrusion detection, iButton permissions and confirmed siren control.
  * @details Monotonic entry/exit countdowns are RAM-only. Confirmed armed/alarm flags live in
- * FRAM, so reboot never grants a fresh exit delay or silently clears an existing alarm.
+ * state memory, so reboot never grants a fresh exit delay or silently clears an existing alarm.
  */
 #include "controllers/controller_internal.h"
 
@@ -100,7 +100,8 @@ void security_reader_barrier()
  */
 bool security_active(const Item& item, bool level)
 {
-    return item.securityType == SecuritySensorType::Reed ? level : !level;
+    const bool closed = input_contact_closed(item.inputId, level);
+    return item.securityType == SecuritySensorType::Reed ? !closed : closed;
 }
 
 /**
@@ -130,14 +131,14 @@ void sample_security_zones(std::int64_t nowUs)
             || input.updatedAtUs < runtime.lastSampleUs) {
             runtime.generation = input.generation;
             runtime.lastSampleUs = input.updatedAtUs;
-            runtime.candidate = input.value;
+            runtime.candidate = input.level;
             runtime.candidateSamples = 1;
             runtime.stable = false;
             runtime.settlingUntilUs = nowUs + kSecuritySettleUs;
         } else if (input.updatedAtUs > runtime.lastSampleUs) {
             runtime.lastSampleUs = input.updatedAtUs;
-            if (runtime.candidate != input.value) {
-                runtime.candidate = input.value;
+            if (runtime.candidate != input.level) {
+                runtime.candidate = input.level;
                 runtime.candidateSamples = 1;
             } else if (runtime.candidateSamples < kPressConfirmSamples)
                 ++runtime.candidateSamples;
@@ -192,7 +193,7 @@ std::string security_arm_block(bool allowActive)
 
 /**
  * @brief Persist a latched alarm without writing the rarely changing flash configuration.
- * @param[in] nowUs Current monotonic uptime used to bound repeated failed FRAM attempts.
+ * @param[in] nowUs Current monotonic uptime used to bound repeated failed state memory attempts.
  * @pre Hold controller_mutex and the outer settings writer guard.
  */
 void persist_security_alarm(std::int64_t nowUs)
@@ -208,7 +209,8 @@ void persist_security_alarm(std::int64_t nowUs)
         security_runtime.pendingAlarm = false;
         security_runtime.storageError.clear();
     } else {
-        security_runtime.storageError = "Тревога активна, но её сохранение во FRAM не подтверждено";
+        security_runtime.storageError =
+            "Тревога активна, но её сохранение в памяти состояний не подтверждено";
         security_runtime.persistenceRetryAtUs = esp_timer_get_time() + kRetryUs;
     }
 }
@@ -219,7 +221,7 @@ void persist_security_alarm(std::int64_t nowUs)
  * @param[in] nowUs Current monotonic uptime.
  * @pre Hold controller_mutex and the settings writer guard.
  * @note Reboot loses only the grace timer: the durable marker restores an immediate alarm.
- * Failed FRAM verification grants no quiet grace and leaves an immediate pending alarm.
+ * Failed state memory verification grants no quiet grace and leaves an immediate pending alarm.
  */
 void begin_security_entry(const std::string& reason, std::int64_t nowUs)
 {
@@ -235,7 +237,7 @@ void begin_security_entry(const std::string& reason, std::int64_t nowUs)
 }
 
 /**
- * @brief Latch an intrusion/fault locally before attempting its durable FRAM record.
+ * @brief Latch an intrusion/fault locally before attempting its durable state memory record.
  * @param[in] reason Human-readable zone or hardware fault causing the alarm.
  * @param[in] nowUs Current monotonic uptime.
  * @pre Hold controller_mutex and the outer settings writer guard.
@@ -414,7 +416,8 @@ bool normalize_security_address(std::string& address)
 }
 
 /**
- * @brief Reset volatile countdowns/debounce without clearing confirmed FRAM armed/alarm flags.
+ * @brief Reset volatile countdowns/debounce without clearing confirmed state memory armed/alarm
+ * flags.
  * @pre Hold controller_mutex; hardware and the driver may retain their own caches.
  */
 void reset_security_runtime()
@@ -439,7 +442,7 @@ void apply_security_config()
 }
 
 /**
- * @brief Confirm an explicit arm/disarm permission and store its flags only in FRAM.
+ * @brief Confirm an explicit arm/disarm permission and store its flags only in state memory.
  * @param[in] armed Requested confirmed permission; disarming also clears latched alarm state.
  * @param[out] error Failure diagnostic, cleared on success.
  * @param[in] deadlineUs Optional command-delivery deadline; zero means no deadline.
@@ -496,7 +499,7 @@ ControllerResult set_security_armed_locked(bool armed, std::string& error, std::
         if (save_states(next) != ESP_OK) {
             error =
                 armed
-                    ? "Не удалось сохранить постановку на охрану во FRAM"
+                    ? "Не удалось сохранить постановку на охрану в памяти состояний"
                     : "Снятие не сохранено: сирена удерживается выключенной, после перезапуска охрана восстановится";
             security_runtime.storageError = error;
             security_reader_barrier();
@@ -874,11 +877,13 @@ cJSON* security_status_locked()
             || !cJSON_AddBoolToObject(item.get(), "entryDelay", zone.entryDelay)
             || !cJSON_AddBoolToObject(item.get(), "available", available)
             || !(observed.available
-                     ? cJSON_AddBoolToObject(item.get(), "inputLevel", observed.input.value)
+                     ? cJSON_AddBoolToObject(item.get(), "inputLevel", observed.input.level)
                      : cJSON_AddNullToObject(item.get(), "inputLevel"))
-            || !(observed.available
-                     ? cJSON_AddBoolToObject(item.get(), "closed", !observed.input.value)
-                     : cJSON_AddNullToObject(item.get(), "closed"))
+            || !(observed.available ? cJSON_AddBoolToObject(
+                                          item.get(),
+                                          "closed",
+                                          input_contact_closed(zone.inputId, observed.input.level))
+                                    : cJSON_AddNullToObject(item.get(), "closed"))
             || !(available ? cJSON_AddBoolToObject(
                                  item.get(), "active", security_active(zone, observed.level))
                            : cJSON_AddNullToObject(item.get(), "active"))
@@ -950,7 +955,7 @@ ControllerResult security_armed_command(bool armed,
  * @brief Set the independent guard permission without commanding raw siren demand.
  * @param[in] armed True arms the guard; false clears entry/exit timing and the latched alarm.
  * @param[out] error Failure diagnostic.
- * @return Confirmed FRAM state or a typed readiness/storage failure.
+ * @return Confirmed state memory state or a typed readiness/storage failure.
  * @endcond
  */
 ControllerResult controller_security_set_armed(bool armed, std::string& error)

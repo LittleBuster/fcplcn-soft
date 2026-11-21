@@ -35,6 +35,8 @@
 #include "nvs_flash.h"
 
 namespace {
+RecoveryBootState boot_state{};
+
 /**
  * @brief Return to the previous confirmed image after a critical failure of a trial OTA boot.
  * @note The SDK restarts on successful rollback. If no valid fallback exists, preserve recovery
@@ -50,19 +52,24 @@ void rollback_failed_trial()
 }
 
 /**
- * @brief Assert safe physical outputs before NVS, logging or profile-dependent task creation.
- * @param[in] board Immutable bootstrap wiring for the compiled physical board.
+ * @brief Assert safe physical outputs after validating the persisted active profile.
+ * @param[in] board Immutable activated wiring, resolved before profile-bound GPIO initialization.
  * @return First GPIO error, or ESP_OK; every safe pin is attempted even after an earlier error.
  * @details The shared expander reset is asserted first, then output latches are preloaded before
  * directions change. Only validated settings/authentication permit hardware_io_init to release it.
  */
 esp_err_t safe_gpio_first(const BoardProfile& board)
 {
-    auto first = gpio_set_level(static_cast<gpio_num_t>(board.expanderResetGpio), 0);
-    const auto direction =
-        gpio_set_direction(static_cast<gpio_num_t>(board.expanderResetGpio), GPIO_MODE_OUTPUT);
-    if (first == ESP_OK)
-        first = direction;
+    boot_state.safeGpiosAttempted = true;
+    esp_err_t first = ESP_OK;
+    if (board.expanderResetGpio >= 0) {
+        first = gpio_set_level(static_cast<gpio_num_t>(board.expanderResetGpio), 0);
+        const auto direction =
+            gpio_set_direction(static_cast<gpio_num_t>(board.expanderResetGpio), GPIO_MODE_OUTPUT);
+        if (first == ESP_OK)
+            first = direction;
+        boot_state.expanderResetRequested = first == ESP_OK;
+    }
     for (std::size_t i = 0; i < board.safeBootGpioCount; ++i) {
         const auto& pin = board.safeBootGpios[i];
         if (pin.gpio == board.expanderResetGpio)
@@ -75,6 +82,7 @@ esp_err_t safe_gpio_first(const BoardProfile& board)
         if (first == ESP_OK)
             first = mode;
     }
+    boot_state.safeGpiosConfigured = first == ESP_OK;
     return first;
 }
 
@@ -88,7 +96,7 @@ void require_boot(const char* stage, esp_err_t result)
 {
     if (result != ESP_OK) {
         rollback_failed_trial();
-        recovery_mode_run(stage, result);
+        recovery_mode_run(stage, result, boot_state);
     }
 }
 
@@ -111,15 +119,14 @@ void service_result(const char* stage, esp_err_t result)
 
 /**
  * @brief Initialize safe autonomous operation and supervise the physical network-recovery gesture.
- * @details Safe GPIOs precede storage and logging. Critical early errors retain settings and
- * enter isolated recovery; later service failures are diagnostic and do not abort control loops.
+ * @details Storage resolves the persisted board before any profile-bound GPIO is driven.
+ * After activation, safe levels precede authentication and peripheral/task initialization.
+ * Critical early errors retain settings and enter isolated recovery without guessing a pin map;
+ * later service failures are diagnostic and do not abort autonomous control loops.
  * No automatic NVS erase is performed, including NO_FREE_PAGES or NEW_VERSION_FOUND errors.
  */
 extern "C" void app_main()
 {
-    const auto& bootstrap = board_profile_active();
-    const auto safe = safe_gpio_first(bootstrap);
-    require_boot("safe_gpio", safe);
     ESP_LOGI(FCPLCN_PRODUCT_NAME, "%s | %s", FCPLCN_PRODUCT_NAME, FCPLCN_PRODUCT_FULL_NAME);
     require_boot("runtime_supervisor", runtime_supervisor_init());
     require_boot("nvs_flash_init", nvs_flash_init());
@@ -129,6 +136,8 @@ extern "C" void app_main()
                  board_profile_activate(config_get().hardware.boardId) ? ESP_OK
                                                                        : ESP_ERR_INVALID_ARG);
     const auto& board = board_profile_active();
+    boot_state.boardId = board.id;
+    require_boot("safe_gpio", safe_gpio_first(board));
     ESP_LOGI(FCPLCN_PRODUCT_NAME, "Board: %s (%s)", board.name, board.id);
     require_boot("authentication", auth_init());
     hardware_io_init();

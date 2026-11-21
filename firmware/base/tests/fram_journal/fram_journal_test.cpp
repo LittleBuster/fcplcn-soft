@@ -1,5 +1,5 @@
 #include "config/state_journal.h"
-#include "hardware/fram.h"
+#include "hardware/state_memory.h"
 #include "util/checksum.h"
 
 #include <algorithm>
@@ -273,7 +273,7 @@ void generation_exhaustion()
 }
 }  // namespace
 
-esp_err_t fram_read(std::uint16_t offset, std::uint8_t* data, std::size_t length)
+esp_err_t state_memory_read(std::uint16_t offset, std::uint8_t* data, std::size_t length)
 {
     ++read_calls;
     if (!powered || fail_reads || (fail_read_at != 0 && read_calls == fail_read_at))
@@ -283,7 +283,7 @@ esp_err_t fram_read(std::uint16_t offset, std::uint8_t* data, std::size_t length
     return ESP_OK;
 }
 
-esp_err_t fram_write(std::uint16_t offset, const std::uint8_t* data, std::size_t length)
+esp_err_t state_memory_write(std::uint16_t offset, const std::uint8_t* data, std::size_t length)
 {
     ++write_calls;
     if (!powered)

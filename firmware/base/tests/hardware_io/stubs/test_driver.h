@@ -20,6 +20,7 @@ void input_levels(int bus, std::uint8_t address, std::uint16_t levels);
 void fail_next_read(int bus, std::uint8_t address);
 void fail_read_after(int bus, std::uint8_t address, int successfulReads);
 void fail_next_write(int bus, std::uint8_t address);
+void fail_next_gpio_write(int gpio);
 void fail_write_after(int bus, std::uint8_t address, int successfulWrites);
 // Wire-independent EMI injection; registers use the BANK=0 canonical map.
 void reset_mcp(int bus, std::uint8_t address);
