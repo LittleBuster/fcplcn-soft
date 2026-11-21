@@ -385,9 +385,11 @@ npm --prefix cloud run build
 
 ### Установщик для хаба и облака
 
-Из корня `fcplcn-soft` запустите:
+Для первой установки скачайте репозиторий целиком:
 
 ```sh
+git clone https://github.com/LittleBuster/fcplcn-soft.git
+cd fcplcn-soft
 ./install.sh
 ```
 

@@ -4,9 +4,17 @@
 хаб или облачный сервер. Node.js, npm, компилятор и PostgreSQL на основной системе
 устанавливать не нужно: приложения и их зависимости работают в контейнерах.
 
+Скачайте официальный репозиторий на хаб или VPS и запустите установщик:
+
 ```sh
+git clone https://github.com/LittleBuster/fcplcn-soft.git
+cd fcplcn-soft
 ./install.sh
 ```
+
+Для скачивания нужен Git. Остальные зависимости подготовит установщик.
+Используйте полный репозиторий: `install.sh` обращается к файлам в `deploy/`,
+`hub/`, `cloud/` и `config/` рядом с ним.
 
 ```text
   1. cloud — облако / VPS
@@ -115,12 +123,12 @@ Rootless Docker и локальный Unix socket Docker Desktop допуска�
 
 ```sh
 ./install.sh hub install \
-  --repo https://github.com/OWNER/fcplcn-soft.git \
+  --repo https://github.com/LittleBuster/fcplcn-soft.git \
   --ref main
 ```
 
-Замените `OWNER` своим именем пользователя или организации. Этот адрес — пример:
-установщик не создаёт репозиторий и не угадывает, где опубликован проект.
+Адрес выше указывает на официальный репозиторий FCPLCn. Для собственного fork
+укажите его GitHub URL; перед установкой дождитесь публикации образов из этого fork.
 Установщик также читает софт во вложенной папке `fcplcn-soft`. Приведённый
 workflow рассчитан на отдельный репозиторий с софтом в корне; для вложенного
 варианта отдельно адаптируйте пути workflow и build context.
@@ -225,22 +233,30 @@ Caddy сам получает и продлевает публичный HTTPS-�
 проверяет хаб на целевой среде и публикует объединённые образы:
 
 ```text
-ghcr.io/OWNER/fcplcn-hub:sha-<полный commit SHA>
-ghcr.io/OWNER/fcplcn-cloud:sha-<полный commit SHA>
+ghcr.io/littlebuster/fcplcn-hub:sha-<полный commit SHA>
+ghcr.io/littlebuster/fcplcn-cloud:sha-<полный commit SHA>
 ```
 
 Также публикуются `latest` для основной ветки, имена веток и версии для тегов
 `v*`. Для обновления установщик выбирает конкретный commit, а не плавающий
 `latest`. Объединённый SHA-образ появляется после успеха всех архитектур.
 
-Перед первым использованием:
+Официальные образы публикуются из
+[LittleBuster/fcplcn-soft](https://github.com/LittleBuster/fcplcn-soft).
+Перед установкой выбранного commit дождитесь успешного workflow
+**FCPLCn container images**. Публичные образы GHCR скачиваются без входа в registry.
 
-1. Разместите содержимое `fcplcn-soft` в отдельном GitHub-репозитории.
-2. Разрешите GitHub Actions и публикацию packages для workflow.
-3. Дождитесь успешной сборки **FCPLCn container images**.
-4. Сделайте GHCR-пакеты публичными или выполните `docker login ghcr.io` на сервере.
-   Для Linux с доступом к Docker через sudo выполняйте вход как `sudo docker login ghcr.io`.
-   Для приватных исходников также настройте Git-доступ. Токены в `--repo` не допускаются.
+Для собственного fork:
+
+1. Разместите софт в корне своего GitHub-репозитория и разрешите GitHub Actions.
+2. Разрешите публикацию packages для workflow и дождитесь успешной сборки.
+3. В `--repo` укажите GitHub URL своего fork. Имя владельца для GHCR определяется
+   автоматически и переводится в нижний регистр: `ghcr.io/владелец/fcplcn-hub`
+   и `ghcr.io/владелец/fcplcn-cloud`.
+4. Сделайте пакеты публичными для скачивания без авторизации. Если fork или его
+   образы приватные, настройте Git-доступ и выполните `docker login ghcr.io` на сервере.
+   Для Linux с доступом к Docker через sudo используйте `sudo docker login ghcr.io`.
+   Токены в `--repo` не допускаются.
 
 Для обновления запустите тот же установщик:
 
@@ -254,7 +270,7 @@ ghcr.io/OWNER/fcplcn-cloud:sha-<полный commit SHA>
 Если изначально у исходников не было GitHub origin:
 
 ```sh
-./install.sh hub update --repo https://github.com/OWNER/fcplcn-soft.git --ref main
+./install.sh hub update --repo https://github.com/LittleBuster/fcplcn-soft.git --ref main
 ```
 
 Порядок обновления:
@@ -289,7 +305,7 @@ flowchart LR
 
 ```sh
 ./install.sh hub install --source-build
-./install.sh hub install --image ghcr.io/OWNER/fcplcn-hub:VERSION
+./install.sh hub install --image ghcr.io/littlebuster/fcplcn-hub:latest
 ./install.sh hub update --ref v1.0.0
 ```
 
