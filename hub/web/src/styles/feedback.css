@@ -123,6 +123,46 @@
   padding: 3px;
 }
 
+/* Результат команды не участвует в раскладке и не сдвигает элементы управления. */
+.notice.action-notice {
+  position: fixed;
+  z-index: 50;
+  right: max(16px, env(safe-area-inset-right));
+  bottom: calc(var(--action-notice-bottom, 0px) + max(16px, env(safe-area-inset-bottom)));
+  width: 440px;
+  max-width: calc(
+    100% - max(16px, env(safe-area-inset-left)) - max(16px, env(safe-area-inset-right))
+  );
+  max-height: min(280px, calc(100dvh - 32px));
+  margin: 0;
+  padding: 8px 10px 8px 16px;
+  gap: 12px;
+  align-items: center;
+  border-radius: 16px;
+  box-shadow: 0 12px 36px #0005;
+  font-size: 14px;
+}
+
+.action-notice > span {
+  min-width: 0;
+  max-height: 220px;
+  overflow: auto;
+  overflow-wrap: anywhere;
+}
+
+.action-notice > .notice-dismiss {
+  align-self: center;
+  flex: 0 0 48px;
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  font-size: 26px;
+}
+
+.action-notice > .notice-dismiss:hover {
+  background: #ffffff0d;
+}
+
 .back-link {
   display: inline-flex;
   align-items: center;

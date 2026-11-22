@@ -92,6 +92,8 @@ async function checkPult() {
     const button = tile.locator('[data-pult-command]');
     const original = await button.getAttribute('aria-pressed');
     assert.ok(['true', 'false'].includes(original));
+    const beforeNotice = await tile.boundingBox();
+    const beforeNoticeHeight = await page.evaluate(() => document.documentElement.scrollHeight);
     let unblock;
     const gate = new Promise((resolve) => {
       unblock = resolve;
@@ -132,6 +134,15 @@ async function checkPult() {
           ?.getAttribute('aria-pressed') !== original,
       { key, original },
     );
+    await page.locator('[data-action-notice]').waitFor();
+    assert.deepEqual(await tile.boundingBox(), beforeNotice, 'Confirmation never shifts a tile');
+    assert.equal(
+      await page.evaluate(() => document.documentElement.scrollHeight),
+      beforeNoticeHeight,
+      'Confirmation never changes the page height',
+    );
+    await page.getByRole('button', { name: 'Закрыть уведомление' }).click();
+    assert.deepEqual(await tile.boundingBox(), beforeNotice, 'Dismissing never shifts a tile');
     await page.unroute(commandRoute);
 
     // Old telemetry must remain visibly unknown and must never permit a click.

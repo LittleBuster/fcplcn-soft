@@ -2,6 +2,7 @@
 import type { HubSnapshot } from '../../../shared/types.js';
 import type { Notice } from './types';
 import { Icon } from '../icons';
+import { useNoticeViewport } from '../hooks/use-notice-viewport';
 
 /** Устаревший снимок остаётся видимым, но не считается разрешением управлять PLC. */
 export function ConnectionNotice({
@@ -35,8 +36,14 @@ export function ActionNotice({
   notice: Notice | null;
   onDismiss: () => void;
 }) {
+  const bottom = useNoticeViewport(Boolean(notice));
   return notice ? (
-    <div class={`notice ${notice.tone}`} role={notice.tone === 'error' ? 'alert' : 'status'}>
+    <div
+      class={`notice action-notice ${notice.tone}`}
+      style={{ '--action-notice-bottom': `${bottom}px` }}
+      role={notice.tone === 'error' ? 'alert' : 'status'}
+      data-action-notice
+    >
       <Icon
         name={notice.tone === 'success' ? 'check' : notice.tone === 'error' ? 'alarm' : 'clock'}
       />
