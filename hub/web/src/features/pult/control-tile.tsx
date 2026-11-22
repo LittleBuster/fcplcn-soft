@@ -31,6 +31,8 @@ export function PultControlTile({
   const moduleEnabled = module.data.enabled === true;
   const available = fresh && item.available === true;
   const measurementKnown = available && number(item.temperatureC) !== null;
+  const humidity = number(item.humidityPct);
+  const hasHumidity = sensor && (item.sensorType === 'dht22' || humidity !== null);
   const known =
     fresh &&
     (sensor
@@ -95,9 +97,19 @@ export function PultControlTile({
           <Icon name={icon} />
         </span>
         {sensor || thermostat ? (
-          <span class="pult-tile-reading" data-pult-reading>
-            {available ? temperature(item.temperatureC) : '—'}
-            <small>°C</small>
+          <span class="pult-tile-readings">
+            <span class="pult-tile-reading" data-pult-reading aria-label="Температура">
+              {available ? temperature(item.temperatureC) : '—'}
+              <small>°C</small>
+            </span>
+            {hasHumidity ? (
+              <span class="pult-tile-reading" data-pult-humidity aria-label="Влажность">
+                {available && humidity !== null
+                  ? humidity.toLocaleString('ru-RU', { maximumFractionDigits: 1 })
+                  : '—'}
+                <small>%</small>
+              </span>
+            ) : null}
           </span>
         ) : (
           <span class="pult-tile-power" aria-hidden="true">
@@ -112,10 +124,6 @@ export function PultControlTile({
       </span>
       {thermostat ? (
         <span class="pult-tile-extra">Задано {fresh ? temperature(item.setpointC) : '—'} °C</span>
-      ) : sensor && available && number(item.humidityPct) !== null ? (
-        <span class="pult-tile-extra">
-          Влажность {number(item.humidityPct)?.toLocaleString('ru-RU')} %
-        </span>
       ) : null}
       {error ? <span class="pult-tile-error">{error}</span> : null}
     </>
@@ -123,7 +131,7 @@ export function PultControlTile({
 
   return (
     <article
-      class={`pult-tile pult-kind-${kind} pult-state-${tone}`}
+      class={`pult-tile pult-kind-${kind} pult-state-${tone}${hasHumidity ? ' pult-has-humidity' : ''}`}
       data-pult-tile={entry.key}
       data-device-id={device.id}
       data-controller-kind={kind}
