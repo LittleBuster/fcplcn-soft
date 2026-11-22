@@ -258,7 +258,7 @@
   margin-left: auto;
 }
 .pult-page .pult-tile-humidity {
-  font-size: 14.5px;
+  font-size: calc(29px / 1.5);
   letter-spacing: 0;
 }
 .pult-page .pult-tile-reading small {
