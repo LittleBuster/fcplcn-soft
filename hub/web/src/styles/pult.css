@@ -257,6 +257,10 @@
   gap: 14px;
   margin-left: auto;
 }
+.pult-page .pult-tile-humidity {
+  font-size: 14.5px;
+  letter-spacing: 0;
+}
 .pult-page .pult-tile-reading small {
   font-size: 14px;
   font-weight: 400;

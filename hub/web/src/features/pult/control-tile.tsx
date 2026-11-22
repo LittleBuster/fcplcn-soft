@@ -103,7 +103,11 @@ export function PultControlTile({
               <small>°C</small>
             </span>
             {hasHumidity ? (
-              <span class="pult-tile-reading" data-pult-humidity aria-label="Влажность">
+              <span
+                class="pult-tile-reading pult-tile-humidity"
+                data-pult-humidity
+                aria-label="Влажность"
+              >
                 {available && humidity !== null
                   ? humidity.toLocaleString('ru-RU', { maximumFractionDigits: 1 })
                   : '—'}
