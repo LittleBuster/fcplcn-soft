@@ -194,8 +194,8 @@
   place-items: center;
 }
 .pult-page .pult-tile-icon .icon {
-  width: 80px;
-  height: 80px;
+  width: 60px;
+  height: 60px;
   stroke-width: 1.45;
 }
 .pult-page .pult-tile-power {
@@ -442,12 +442,9 @@
   }
 }
 @media (max-width: 680px) {
-  .pult-page .pult-tile-top {
-    gap: 4px;
-  }
   .pult-page .pult-tile-icon .icon {
-    width: 56px;
-    height: 56px;
+    width: 52px;
+    height: 52px;
   }
   .pult-page .pult-summary {
     grid-template-columns: 1fr 1fr;
