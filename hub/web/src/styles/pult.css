@@ -244,6 +244,7 @@
 }
 .pult-page .pult-tile-reading {
   white-space: nowrap;
+  color: var(--amber);
   font-size: 29px;
   font-weight: 550;
   letter-spacing: -0.7px;
@@ -260,12 +261,14 @@
 .pult-page .pult-tile-humidity {
   font-size: calc(29px / 1.5);
   letter-spacing: 0;
+  color: var(--cyan);
 }
 .pult-page .pult-tile-reading small {
   font-size: 14px;
   font-weight: 400;
   margin-left: 4px;
-  color: #a9bdd5;
+  color: inherit;
+  opacity: 0.75;
 }
 .pult-page .pult-tile-source {
   display: flex;
