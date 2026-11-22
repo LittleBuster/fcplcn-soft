@@ -1344,7 +1344,7 @@ button.controller-visual:disabled {
 .socket-live {
   display: flex;
   justify-content: center;
-  margin-bottom: 12px;
+  margin: 16px 0 12px;
 }
 .socket-input-state,
 .socket-binding-state {
