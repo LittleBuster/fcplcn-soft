@@ -215,6 +215,7 @@ async function checkPult() {
       'Reload retains login and pult route',
     );
     assert.deepEqual(errors, []);
+    await require('./pult-settings.browser.cjs').checkPultSettings({ page, context, base });
     await require('./pult-wake.browser.cjs').checkPultWake({ browser, base });
     console.log(
       'FCPLCn pult checks passed: deep link, room/type filters, confirmed commands, stale blocking, tablet layouts, wake recovery.',

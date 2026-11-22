@@ -135,6 +135,7 @@ export function App() {
           }
           onCommand={commands.command}
           openDevice={navigation.openDevice}
+          onPultSettingsSaved={data.acceptPultSettings}
         />
       ) : configuringId || selected ? (
         <DevicePage

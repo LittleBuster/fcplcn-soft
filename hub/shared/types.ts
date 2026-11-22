@@ -1,5 +1,6 @@
 /** @file Shared LAN hub contracts; operative control loops remain on each PLC. */
 import type { DeviceIllustrationId } from './device-art.js';
+import type { PultSettingsView } from './pult.js';
 import type {
   SecurityCommandFence,
   SecurityLeaseInput,
@@ -94,6 +95,7 @@ export interface HubSnapshot extends EngineSnapshot {
   now: string;
   scenes: ScenesSnapshot;
   houseSecurity?: HouseSecurityView;
+  pult?: PultSettingsView;
 }
 
 export interface HouseSecurityDeviceView {

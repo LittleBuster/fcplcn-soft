@@ -1,5 +1,6 @@
 /** @file Реальные каналы домашнего пульта и правила отображения подтверждённых состояний. */
 import type { ControllerView, DeviceView, HubSnapshot } from '../../../../shared/types.js';
+import type { PultTemperatureSource } from '../../../../shared/pult.js';
 import type { IconName } from '../../icons';
 import { deviceName, number, rows, text, type Row } from '../../model';
 
@@ -56,15 +57,21 @@ export function pultFresh(entry: PultEntry, connected: boolean): boolean {
   return connected && entry.device.online && entry.device.status === 'online' && entry.module.fresh;
 }
 
-/** Выбирает отдельное свежее показание воздуха; никаких расчётных средних температур. */
-export function pultAirReading(entries: PultEntry[], connected: boolean): PultEntry | undefined {
-  const fresh = entries.filter(
+/** Читает только закреплённый датчик; потеря его связи не подменяет источник температуры. */
+export function pultAirReading(
+  entries: PultEntry[],
+  connected: boolean,
+  source: PultTemperatureSource | null | undefined,
+): PultEntry | undefined {
+  if (!source) return undefined;
+  return entries.find(
     (entry) =>
       entry.kind === 'meteo' &&
+      entry.device.id === source.deviceId &&
+      text(entry.item.id) === source.itemId &&
       pultFresh(entry, connected) &&
       entry.module.data.enabled === true &&
       entry.item.available === true &&
       number(entry.item.temperatureC) !== null,
   );
-  return fresh.find((entry) => entry.item.sensorType === 'dht22') || fresh[0];
 }

@@ -1,0 +1,181 @@
+/* Выбор датчика пульта: те же крупные цели касания, отдельный явный черновик. */
+.pult-page .pult-summary-icon.pult-temperature-configure {
+  position: relative;
+  min-width: 48px;
+  min-height: 48px;
+  padding: 0;
+  border: 1px solid transparent;
+  color: #e6c78c;
+  cursor: pointer;
+}
+
+.pult-page .pult-temperature-configure:hover,
+.pult-page .pult-temperature-configure[aria-expanded='true'] {
+  background: #e6c78c1c;
+  border-color: #7c6a48;
+}
+
+.pult-page .pult-temperature-configure-badge {
+  position: absolute;
+  bottom: -2px;
+  right: -2px;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 7px;
+  background: #1b2a36;
+  color: #b5c8e1;
+}
+
+.pult-page .pult-temperature-configure .pult-temperature-configure-badge > .icon {
+  width: 15px;
+  height: 15px;
+}
+
+.pult-page .pult-temperature-unavailable {
+  color: #d2b483;
+}
+
+.pult-page .pult-temperature-settings {
+  margin: -8px 0 24px;
+  padding: 22px;
+  border: 1px solid #3c536c;
+  border-radius: 18px;
+  background: #182736;
+}
+
+.pult-page .pult-temperature-settings-heading {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  margin-bottom: 20px;
+}
+
+.pult-page .pult-temperature-settings-heading h3 {
+  font-size: 19px;
+  font-weight: 650;
+  margin-bottom: 5px;
+}
+
+.pult-page .pult-temperature-settings-heading p {
+  color: #a1b2c9;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.pult-page .pult-temperature-settings-icon {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  color: #e6c78c;
+  border-radius: 13px;
+  background: #e6c78c12;
+}
+
+.pult-page .pult-temperature-settings-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.pult-page .pult-temperature-settings-fields label {
+  display: grid;
+  gap: 9px;
+  color: #b8cae0;
+  font-size: 14px;
+}
+
+.pult-page .pult-temperature-settings-fields select {
+  width: 100%;
+  min-width: 0;
+  min-height: 48px;
+  padding: 11px 13px;
+  border: 1px solid #3c536c;
+  border-radius: 12px;
+  background: #101b29;
+  color: #dfebfb;
+  font-size: 16px;
+}
+
+.pult-page .pult-temperature-settings-fields select:disabled {
+  opacity: 0.55;
+}
+
+.pult-page .pult-temperature-settings-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.pult-page .pult-temperature-settings-actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 48px;
+  padding: 11px 18px;
+  border: 1px solid #3c536c;
+  border-radius: 12px;
+  background: #253a51;
+  color: #d9e9ff;
+  font-size: 14px;
+}
+
+.pult-page .pult-temperature-settings-actions .pult-temperature-save {
+  border-color: #6b8fbd;
+  background: #34557d;
+}
+
+.pult-page .pult-temperature-settings-actions .pult-temperature-cancel {
+  background: transparent;
+}
+
+.pult-page .pult-temperature-settings-actions .pult-temperature-reload {
+  margin-right: auto;
+}
+
+.pult-page .pult-temperature-settings-actions button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.pult-page .pult-temperature-settings-error,
+.pult-page .pult-temperature-settings-status {
+  margin-top: 16px;
+  font-size: 14px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.pult-page .pult-temperature-settings-error {
+  color: #ffb4be;
+}
+
+.pult-page .pult-temperature-settings-status {
+  color: #a1b2c9;
+}
+
+@media (max-width: 520px) {
+  .pult-page .pult-temperature-settings {
+    padding: 18px;
+  }
+  .pult-page .pult-temperature-settings-fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .pult-page .pult-temperature-settings-icon {
+    display: none;
+  }
+  .pult-page .pult-temperature-settings-actions button {
+    flex: 1;
+  }
+  .pult-page .pult-temperature-settings-actions .pult-temperature-reload {
+    flex-basis: 100%;
+    margin: 0;
+  }
+}

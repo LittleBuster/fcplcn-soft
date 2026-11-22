@@ -1,6 +1,7 @@
 /** @file Домашний пульт для планшета: крупные каналы оборудования без быстрых сценариев. */
 import { useState } from 'preact/hooks';
 import type { HubSnapshot } from '../../../shared/types.js';
+import type { PultSettingsView } from '../../../shared/pult.js';
 import type { CommandAction } from '../components/types';
 import { Icon } from '../icons';
 import { PultControlTile } from '../features/pult/control-tile';
@@ -21,6 +22,7 @@ interface PultPageProps {
   controlsBlocked: boolean;
   onCommand: CommandAction;
   openDevice: (id: string) => void;
+  onPultSettingsSaved: (value: PultSettingsView) => void;
 }
 
 /** Читает тот же снимок и использует тот же подтверждаемый командный путь, что панель PLC. */
@@ -31,6 +33,7 @@ export function PultPage({
   controlsBlocked,
   onCommand,
   openDevice,
+  onPultSettingsSaved,
 }: PultPageProps) {
   const [selectedRoom, setRoom] = useState('');
   const [filter, setFilter] = useState<PultFilter>('all');
@@ -44,7 +47,12 @@ export function PultPage({
 
   return (
     <div class="pult-page" data-pult>
-      <PultSummary snapshot={snapshot} entries={entries} connected={connected} />
+      <PultSummary
+        snapshot={snapshot}
+        entries={entries}
+        connected={connected}
+        onPultSettingsSaved={onPultSettingsSaved}
+      />
       <nav class="pult-rooms" aria-label="Помещения пульта">
         <button
           type="button"

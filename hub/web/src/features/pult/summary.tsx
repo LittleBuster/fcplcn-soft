@@ -1,8 +1,12 @@
 /** @file Компактная сводка пульта по фактической охране, одному датчику воздуха и связи. */
+import { useRef, useState } from 'preact/hooks';
 import type { HubSnapshot } from '../../../../shared/types.js';
+import type { PultSettingsView } from '../../../../shared/pult.js';
 import { Icon } from '../../icons';
 import { deviceName, temperature, text } from '../../model';
+import { canConfigure } from '../../portal';
 import { pultAirReading, type PultEntry } from './model';
+import { TemperatureSettings } from './temperature-settings';
 
 /** Приоритет тревоги выше отсутствующей связи; неподтверждённые модули не выглядят снятыми. */
 function securitySummary(snapshot: HubSnapshot, connected: boolean) {
@@ -49,65 +53,129 @@ export function PultSummary({
   snapshot,
   entries,
   connected,
+  onPultSettingsSaved,
 }: {
   snapshot: HubSnapshot;
   entries: PultEntry[];
   connected: boolean;
+  onPultSettingsSaved?: (value: PultSettingsView) => void;
 }) {
+  const [editing, setEditing] = useState(false);
+  const [accepted, setAccepted] = useState<PultSettingsView | null>(null);
+  const configureButton = useRef<HTMLButtonElement>(null);
   const security = securitySummary(snapshot, connected);
-  const air = pultAirReading(entries, connected);
+  const settings =
+    snapshot.pult && (!accepted || snapshot.pult.revision >= accepted.revision)
+      ? snapshot.pult
+      : accepted;
+  const source = settings?.temperatureSource;
+  const entry = source
+    ? entries.find(
+        (value) =>
+          value.kind === 'meteo' &&
+          value.device.id === source.deviceId &&
+          text(value.item.id) === source.itemId,
+      )
+    : undefined;
+  const air = pultAirReading(entries, connected, source);
+  const sourceLabel = source
+    ? `${entry ? deviceName(entry.device) : source.deviceName} · ${entry ? text(entry.item.name, source.itemName) : source.itemName}`
+    : 'Выберите датчик';
+  const closeSettings = () => {
+    setEditing(false);
+    configureButton.current?.focus({ preventScroll: true });
+  };
   const online = connected
     ? snapshot.devices.filter((device) => device.online && device.status === 'online').length
     : 0;
   return (
-    <div class="pult-summary">
-      <section
-        class={`pult-summary-card pult-summary-security${security.alarm ? ' pult-summary-alarm' : ''}`}
-        data-pult-security
-        aria-label="Состояние охраны"
-      >
-        <span class="pult-summary-icon">
-          <Icon name={security.alarm ? 'alarm' : 'shield'} />
-        </span>
-        <div>
-          <span class="pult-summary-label">Охрана дома</span>
-          <strong>{security.label}</strong>
-          <small>{security.detail}</small>
-        </div>
-      </section>
-      <section class="pult-summary-card pult-summary-climate" aria-label="Температура воздуха">
-        <span class="pult-summary-icon">
-          <Icon name="thermometer" />
-        </span>
-        <div>
-          <span class="pult-summary-label">Температура</span>
-          <strong>{air ? `${temperature(air.item.temperatureC)} °C` : '—'}</strong>
-          <small>
-            {air
-              ? `${deviceName(air.device)} · ${text(air.item.name, 'Датчик температуры')}`
-              : 'Ждём свежие показания'}
-          </small>
-        </div>
-      </section>
-      <section class="pult-summary-card pult-summary-network" aria-label="Связь с устройствами">
-        <span class="pult-summary-icon">
-          <Icon name="wifi" />
-        </span>
-        <div>
-          <span class="pult-summary-label">Устройства</span>
-          <strong>
-            {online}
-            <span class="pult-summary-total"> / {snapshot.devices.length}</span>
-          </strong>
-          <small>
-            {!connected
-              ? 'Управление недоступно'
-              : online === snapshot.devices.length && online > 0
-                ? 'Все устройства на связи'
-                : 'На связи с хабом'}
-          </small>
-        </div>
-      </section>
-    </div>
+    <>
+      <div class="pult-summary">
+        <section
+          class={`pult-summary-card pult-summary-security${security.alarm ? ' pult-summary-alarm' : ''}`}
+          data-pult-security
+          aria-label="Состояние охраны"
+        >
+          <span class="pult-summary-icon">
+            <Icon name={security.alarm ? 'alarm' : 'shield'} />
+          </span>
+          <div>
+            <span class="pult-summary-label">Охрана дома</span>
+            <strong>{security.label}</strong>
+            <small>{security.detail}</small>
+          </div>
+        </section>
+        <section
+          class="pult-summary-card pult-summary-climate"
+          aria-label="Температура воздуха"
+          data-pult-temperature
+        >
+          {canConfigure ? (
+            <button
+              ref={configureButton}
+              type="button"
+              class="pult-summary-icon pult-temperature-configure"
+              data-pult-temperature-configure
+              aria-label="Выбрать датчик температуры"
+              title="Выбрать датчик температуры"
+              aria-expanded={editing}
+              aria-controls="pult-temperature-settings"
+              onClick={() => setEditing(true)}
+            >
+              <Icon name="thermometer" />
+              <span class="pult-temperature-configure-badge">
+                <Icon name="settings" />
+              </span>
+            </button>
+          ) : (
+            <span class="pult-summary-icon">
+              <Icon name="thermometer" />
+            </span>
+          )}
+          <div>
+            <span class="pult-summary-label">Температура</span>
+            <strong data-pult-temperature-value>
+              {air ? `${temperature(air.item.temperatureC)} °C` : '—'}
+            </strong>
+            <small data-pult-temperature-source>{sourceLabel}</small>
+            {source && !air ? (
+              <small class="pult-temperature-unavailable" data-pult-temperature-status>
+                Нет свежих данных
+              </small>
+            ) : null}
+          </div>
+        </section>
+        <section class="pult-summary-card pult-summary-network" aria-label="Связь с устройствами">
+          <span class="pult-summary-icon">
+            <Icon name="wifi" />
+          </span>
+          <div>
+            <span class="pult-summary-label">Устройства</span>
+            <strong>
+              {online}
+              <span class="pult-summary-total"> / {snapshot.devices.length}</span>
+            </strong>
+            <small>
+              {!connected
+                ? 'Управление недоступно'
+                : online === snapshot.devices.length && online > 0
+                  ? 'Все устройства на связи'
+                  : 'На связи с хабом'}
+            </small>
+          </div>
+        </section>
+      </div>
+      {editing && canConfigure ? (
+        <TemperatureSettings
+          entries={entries}
+          settings={settings}
+          onSaved={(value) => {
+            setAccepted(value);
+            onPultSettingsSaved?.(value);
+          }}
+          onClose={closeSettings}
+        />
+      ) : null}
+    </>
   );
 }

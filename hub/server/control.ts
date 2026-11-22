@@ -9,6 +9,7 @@ import { validLabel } from './storage.js';
 import { isDeviceIllustrationId } from '../shared/device-art.js';
 import { HouseSecurity } from './house-security.js';
 import type { TelegramView } from '../shared/telegram.js';
+import { PultSettings } from './pult-settings.js';
 
 export interface TelegramAPI {
   snapshot(): TelegramView;
@@ -44,6 +45,7 @@ const only = (body: Record<string, unknown>, keys: string[]) =>
 /** Authority never queues offline actions or bypasses the PLC's own ownership and deadline checks. */
 export class HubControl {
   readonly houseSecurity?: HouseSecurity;
+  private readonly pult: PultSettings;
   private firmware?: {
     start(deviceId: string, body: Record<string, unknown>): DispatchResult;
     status(jobId: string): DispatchResult;
@@ -54,6 +56,7 @@ export class HubControl {
   private readonly uploads = new Map<string, { bootId: string; until: number }>();
   private readonly timer: ReturnType<typeof setInterval>;
   constructor(private readonly options: HubControlOptions) {
+    this.pult = new PultSettings(options.dataDir);
     this.timer = setInterval(() => this.refresh(), 1000).unref();
     this.houseSecurity =
       options.houseSecurity ||
@@ -129,6 +132,7 @@ export class HubControl {
       mode: this.options.mode,
       now: new Date().toISOString(),
       scenes: this.scenes(),
+      pult: this.pult.snapshot(),
       ...(this.houseSecurity ? { houseSecurity: this.houseSecurity.snapshot() } : {}),
     };
   }
@@ -278,6 +282,10 @@ export class HubControl {
     if (options.signal?.aborted || (options.remainingMs !== undefined && options.remainingMs < 250))
       throw fail('Срок запроса истёк до отправки', 408);
     if (method === 'GET' && path === '/overview') return { status: 200, data: this.overview() };
+    if (method === 'GET' && path === '/pult/settings')
+      return { status: 200, data: this.pult.snapshot() };
+    if (method === 'PUT' && path === '/pult/settings')
+      return { status: 200, data: this.pult.update(body, this.snapshot().devices) };
     if (method === 'GET' && path === '/scenes') return { status: 200, data: this.scenes() };
     const key = /^\/devices\/(fcplcn-[a-zA-Z0-9_-]{1,96})\/security\/key$/.exec(path);
     if (key && method === 'POST') {

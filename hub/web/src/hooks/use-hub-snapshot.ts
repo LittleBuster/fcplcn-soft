@@ -1,6 +1,7 @@
 /** @file Последний снимок хаба и отменяемый опрос без параллельных запросов. */
 import { useState, useRef, useEffect } from 'preact/hooks';
 import type { HubSnapshot } from '../../../shared/types.js';
+import type { PultSettingsView } from '../../../shared/pult.js';
 import { api, ApiError } from '../api';
 import type { HubSession } from './use-hub-session';
 
@@ -72,11 +73,17 @@ export function useHubSnapshot(auth: HubSession, onUnauthorized: () => void) {
         document.hidden
       )
         return;
-      setSnapshot((current) =>
-        sceneGeneration === sceneVersion.current
-          ? result
-          : { ...result, scenes: current?.scenes || result.scenes },
-      );
+      setSnapshot((current) => ({
+        ...result,
+        scenes:
+          sceneGeneration === sceneVersion.current
+            ? result.scenes
+            : current?.scenes || result.scenes,
+        pult:
+          current?.pult && (!result.pult || current.pult.revision > result.pult.revision)
+            ? current.pult
+            : result.pult,
+      }));
       setLoadError('');
       setConnectionFresh(true);
     } catch (error) {
@@ -145,7 +152,25 @@ export function useHubSnapshot(auth: HubSession, onUnauthorized: () => void) {
     };
   }, [session?.authenticated]);
 
-  return { snapshot, setSnapshot, loadError, refreshing, connectionFresh, sceneVersion, refresh };
+  /** Старый опрос не заменяет уже подтверждённый выбор датчика. */
+  function acceptPultSettings(value: PultSettingsView) {
+    setSnapshot((current) =>
+      current && (!current.pult || value.revision >= current.pult.revision)
+        ? { ...current, pult: value }
+        : current,
+    );
+  }
+
+  return {
+    snapshot,
+    setSnapshot,
+    loadError,
+    refreshing,
+    connectionFresh,
+    sceneVersion,
+    refresh,
+    acceptPultSettings,
+  };
 }
 
 export type HubSnapshotState = ReturnType<typeof useHubSnapshot>;

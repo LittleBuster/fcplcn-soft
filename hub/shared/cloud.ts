@@ -84,7 +84,7 @@ export const cloudObject = (value: unknown): value is Record<string, unknown> =>
 export function cloudRoute(method: string, path: string): boolean {
   if (method === 'GET')
     return (
-      ['/overview', '/scenes', '/telegram'].includes(path) ||
+      ['/overview', '/scenes', '/telegram', '/pult/settings'].includes(path) ||
       /^\/firmware\/jobs\/[a-zA-Z0-9_-]{1,96}$/.test(path) ||
       /^\/devices\/fcplcn-[a-zA-Z0-9_-]{1,96}\/service\/(?:config(?:\/backup)?|status|board-profiles|hardware|controllers(?:\/(?:sockets|lights|meteo|thermostats|security))?|firmware)$/.test(
         path,
@@ -99,6 +99,7 @@ export function cloudRoute(method: string, path: string): boolean {
         path,
       )
     );
+  if (method === 'PUT' && path === '/pult/settings') return true;
   return method === 'PATCH'
     ? /^\/devices\/fcplcn-[a-zA-Z0-9_-]{1,96}$/.test(path)
     : (method === 'PUT' || method === 'DELETE') && /^\/scenes\/[a-zA-Z0-9_-]{1,64}$/.test(path);
