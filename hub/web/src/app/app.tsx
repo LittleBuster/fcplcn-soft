@@ -7,6 +7,7 @@ import { useHubCommands } from '../hooks/use-hub-commands';
 import { useHubScenes } from '../hooks/use-hub-scenes';
 import { usePortalHeight } from '../hooks/use-portal-height';
 import { DevicesPage } from '../pages/devices';
+import { PultPage } from '../pages/pult';
 import { ScenesPanel } from '../scenes';
 import { DevicePage } from '../pages/device';
 import { TelegramPanel } from '../telegram';
@@ -20,7 +21,7 @@ import { HubLayout } from './layout';
 import { PageHeading } from './page-heading';
 import { ActionNotice, ConnectionNotice } from './notices';
 import { Icon } from '../icons';
-import { portal } from '../portal';
+import { canControl, portal } from '../portal';
 
 /** Соединяет страницы и хуки; автоматизация и MQTT выполняются независимо от браузера. */
 export function App() {
@@ -50,7 +51,7 @@ export function App() {
   const { view, selectedId, configuringId, navigate } = navigation;
   const devices = snapshot?.devices || [];
   const selected = devices.find((device) => device.id === selectedId);
-  const brokerConnected = Boolean(snapshot?.broker.connected && !loadError);
+  const brokerConnected = Boolean(snapshot?.broker.connected && !loadError && data.connectionFresh);
   const clearNotice = () => notices.setNotice(null);
 
   if (!session) return <StartupPage initialError={initialError} loadSession={loadSession} />;
@@ -124,6 +125,17 @@ export function App() {
           <Icon name="refresh" />
           <p>Ожидаем данные хаба…</p>
         </div>
+      ) : view === 'pult' ? (
+        <PultPage
+          snapshot={snapshot}
+          pending={commands.pending}
+          connected={brokerConnected}
+          controlsBlocked={
+            !canControl || commands.sceneStarting || Boolean(snapshot.scenes.activeRun)
+          }
+          onCommand={commands.command}
+          openDevice={navigation.openDevice}
+        />
       ) : configuringId || selected ? (
         <DevicePage
           snapshot={snapshot}

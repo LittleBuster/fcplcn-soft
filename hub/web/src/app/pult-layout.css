@@ -1,0 +1,187 @@
+/* Оболочка планшетного пульта отделена от административной навигации. */
+.app-shell.pult-shell {
+  grid-template-columns: minmax(0, 1fr);
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+.pult-shell > .sidebar,
+.pult-shell > .workspace > .topbar,
+.pult-shell .page-footer {
+  display: none;
+}
+
+.pult-shell .main-content {
+  --pult-padding-x: 30px;
+  --pult-padding-top: 24px;
+  --pult-padding-bottom: 30px;
+  width: 100%;
+  max-width: 1560px;
+  margin: 0 auto;
+  padding-top: max(var(--pult-padding-top), env(safe-area-inset-top));
+  padding-right: max(var(--pult-padding-x), env(safe-area-inset-right));
+  padding-bottom: max(var(--pult-padding-bottom), env(safe-area-inset-bottom));
+  padding-left: max(var(--pult-padding-x), env(safe-area-inset-left));
+}
+
+.pult-shell .demo-banner {
+  margin: 0 0 18px;
+  padding: 9px 14px;
+  min-height: 36px;
+  font-size: 12px;
+}
+
+.pult-heading {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  margin-bottom: 24px;
+}
+
+.pult-heading-identity {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.pult-heading-icon {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  border: 1px solid #36577b;
+  border-radius: 17px;
+  color: #aacbff;
+  background: linear-gradient(145deg, #213955, #172535);
+}
+
+.pult-heading-icon .icon {
+  width: 31px;
+  height: 31px;
+}
+
+.pult-heading-identity p {
+  color: #a1b2c9;
+  font-size: 13px;
+  margin-bottom: 2px;
+}
+
+.pult-heading h1 {
+  font-size: 34px;
+  line-height: 1.1;
+  letter-spacing: -1px;
+}
+
+.pult-heading h1 > span {
+  color: #94bcff;
+}
+
+.pult-clock {
+  display: grid;
+  justify-items: center;
+  margin: 0 auto;
+  gap: 2px;
+}
+
+.pult-clock time {
+  font-size: 44px;
+  line-height: 1.05;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -1.6px;
+}
+
+.pult-clock > span {
+  color: #a1b2c9;
+  font-size: 13px;
+}
+
+.pult-heading-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.pult-header-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 52px;
+  min-height: 52px;
+  gap: 9px;
+  padding: 12px 15px;
+  border: 1px solid #34465e;
+  border-radius: 14px;
+  background: #1b2738;
+  color: #cbd9ec;
+  font-size: 15px;
+  font-weight: 550;
+}
+
+.pult-header-button:hover {
+  background: #25364e;
+}
+.pult-header-button:disabled {
+  opacity: 0.55;
+}
+
+@media (max-width: 850px) {
+  .pult-shell .main-content {
+    --pult-padding-x: 24px;
+    --pult-padding-top: 20px;
+    --pult-padding-bottom: 28px;
+  }
+  .pult-heading {
+    gap: 16px;
+  }
+  .pult-heading h1 {
+    font-size: 31px;
+  }
+  .pult-clock time {
+    font-size: 39px;
+  }
+  .pult-heading-actions {
+    gap: 8px;
+  }
+  .pult-heading-actions .pult-header-button > span {
+    display: none;
+  }
+}
+
+@media (max-width: 520px) {
+  .pult-shell .main-content {
+    --pult-padding-x: 16px;
+    --pult-padding-top: 16px;
+    --pult-padding-bottom: 16px;
+  }
+  .pult-heading {
+    flex-wrap: wrap;
+    gap: 16px 12px;
+  }
+  .pult-heading-icon {
+    display: none;
+  }
+  .pult-heading-identity {
+    flex: 1;
+  }
+  .pult-heading h1 {
+    font-size: 30px;
+  }
+  .pult-heading-actions {
+    order: 2;
+  }
+  .pult-clock {
+    order: 3;
+    width: 100%;
+    align-items: center;
+    grid-template-columns: auto 1fr;
+    gap: 12px;
+    justify-items: start;
+  }
+  .pult-clock time {
+    font-size: 32px;
+  }
+  .pult-clock > span {
+    font-size: 12px;
+  }
+}

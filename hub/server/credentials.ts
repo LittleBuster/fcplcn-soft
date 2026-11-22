@@ -1,5 +1,5 @@
 /** @file Durable local hub account; only salted password hashes are written to private storage. */
-import { randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
+import { createHash, randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
 import {
   chmodSync,
   closeSync,
@@ -81,6 +81,11 @@ export class CredentialStore {
   /** @brief Return account information without password hashes, salts or credentials. */
   snapshot(): { username: string } {
     return { username: this.current.username };
+  }
+
+  /** Bind private durable sessions to the exact saved account without exposing its password hash. */
+  sessionBinding(): string {
+    return createHash('sha256').update(JSON.stringify(this.current)).digest('hex');
   }
 
   /** @brief Derive a candidate hash even for an incorrect login to keep comparison timing uniform. */

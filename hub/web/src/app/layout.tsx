@@ -5,6 +5,7 @@ import type { View } from './types';
 import { Icon } from '../icons';
 import { time } from '../model';
 import { canConfigure, portal } from '../portal';
+import './pult-layout.css';
 
 interface HubLayoutProps {
   session: SessionView;
@@ -30,7 +31,9 @@ export function HubLayout({
 }: HubLayoutProps) {
   const devices = snapshot?.devices || [];
   return (
-    <div class={`app-shell${portal ? ' cloud-portal-shell' : ''}`}>
+    <div
+      class={`app-shell${portal ? ' cloud-portal-shell' : ''}${view === 'pult' ? ' pult-shell' : ''}`}
+    >
       <aside class="sidebar">
         <a
           class="brand"
@@ -51,6 +54,14 @@ export function HubLayout({
         <div class="sidebar-divider" />
         <p class="nav-label">Управление домом</p>
         <nav aria-label="Главное меню">
+          <button
+            class={view === 'pult' ? 'nav-item active' : 'nav-item'}
+            onClick={() => navigate('pult')}
+            data-nav="pult"
+          >
+            <Icon name="tablet" />
+            Пульт
+          </button>
           <button
             class={view === 'overview' ? 'nav-item active' : 'nav-item'}
             onClick={() => navigate('overview')}
@@ -140,21 +151,23 @@ export function HubLayout({
             <span>Хаб</span>
             <span class="breadcrumb-slash">/</span>
             <strong>
-              {selected
-                ? 'Контроллер'
-                : view === 'activity'
-                  ? 'Журнал'
-                  : view === 'devices'
-                    ? 'Контроллеры'
-                    : view === 'scenes'
-                      ? 'Сценарии'
-                      : view === 'telegram'
-                        ? 'Telegram'
-                        : view === 'cloud'
-                          ? 'Облако'
-                          : view === 'account'
-                            ? 'Учётная запись'
-                            : 'Обзор'}
+              {view === 'pult'
+                ? 'Пульт'
+                : selected
+                  ? 'Контроллер'
+                  : view === 'activity'
+                    ? 'Журнал'
+                    : view === 'devices'
+                      ? 'Контроллеры'
+                      : view === 'scenes'
+                        ? 'Сценарии'
+                        : view === 'telegram'
+                          ? 'Telegram'
+                          : view === 'cloud'
+                            ? 'Облако'
+                            : view === 'account'
+                              ? 'Учётная запись'
+                              : 'Обзор'}
             </strong>
           </div>
           <div class="topbar-right">

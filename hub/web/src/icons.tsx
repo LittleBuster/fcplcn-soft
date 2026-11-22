@@ -3,6 +3,7 @@
 import type { ComponentChildren } from 'preact';
 
 export type IconName =
+  | 'tablet'
   | 'home'
   | 'away'
   | 'prepare'
@@ -41,6 +42,14 @@ export type IconName =
   | 'key';
 
 const drawings: Record<IconName, ComponentChildren> = {
+  tablet: (
+    <>
+      <rect x="2" y="4" width="20" height="16" rx="3" />
+      <path d="M17 4v16" />
+      <circle cx="19.5" cy="12" r=".6" />
+      <path d="M6 8h7M6 12h3m-3 4h7m-1-4h1" />
+    </>
+  ),
   key: (
     <>
       <circle cx="8" cy="8" r="5" />

@@ -254,7 +254,41 @@ async function checkManagement({ page, context, base, artifacts }) {
   ]) {
     await open(kind);
     if (kind === 'security') {
-      // A previous house scene may arm a newly configured PLC during reconciliation.
+      // Earlier scene checks can leave asynchronous whole-house security work.
+      // Wait only for in-flight work, not for matching the whole-house intent:
+      // configuring an already-online module never implicitly arms it. A legitimate
+      // unknown/local-override status must still permit this explicit disarm.
+      await expect
+        .poll(
+          async () => {
+            const reply = await context.request.get(`${base}/api/v1/overview`);
+            assert.equal(reply.status(), 200, await reply.text());
+            const snapshot = await reply.json();
+            const house = snapshot.houseSecurity;
+            const guard = house?.devices.find((entry) => entry.deviceId === deviceId);
+            const device = snapshot.devices.find((entry) => entry.id === deviceId);
+            return {
+              sceneIdle: !snapshot.scenes.activeRun,
+              houseIdle: house?.busy === false,
+              guardOnline: guard?.online === true,
+              configured: guard?.configured === true && guard?.enabled === true,
+              moduleFresh: device?.controllers.security?.fresh === true,
+              commandSettled: Boolean(guard && guard.status !== 'pending'),
+            };
+          },
+          {
+            message: 'Security work is idle and PLC data is fresh before local disarming',
+            timeout: 10000,
+          },
+        )
+        .toEqual({
+          sceneIdle: true,
+          houseIdle: true,
+          guardOnline: true,
+          configured: true,
+          moduleFresh: true,
+          commandSettled: true,
+        });
       // Explicitly disarm through the common coordinator before removing its zones.
       const disarm = await context.request.post(`${base}/api/v1/devices/${deviceId}/commands`, {
         data: { controller: 'security', itemId: 'alarm', value: false },

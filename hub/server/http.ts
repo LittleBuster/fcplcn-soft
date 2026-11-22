@@ -132,8 +132,8 @@ export function createHubServer({
   onControlReady?.(controls);
   const directory = resolve(webDir);
   const plcDirectory = resolve(plcDir || resolve(directory, '../plc'));
-  const session = (request: IncomingMessage) => ({
-    authenticated: sessions.authenticated(request),
+  const session = (request: IncomingMessage, response: ServerResponse) => ({
+    authenticated: sessions.authenticated(request, response),
     requiresLogin: sessions.required,
     product,
     mode: config.mode,
@@ -163,7 +163,7 @@ export function createHubServer({
         return;
       }
       if (method === 'GET' && path === '/api/v1/session') {
-        reply(response, 200, session(request));
+        reply(response, 200, session(request, response));
         return;
       }
       if (method === 'POST' && path === '/api/v1/auth/login') {
@@ -173,7 +173,7 @@ export function createHubServer({
           response,
           status,
           status === 200
-            ? session(requestAfterLogin(request, response))
+            ? session(requestAfterLogin(request, response), response)
             : {
                 error:
                   status === 429
@@ -209,7 +209,7 @@ export function createHubServer({
       }
       const plcFrame = /^\/plc\/(fcplcn-[a-zA-Z0-9_-]{1,96})\/?$/.exec(path);
       if (method === 'GET' && plcFrame) {
-        if (!sessions.authenticated(request)) {
+        if (!sessions.authenticated(request, response)) {
           reply(response, 401, { error: 'Войдите в хаб' });
           return;
         }
@@ -235,7 +235,7 @@ export function createHubServer({
         return;
       }
       if (path.startsWith('/api/')) {
-        if (!sessions.authenticated(request)) {
+        if (!sessions.authenticated(request, response)) {
           reply(response, 401, { error: 'Войдите в хаб' });
           return;
         }

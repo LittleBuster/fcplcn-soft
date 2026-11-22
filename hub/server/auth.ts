@@ -1,14 +1,25 @@
-/** @file Bounded local administrator sessions and login throttling. */
+/** @file Durable local administrator sessions without a server expiry, plus login throttling. */
 import { createHash, randomBytes } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
+import { dirname } from 'node:path';
 import { CredentialStore, validPassword, validUsername } from './credentials.js';
+import { maximumSessions, SessionStore } from './session-store.js';
 
 const cookieName = 'fcplcn_hub_session';
-const lifetimeMs = 12 * 60 * 60 * 1000;
+// Browsers cap cookie lifetimes; active panels renew daily without expiring the server session.
+const cookieLifetimeSeconds = 400 * 24 * 60 * 60;
+const cookieRenewalMs = 24 * 60 * 60 * 1000;
 export class Sessions {
-  private readonly sessions = new Map<string, number>();
+  private sessions: Set<string>;
+  private readonly store: SessionStore;
+  private binding: string;
+  private readonly renewAfter = new Map<string, number>();
   private readonly failures = new Map<string, { until: number; attempts: number }>();
-  constructor(private readonly credentials: CredentialStore) {}
+  constructor(private readonly credentials: CredentialStore) {
+    this.store = new SessionStore(dirname(credentials.path));
+    this.binding = credentials.sessionBinding();
+    this.sessions = this.store.load(this.binding);
+  }
   get required(): boolean {
     return true;
   }
@@ -17,21 +28,39 @@ export class Sessions {
     const raw = request.headers.cookie
       ?.split(';')
       .find((part) => part.trim().startsWith(`${cookieName}=`));
-    return raw ? raw.trim().slice(cookieName.length + 1) : '';
+    const token = raw ? raw.trim().slice(cookieName.length + 1) : '';
+    return /^[a-f0-9]{64}$/.test(token) ? token : '';
   }
   private key(token: string): string {
     return createHash('sha256').update(token).digest('hex');
   }
 
-  authenticated(request: IncomingMessage): boolean {
-    const key = this.key(this.token(request));
-    const expires = this.sessions.get(key);
-    if (!expires) return false;
-    if (expires <= Date.now()) {
-      this.sessions.delete(key);
-      return false;
-    }
+  authenticated(request: IncomingMessage, response?: ServerResponse): boolean {
+    this.syncCredentials();
+    const token = this.token(request);
+    if (!token) return false;
+    const key = this.key(token);
+    if (!this.sessions.has(key)) return false;
+    if (response && Date.now() >= (this.renewAfter.get(key) || 0)) this.cookie(response, token);
     return true;
+  }
+
+  /** A committed account update revokes all prior hashes even if session-file cleanup fails. */
+  private syncCredentials(): void {
+    const binding = this.credentials.sessionBinding();
+    if (binding === this.binding) return;
+    this.binding = binding;
+    this.sessions.clear();
+    this.renewAfter.clear();
+    this.store.save(binding, this.sessions, () => {});
+  }
+
+  private cookie(response: ServerResponse, token: string): void {
+    response.setHeader(
+      'Set-Cookie',
+      `${cookieName}=${token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${cookieLifetimeSeconds}`,
+    );
+    this.renewAfter.set(this.key(token), Date.now() + cookieRenewalMs);
   }
 
   /** Return 429 before an expensive password derivation after repeated failures. */
@@ -62,14 +91,16 @@ export class Sessions {
       return 401;
     }
     this.failures.delete(address);
-    for (const [key, expires] of this.sessions) if (expires <= now) this.sessions.delete(key);
-    if (this.sessions.size >= 128) this.sessions.delete(this.sessions.keys().next().value!);
+    this.syncCredentials();
+    const next = new Set(this.sessions);
+    if (next.size >= maximumSessions) next.delete(next.keys().next().value!);
     const token = randomBytes(32).toString('hex');
-    this.sessions.set(this.key(token), now + lifetimeMs);
-    response.setHeader(
-      'Set-Cookie',
-      `${cookieName}=${token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${lifetimeMs / 1000}`,
-    );
+    next.add(this.key(token));
+    this.store.save(this.binding, next, () => {
+      this.sessions = next;
+      for (const key of this.renewAfter.keys()) if (!next.has(key)) this.renewAfter.delete(key);
+    });
+    this.cookie(response, token);
     return 200;
   }
 
@@ -110,11 +141,20 @@ export class Sessions {
     }
     const revision = this.credentials.revision;
     try {
-      this.credentials.update(data.username, data.newPassword as string | undefined);
+      // Even saving the unchanged login explicitly signs out existing panels. A fresh salt
+      // makes that revocation durable without changing the credential file format.
+      const password =
+        data.newPassword === undefined && data.username === this.credentials.snapshot().username
+          ? data.currentPassword
+          : (data.newPassword as string | undefined);
+      this.credentials.update(data.username, password);
     } finally {
       if (this.credentials.revision !== revision) {
-        this.sessions.clear();
-        this.logout(request, response);
+        try {
+          this.syncCredentials();
+        } finally {
+          this.clearCookie(response);
+        }
       }
     }
     this.failures.delete(address);
@@ -122,7 +162,17 @@ export class Sessions {
   }
 
   logout(request: IncomingMessage, response: ServerResponse): void {
-    this.sessions.delete(this.key(this.token(request)));
+    const key = this.key(this.token(request));
+    const next = new Set(this.sessions);
+    next.delete(key);
+    this.store.save(this.binding, next, () => {
+      this.sessions = next;
+      this.renewAfter.delete(key);
+    });
+    this.clearCookie(response);
+  }
+
+  private clearCookie(response: ServerResponse): void {
     response.setHeader(
       'Set-Cookie',
       `${cookieName}=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0`,

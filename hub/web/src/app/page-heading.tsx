@@ -3,6 +3,7 @@ import type { HubSnapshot, DeviceView } from '../../../shared/types.js';
 import type { HubNavigation } from '../hooks/use-hub-navigation';
 import { Icon } from '../icons';
 import { deviceName } from '../model';
+import { PultHeading } from './pult-heading';
 
 interface PageHeadingProps {
   snapshot: HubSnapshot | null;
@@ -21,6 +22,15 @@ export function PageHeading({
   refresh,
 }: PageHeadingProps) {
   const { view, configuringId, setSelectedId, setConfiguringId } = navigation;
+  if (view === 'pult')
+    return (
+      <PultHeading
+        snapshot={snapshot}
+        refreshing={refreshing}
+        refresh={refresh}
+        onBack={() => navigation.navigate('overview')}
+      />
+    );
   const title = configuringId
     ? 'Настройка PLC'
     : selected

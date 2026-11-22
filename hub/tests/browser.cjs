@@ -255,6 +255,7 @@ async function run() {
     assert.deepEqual(external, [], 'No fonts, images, scripts or telemetry from outside the hub');
     assert.deepEqual(errors, []);
     await require('./house-security.browser.cjs').checkLocalHouseSecurity();
+    await require('./pult.browser.cjs').checkPult();
     console.log(
       'FCPLCn hub browser checks passed: default admin/empty login, account editing and empty-password restore, login/logout, PLC discovery, confirmed control, native SVGs, persisted names, journal, loss of connection and responsive layout.',
     );
