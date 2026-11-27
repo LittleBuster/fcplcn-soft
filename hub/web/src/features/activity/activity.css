@@ -1,0 +1,194 @@
+.activity-sections {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 18px;
+}
+
+.activity-sections button {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.activity-sections button:hover {
+  background: var(--panel-hover);
+  color: var(--text);
+}
+
+.activity-sections button[aria-pressed='true'] {
+  border-color: #557aa4;
+  background: #223954;
+  color: #d9e8ff;
+}
+
+.activity-sections .icon {
+  width: 17px;
+  height: 17px;
+}
+
+.activity-records {
+  display: grid;
+  gap: 10px;
+}
+
+.activity-record {
+  min-width: 0;
+  padding: 15px 18px;
+}
+
+.activity-record-heading {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 5px 12px;
+}
+
+.activity-record-heading h2 {
+  min-width: 0;
+  font-size: 15px;
+  overflow-wrap: anywhere;
+}
+
+.activity-status {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.outage-restored,
+.scene-status-completed {
+  color: var(--green);
+}
+
+.outage-open,
+.scene-status-failed,
+.scene-status-interrupted,
+.activity-error {
+  color: var(--red);
+}
+
+.scene-status-partial {
+  color: var(--amber);
+}
+
+.scene-status-running {
+  color: var(--accent);
+}
+
+.activity-error,
+.activity-outage-reason {
+  margin-top: 5px;
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.activity-outage-reason {
+  color: var(--muted);
+}
+
+.activity-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 24px;
+  margin: 12px 0 0;
+  min-width: 0;
+}
+
+.activity-facts > div {
+  min-width: 0;
+}
+
+.activity-facts dt {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.activity-facts dd {
+  margin: 3px 0 0;
+  color: var(--text);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+  font-variant-numeric: tabular-nums;
+}
+
+.activity-scene-details {
+  margin-top: 12px;
+}
+
+.activity-scene-details > summary {
+  cursor: pointer;
+  width: fit-content;
+  min-height: 32px;
+  padding: 7px 0;
+  color: var(--accent);
+  font-size: 12px;
+}
+
+.activity-scene-details .scene-result-list {
+  margin-top: 5px;
+  padding-inline: 10px;
+}
+
+.activity-scene-details .scene-result-status {
+  max-width: 35%;
+  text-align: right;
+}
+
+.command-log-full .command-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: start;
+}
+
+.command-log-full .command-copy strong {
+  font-size: 14px;
+}
+
+.command-log-full .command-copy p,
+.command-log-full .command-result > span {
+  font-size: 12px;
+}
+
+.command-log-full .command-result {
+  max-width: none;
+}
+
+.command-log-full .command-facts {
+  margin-top: 7px;
+  column-gap: 16px;
+}
+
+.command-log-full .command-facts time {
+  margin: 0;
+  color: inherit;
+  font-size: inherit;
+}
+
+@media (max-width: 640px) {
+  .activity-sections button {
+    padding-inline: 9px;
+  }
+
+  .activity-record {
+    padding: 12px;
+  }
+
+  .command-log-full .command-row {
+    grid-template-columns: auto minmax(0, 1fr);
+    row-gap: 6px;
+  }
+
+  .command-log-full .command-result {
+    grid-column: 2;
+    text-align: left;
+  }
+}

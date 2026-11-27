@@ -15,6 +15,14 @@ struct Transfer {
     int timeout;
 };
 
+enum class GpioOperation { Level, Direction, Pull };
+
+struct GpioCall {
+    GpioOperation operation;
+    int pin;
+    int value;
+};
+
 void set_present(int bus, std::uint8_t address, bool present);
 void input_levels(int bus, std::uint8_t address, std::uint16_t levels);
 void fail_next_read(int bus, std::uint8_t address);
@@ -37,6 +45,7 @@ void ignore_next_nonzero_latch_write(int bus, std::uint8_t address);
 // Physical register values, independent of IOCON.BANK/SEQOP wire mapping.
 std::uint16_t register_pair(int bus, std::uint8_t address, std::uint8_t reg);
 std::vector<Transfer> transfers();
+const std::vector<GpioCall>& gpio_calls();
 void advance(std::uint32_t ms);
 void elapse_next_read_ms(std::uint32_t ms);
 unsigned worker_creations();

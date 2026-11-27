@@ -30,7 +30,7 @@ class FakeScenes {
   snapshot(): ScenesSnapshot {
     return { definitions: this.definitions, activeRun: this.activeRun, runs: [] };
   }
-  run(id: string, trigger = 'manual'): SceneRun {
+  async startRun(id: string, trigger = 'manual'): Promise<SceneRun> {
     if (this.fail) throw this.fail;
     this.calls.push({ id, trigger });
     return {
@@ -93,6 +93,20 @@ test('scheduler skips startup minute, nonselected weekdays and disabled schedule
   assert.equal(f.scenes.calls.length, 0);
 });
 
+test('resuming a paused weekly schedule only applies to upcoming slots', (t) => {
+  const f = fixture(t);
+  const weekly = schedule('15:00', 'UTC', [5, 6]);
+  f.scenes.definitions = [definition('evening', { ...weekly, paused: true })];
+  f.scheduler.start();
+  f.at('2026-11-20T15:00:00Z');
+  f.scenes.definitions[0].schedule!.paused = false;
+  f.at('2026-11-20T15:00:04Z');
+  assert.deepEqual(f.scenes.calls, []);
+  f.at('2026-11-21T14:59:00Z');
+  f.at('2026-11-21T15:00:00Z');
+  assert.deepEqual(f.scenes.calls, [{ id: 'evening', trigger: 'schedule' }]);
+});
+
 test('scheduler never catches up after a paused hub, clock jump or late first sample', (t) => {
   const f = fixture(t);
   f.scenes.definitions[0].schedule = schedule('15:03');
@@ -152,8 +166,8 @@ test('durable claims are committed before dispatch and survive restart plus back
   const directory = mkdtempSync(join(tmpdir(), 'fcplcn-scheduler-'));
   t.after(() => rmSync(directory, { recursive: true, force: true }));
   const f = fixture(t, { directory });
-  const original = f.scenes.run.bind(f.scenes);
-  f.scenes.run = (id, trigger) => {
+  const original = f.scenes.startRun.bind(f.scenes);
+  f.scenes.startRun = async (id, trigger) => {
     const stored = JSON.parse(readFileSync(join(directory, 'scheduler.json'), 'utf8'));
     assert.equal(stored.claims.length, 1, 'The duplicate barrier exists before actuation');
     return original(id, trigger);
@@ -225,11 +239,12 @@ test('corrupt stored claims fail closed until repaired, without stale execution'
   assert.equal(f.scenes.calls.length, 1);
 });
 
-test('a rejected dispatch is recorded once and stop cancels future scheduling', (t) => {
+test('a rejected dispatch is recorded once and stop cancels future scheduling', async (t) => {
   const f = fixture(t);
   f.scenes.fail = new Error('Сценарий занят');
   f.scheduler.start();
   f.at('2026-11-20T15:00:00Z');
+  await Promise.resolve();
   assert.equal(f.scheduler.snapshot().events[0].status, 'error');
   assert.match(f.scheduler.snapshot().events[0].reason || '', /занят/);
   f.scenes.fail = null;

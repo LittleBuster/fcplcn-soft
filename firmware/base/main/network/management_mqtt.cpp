@@ -5,7 +5,7 @@
 #include "network/management_mqtt.h"
 #include "config/model.h"
 #include "config/settings_json.h"
-#include "util/operation_context.h"
+#include "platform/operation_context.h"
 #include <cmath>
 #include <memory>
 

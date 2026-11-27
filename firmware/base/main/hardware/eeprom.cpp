@@ -4,15 +4,15 @@
  * @details Microchip DS20001754R sections 6-8: 128-byte physical pages, 16-bit
  * addresses, 5-ms maximum programming cycle and write-direction ACK polling.
  */
-#include "hardware/eeprom.h"
+#include "eeprom.h"
 
 #include <algorithm>
 #include <array>
 #include <cstring>
 #include <mutex>
 
-#include "hardware/board_profile.h"
-#include "hardware/hardware_io.h"
+#include "board_profile.h"
+#include "hardware_io.h"
 #include "esp_rom_sys.h"
 #include "esp_timer.h"
 

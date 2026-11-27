@@ -1,6 +1,7 @@
 /** @file Shared LAN hub contracts; operative control loops remain on each PLC. */
 import type { DeviceIllustrationId } from './device-art.js';
 import type { PultSettingsView } from './pult.js';
+import type { ActivityActor, DeviceOutage, EngineActivityHooks } from './activity.js';
 import type {
   SecurityCommandFence,
   SecurityLeaseInput,
@@ -11,7 +12,15 @@ export type {
   SecurityLeaseInput,
   SecurityTouchEvent,
 } from './security-sync.js';
-export const controllerKinds = ['sockets', 'lights', 'meteo', 'thermostats', 'security'] as const;
+export const controllerKinds = [
+  'sockets',
+  'lights',
+  'meteo',
+  'thermostats',
+  'security',
+  'tanks',
+  'irrigation',
+] as const;
 export type ControllerKind = (typeof controllerKinds)[number];
 export type WritableControllerKind = Exclude<ControllerKind, 'meteo'>;
 
@@ -73,6 +82,9 @@ export interface ManagementReply {
 export interface CommandView {
   id: string;
   deviceId: string;
+  deviceName?: string;
+  actor?: ActivityActor;
+  sceneRunId?: string;
   controller: WritableControllerKind;
   itemId: string;
   value: boolean;
@@ -87,6 +99,7 @@ export interface EngineSnapshot {
   broker: { connected: boolean; error: string | null };
   devices: DeviceView[];
   commands: CommandView[];
+  outages?: DeviceOutage[];
 }
 
 export interface HubSnapshot extends EngineSnapshot {
@@ -96,6 +109,8 @@ export interface HubSnapshot extends EngineSnapshot {
   scenes: ScenesSnapshot;
   houseSecurity?: HouseSecurityView;
   pult?: PultSettingsView;
+  /** Present in cloud portal snapshots, including cached snapshots of an offline hub. */
+  cloud?: { online: boolean; lastSeenAt: string | null };
 }
 
 export interface HouseSecurityDeviceView {
@@ -146,7 +161,10 @@ export interface SceneDefinition {
   schedule?: SceneSchedule | null;
 }
 export interface SceneSchedule {
+  /** A weekly schedule is configured. Older manual scenes can carry an inactive schedule draft. */
   enabled: boolean;
+  /** Temporarily suspend an existing weekly schedule, preserving its days and time. */
+  paused?: boolean;
   /** ISO weekdays: Monday=1 through Sunday=7. */
   days: number[];
   time: string;
@@ -169,6 +187,7 @@ export interface SceneRun {
   id: string;
   sceneId: SceneId;
   name: string;
+  actor?: ActivityActor;
   status: 'running' | 'completed' | 'partial' | 'failed' | 'empty' | 'interrupted';
   startedAt: string;
   completedAt: string | null;
@@ -239,5 +258,7 @@ export interface EngineOptions {
   commandTimeoutMs: number;
   labels: Record<string, DeviceLabel>;
   onLabelsChanged(labels: Record<string, DeviceLabel>): void;
+  onMeteo?(deviceId: string, data: Record<string, unknown>, receivedAt: string): void;
+  activity?: EngineActivityHooks;
   demoDataDir?: string;
 }

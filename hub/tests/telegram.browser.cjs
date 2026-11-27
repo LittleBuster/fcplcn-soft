@@ -156,15 +156,106 @@ async function checkTelegram({ page, base, artifacts, expectHttpError }) {
       'Telegram settings fit a phone without horizontal scrolling',
     );
     const preview = panel.getByRole('complementary', { name: 'Пример меню Telegram' });
+    const message = preview.locator('[data-telegram-preview-message]');
     const house = await page.request.get(base + '/api/v1/overview').then((reply) => reply.json());
+    const keyboardRows = preview.locator('.telegram-keyboard > div');
+    await expect(keyboardRows.first().getByRole('button')).toHaveText([
+      '🏠 Я дома',
+      '🚪 Ушел',
+      '🚗 Готовлюсь',
+    ]);
+    for (const [index, device] of house.devices.entries()) {
+      await expect(keyboardRows.nth(index + 1).getByRole('button')).toHaveText([
+        `🏡 ${device.name || device.id}`,
+      ]);
+    }
     const withSockets = house.devices.find((entry) => entry.controllers.sockets);
     assert.ok(withSockets, 'The keyboard preview includes a configured socket module');
     await preview
       .getByRole('button', { name: `🏡 ${withSockets.name || withSockets.id}`, exact: true })
       .click();
     await preview.getByRole('button', { name: '🔌 Розетки', exact: true }).click();
-    await expect(preview.getByText('Розетки', { exact: true })).toBeVisible();
+    await expect(message).toContainText('Розетки');
+    await expect(message.locator('b').first()).toContainText(withSockets.name || withSockets.id);
+    const detailsButton = preview.getByRole('button', {
+      name: 'ℹ️ Подробности каналов',
+      exact: true,
+    });
+    await expect(keyboardRows.nth(-3).getByRole('button')).toHaveText(['⚙️ Настройки']);
+    await expect(keyboardRows.nth(-2).getByRole('button')).toHaveText(['ℹ️ Подробности каналов']);
+    await detailsButton.click();
+    await expect(keyboardRows.nth(-2).getByRole('button')).toHaveText(['⚡ Быстрое управление']);
+    const socket = withSockets.controllers.sockets.data.items[0];
+    await preview
+      .getByRole('button', { name: socket.name || socket.id })
+      .first()
+      .click();
+    await expect(message).toContainText('Подтверждение реле:');
+    await preview.getByRole('button', { name: '⬅️ Каналы', exact: true }).click();
+    await expect(keyboardRows.nth(-2).getByRole('button')).toHaveText(['⚡ Быстрое управление']);
+    await preview.getByRole('button', { name: '⚡ Быстрое управление', exact: true }).click();
+    await expect(detailsButton).toBeVisible();
     await preview.getByRole('button', { name: '⬅️ Контроллеры', exact: true }).click();
+
+    const requests = [];
+    const collectMutation = (request) => {
+      if (request.url().startsWith(base + '/api/v1/') && request.method() !== 'GET')
+        requests.push(request.url());
+    };
+    page.on('request', collectMutation);
+    try {
+      const press = (label) => preview.getByRole('button', { name: label, exact: true }).click();
+      await press('⬅️ Устройства');
+      await press('🏡 Котельная');
+      await press('🛢 Баки');
+      await expect(message.locator('b').filter({ hasText: 'Бак с водой' })).toBeVisible();
+      assert.match(
+        await message.textContent(),
+        /Бак с водой\nМониторинг: [^\n]+\nУровень: [^\n]+\nНасос: [^\n]+\nКран: [^\n]+/,
+      );
+      const disableModule = preview.getByRole('button', {
+        name: '⚙️ Выключить модуль',
+        exact: true,
+      });
+      await expect(disableModule).toHaveCount(0);
+      await expect(keyboardRows.nth(-3).getByRole('button')).toHaveText(['🛢 Бак с водой']);
+      await expect(keyboardRows.nth(-2).getByRole('button')).toHaveText(['⚙️ Настройки']);
+      await press('⚙️ Настройки');
+      await expect(message).toContainText('Настройки модуля');
+      await disableModule.click();
+      await expect(preview.getByRole('status').locator('blockquote')).toContainText(
+        'Пример действия · ⚙️ Выключить модуль',
+      );
+      await press('⬅️ Каналы');
+      await expect(disableModule).toHaveCount(0);
+      await expect(
+        preview.getByRole('button', { name: '🛢 Бак с водой', exact: true }),
+      ).toBeVisible();
+      await press('⬅️ Контроллеры');
+      await press('💧 Полив');
+      await press('💧 Полив сада');
+      await expect(preview.getByText(/07:00/)).toBeVisible();
+      assert.match(await message.textContent(), /Время старта: 07:00\nДлительность: 15 мин/);
+      await expect(message.locator('b').getByText('Источник воды:', { exact: true })).toBeVisible();
+      await expect(preview.getByRole('button', { name: '🟢 Включить правило' })).toBeVisible();
+      await press('⚙️ Настроить');
+      await press('📅 Дни полива');
+      await press('⌨️ 1 3');
+      await expect(message).toContainText('Сохранить новое значение «Пн, Ср»?');
+      await press('💾 Сохранить');
+      await expect(preview.getByRole('status').locator('blockquote')).toContainText(
+        'Пример действия',
+      );
+      await press('⬅️ Настройки');
+      await press('🛢 Бак');
+      await expect(preview.getByRole('button', { name: '➖ Без бака', exact: true })).toBeVisible();
+      await expect(
+        preview.getByRole('button', { name: '🛢 Бак с водой', exact: true }),
+      ).toBeVisible();
+      assert.deepEqual(requests, [], 'Preview actions never send a controller mutation');
+    } finally {
+      page.off('request', collectMutation);
+    }
 
     nextConflict = true;
     await panel.getByLabel('Имя для 12345678').fill('Несохранённое имя');

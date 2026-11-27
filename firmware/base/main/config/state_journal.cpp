@@ -11,7 +11,7 @@
 #include <mutex>
 
 #include "hardware/state_memory.h"
-#include "util/checksum.h"
+#include "platform/checksum.h"
 
 namespace {
 constexpr std::size_t kSlotBytes = kStateJournalReservedBytes / 2;

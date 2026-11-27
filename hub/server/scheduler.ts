@@ -188,7 +188,7 @@ export class SceneScheduler {
     let due = 0;
     for (const scene of definitions.slice(0, 256)) {
       const schedule = scene.schedule;
-      if (!schedule?.enabled) continue;
+      if (!schedule?.enabled || schedule.paused) continue;
       let local: LocalMinute;
       try {
         local = localMinute(now, schedule);
@@ -232,17 +232,11 @@ export class SceneScheduler {
       }
       if (blocked) continue;
       launched = true;
-      try {
-        void Promise.resolve(this.scenes.run(scene.id, 'schedule')).catch((error: unknown) => {
-          event.status = 'error';
-          event.reason = 'Сценарий не запущен: ' + reason(error);
-          this.persist();
-        });
-      } catch (error) {
+      void this.scenes.startRun(scene.id, 'schedule').catch((error: unknown) => {
         event.status = 'error';
         event.reason = 'Сценарий не запущен: ' + reason(error);
         this.persist();
-      }
+      });
     }
   }
 

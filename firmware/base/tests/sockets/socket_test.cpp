@@ -1,4 +1,5 @@
 #include "controllers/socket_controller.h"
+#include "controllers/irrigation_water.h"
 #include "network/socket_mqtt.h"
 #include "controllers/security_sync.h"
 #include "hardware/hardware_io.h"
@@ -7,7 +8,7 @@
 #include "cJSON.h"
 #include "meteo_fake.h"
 #include "ibutton_fake.h"
-#include "util/checksum.h"
+#include "platform/checksum.h"
 #include "esp_timer.h"
 #include <functional>
 #include <atomic>
@@ -2088,7 +2089,7 @@ void fram_diagnostics()
     };
     auto empty = probe();
     REQUIRE(boolean(empty.get(), "available") && boolean(empty.get(), "valid"));
-    REQUIRE(number(empty.get(), "payloadBytes") == 8);
+    REQUIRE(number(empty.get(), "payloadBytes") == 10);
     configure();
     REQUIRE(module_update(ControllerKind::Lights, light) == SocketResult::Ok);
     REQUIRE(module_update(ControllerKind::Meteo, "[" + meteo_row("room") + "]")
@@ -2118,7 +2119,7 @@ void fram_diagnostics()
     REQUIRE(number(healthy.get(), "reservedBytes") == 512);
     REQUIRE(number(healthy.get(), "usedBytes") == 512);
     REQUIRE(number(healthy.get(), "freeBytes") == 7680);
-    REQUIRE(number(healthy.get(), "payloadBytes") == 11);  // Three flags plus security state.
+    REQUIRE(number(healthy.get(), "payloadBytes") == 13);  // Three flags plus security state.
     REQUIRE(number(healthy.get(), "address") == 0x50);
     REQUIRE(std::string(cJSON_GetStringValue(field(healthy.get(), "model"))) == "FM24CL64B-GTR");
     REQUIRE(std::string(cJSON_GetStringValue(field(healthy.get(), "busId"))) == "io-expanders");
@@ -2131,7 +2132,7 @@ void fram_diagnostics()
     socket_test::set_fram_present(true);
     auto recovered = probe();
     REQUIRE(boolean(recovered.get(), "available") && boolean(recovered.get(), "valid"));
-    REQUIRE(number(recovered.get(), "payloadBytes") == 11);
+    REQUIRE(number(recovered.get(), "payloadBytes") == 13);
     REQUIRE(std::string(cJSON_GetStringValue(field(recovered.get(), "error"))).empty());
     unchanged();
     socket_test::corrupt_fram();
@@ -2149,11 +2150,267 @@ void fram_diagnostics()
 #include "security_checks.inc"
 #include "legacy_checks.inc"
 
+const std::string tank_two =
+    R"([{"id":"tank","name":"Бак","pumpRelayId":"rly-0/1","valveRelayId":"rly-0/2","levelInputs":["in-0/1","in-0/2"],"fillLevel":2}])";
+const std::string tank_three =
+    R"([{"id":"tank","name":"Бак","pumpRelayId":"rly-0/1","valveRelayId":"rly-0/2","levelInputs":["in-0/1","in-0/2","in-0/3"],"fillLevel":3}])";
+
+void tank_settle()
+{
+    for (unsigned n = 0; n < 4; ++n)
+        step(25'000);
+}
+
+void tank_percent(unsigned value)
+{
+    auto s = module(ControllerKind::Tanks);
+    REQUIRE(boolean(item(s.get()), "available"));
+    REQUIRE(field(item(s.get()), "levelPct")->valuedouble == value);
+}
+
+void tank_enable()
+{
+    std::string error;
+    REQUIRE(controller_tank_set_enabled("tank", true, error) == ControllerResult::Ok);
+    tank_settle();
+}
+
+void tank_levels()
+{
+    start();
+    REQUIRE(module_update(ControllerKind::Tanks, tank_two) == ControllerResult::Ok);
+    REQUIRE(!boolean(item(module(ControllerKind::Tanks).get()), "enabled"));
+    tank_enable();
+    tank_percent(0);
+    REQUIRE(!socket_test::relay(0) && socket_test::relay(1));
+    socket_test::input(0, false);
+    step(10'000);  // The pump waits for debounce; the unchanged fill contact keeps its valve open.
+    REQUIRE(!socket_test::relay(0) && socket_test::relay(1));
+    tank_settle();
+    tank_percent(50);
+    REQUIRE(socket_test::relay(0) && socket_test::relay(1));
+    socket_test::input(1, false);
+    step(10'000);
+    REQUIRE(socket_test::relay(0));  // Higher-level changes must not cycle the drain pump.
+    tank_settle();
+    tank_percent(100);
+    REQUIRE(socket_test::relay(0) && !socket_test::relay(1));
+    socket_test::input(0, true);  // Physically impossible upper-wet / lower-dry.
+    step();
+    REQUIRE(!socket_test::relay(0) && !socket_test::relay(1));
+    auto bad = module(ControllerKind::Tanks);
+    REQUIRE(!boolean(item(bad.get()), "available"));
+    REQUIRE(cJSON_IsNull(field(item(bad.get()), "levelPct")));
+    socket_test::input(1, true);
+    tank_settle();
+    tank_percent(0);
+    REQUIRE(!socket_test::relay(0) && socket_test::relay(1));
+    std::string error;
+    REQUIRE(controller_set_state(ControllerKind::Tanks, "tank", true, error)
+            == ControllerResult::InvalidInput);
+}
+
+void tank_three_levels()
+{
+    start();
+    REQUIRE(module_update(ControllerKind::Tanks, tank_three) == ControllerResult::Ok);
+    tank_enable();
+    for (unsigned n = 0; n < 3; ++n) {
+        socket_test::input(n, false);
+        if (n == 1) {
+            step(10'000);
+            REQUIRE(socket_test::relay(0) && socket_test::relay(1));
+        }
+        tank_settle();
+        tank_percent(n == 0 ? 33 : n == 1 ? 67 : 100);
+        REQUIRE(socket_test::relay(0));
+        REQUIRE(socket_test::relay(1) == (n != 2));
+    }
+    for (const auto mask : {2U, 4U, 5U, 6U}) {
+        for (unsigned n = 0; n < 3; ++n)
+            socket_test::input(n, !(mask & (1U << n)));
+        step();
+        REQUIRE(!socket_test::relay(0) && !socket_test::relay(1));
+        auto status = module(ControllerKind::Tanks);
+        REQUIRE(!boolean(item(status.get()), "available"));
+        REQUIRE(cJSON_IsNull(field(item(status.get()), "levelPct")));
+    }
+    for (unsigned n = 0; n < 3; ++n)
+        socket_test::input(n, false);
+    tank_settle();
+    std::string lower = tank_three;
+    lower[lower.find("fillLevel") + 11] = '1';
+    REQUIRE(module_update(ControllerKind::Tanks, lower) == ControllerResult::Ok);
+    socket_test::input(1, true);
+    socket_test::input(2, true);
+    tank_settle();
+    tank_percent(33);
+    REQUIRE(socket_test::relay(0) && !socket_test::relay(1));
+}
+
+void tank_flags_faults()
+{
+    start();
+    REQUIRE(module_update(ControllerKind::Tanks, tank_two) == ControllerResult::Ok);
+    tank_enable();
+    socket_test::input(0, false);
+    tank_settle();
+    REQUIRE(socket_test::relay(0));
+    // Generation changes invalidate an identical-looking status before the worker runs.
+    socket_test::input(0, false, false);
+    socket_test::input(0, false, true);
+    REQUIRE(!boolean(item(module(ControllerKind::Tanks).get()), "available"));
+    step(10'000);
+    REQUIRE(!socket_test::relay(0) && !socket_test::relay(1));
+    tank_settle();
+    tank_percent(50);
+    socket_test::relay_valid(0, false);
+    socket_test::relay_valid(0, true);
+    REQUIRE(!boolean(item(module(ControllerKind::Tanks).get()), "available"));
+    step(10'000);
+    REQUIRE(!socket_test::relay(0) && !socket_test::relay(1));
+    tank_settle();
+    tank_percent(50);
+    socket_test::input(0, false, false);
+    step();
+    REQUIRE(!socket_test::relay(0) && !socket_test::relay(1));
+    socket_test::input(0, false, true);
+    step(10'000);
+    REQUIRE(!socket_test::relay(0));
+    tank_settle();
+    tank_percent(50);
+    std::string error;
+    socket_test::advance_on_relay_read(400'000);
+    step(10'000);
+    REQUIRE(!socket_test::relay(0) && !socket_test::relay(1));
+    REQUIRE(!boolean(item(module(ControllerKind::Tanks).get()), "available"));
+    step(10'000);
+    REQUIRE(!socket_test::relay(0) && !socket_test::relay(1));
+    tank_settle();
+    tank_percent(50);
+    const auto state_writes = socket_test::fram_commits();
+    REQUIRE(controller_tank_set_enabled("tank", true, error) == ControllerResult::Ok);
+    REQUIRE(socket_test::relay(0) && socket_test::relay(1));
+    REQUIRE(socket_test::fram_commits() == state_writes);
+    REQUIRE(controller_tank_set_enabled("tank", false, error) == ControllerResult::Ok);
+    REQUIRE(!socket_test::relay(0) && !socket_test::relay(1));
+    tank_settle();
+    REQUIRE(!boolean(item(module(ControllerKind::Tanks).get()), "available"));
+    tank_enable();
+    REQUIRE(socket_test::recovery_policy(0) == HardwareRelayRecovery::Controller);
+    REQUIRE(socket_test::recovery_policy(1) == HardwareRelayRecovery::Controller);
+    REQUIRE(controllers_set_relay("rly-0/1", true, error) == ControllerResult::Conflict);
+    REQUIRE(controllers_set_relay("rly-0/2", false, error) == ControllerResult::Conflict);
+    REQUIRE(controller_tank_set_enabled_until("tank", false, 1, error)
+            == ControllerResult::Conflict);
+    REQUIRE(socket_test::relay(0));
+    const auto flash = socket_test::nvs_commits();
+    socket_test::fail_fram_commit();
+    REQUIRE(controller_tank_set_enabled("tank", false, error) == ControllerResult::StorageError);
+    REQUIRE(boolean(item(module(ControllerKind::Tanks).get()), "enabled"));
+    tank_settle();
+    REQUIRE(!socket_test::relay(0) && !socket_test::relay(1));
+    REQUIRE(socket_test::nvs_commits() == flash);
+    tank_enable();
+    tank_percent(50);
+    socket_controller_test_reset();
+    socket_test::reboot_hardware();
+    socket_test::input(0, false);
+    REQUIRE(controllers_init() == ESP_OK);
+    REQUIRE(boolean(item(module(ControllerKind::Tanks).get()), "enabled"));
+    REQUIRE(!socket_test::relay(0) && !socket_test::relay(1));
+    tank_settle();
+    tank_percent(50);
+}
+
+void tank_validation()
+{
+    start();
+    REQUIRE(module_update(ControllerKind::Tanks, tank_two) == ControllerResult::Ok);
+    REQUIRE(update(one) == ControllerResult::Conflict);
+    REQUIRE(update(R"([{"id":"x","name":"X","relayId":"rly-0/3","inputId":"in-0/2"}])")
+            == ControllerResult::Conflict);
+    const auto base = module_revision(ControllerKind::Tanks);
+    for (const auto& fields :
+         {R"("levelInputs":[],"fillLevel":1)",
+          R"("levelInputs":["in-0/1","in-0/1"],"fillLevel":2)",
+          R"("levelInputs":["in-0/1"],"fillLevel":2)",
+          R"("levelInputs":["in-0/1","in-0/2","in-0/3","in-0/4"],"fillLevel":3)"}) {
+        const std::string row =
+            std::string(
+                R"([{"id":"tank","name":"Бак","pumpRelayId":"rly-0/1","valveRelayId":"rly-0/2",)")
+            + fields + "}]";
+        REQUIRE(module_update(ControllerKind::Tanks, row) == ControllerResult::InvalidInput);
+    }
+    REQUIRE(module_revision(ControllerKind::Tanks) == base);
+    const std::string one_level =
+        R"([{"id":"tank","name":"Бак","pumpRelayId":"","valveRelayId":"","levelInputs":["in-0/1"],"fillLevel":1}])";
+    REQUIRE(module_update(ControllerKind::Tanks, one_level) == ControllerResult::Ok);
+    tank_enable();
+    tank_percent(0);
+    socket_test::input(0, false);
+    tank_settle();
+    tank_percent(100);
+    auto state = module(ControllerKind::Tanks);
+    REQUIRE(cJSON_IsNull(field(item(state.get()), "pumpActual")));
+}
+
+void tank_legacy_profile()
+{
+    start("fcplc-080806-3v1");
+    socket_test::input(0, false);
+    socket_test::input(1, false);
+    REQUIRE(module_update(ControllerKind::Tanks, tank_two) == ControllerResult::Ok);
+    tank_enable();
+    tank_percent(0);
+    socket_test::input(0, true);
+    tank_settle();
+    tank_percent(50);
+    REQUIRE(socket_test::relay(0) && socket_test::relay(1));
+}
+
+#include "irrigation_checks.inc"
+
+void tank_mqtt()
+{
+    start();
+    REQUIRE(module_update(ControllerKind::Tanks, tank_two) == ControllerResult::Ok);
+    socket_mqtt_test_reset();
+    const auto payload = std::string(
+        R"({"bootId":"test-boot","sequence":1,"id":"tank","value":true,"expiresAtUptimeMs":10000})");
+    Json response(controller_mqtt_command(ControllerKind::Tanks, payload, false, "test-boot", 1000),
+                  cJSON_Delete);
+    REQUIRE(boolean(response.get(), "ok"));
+    REQUIRE(boolean(item(module(ControllerKind::Tanks).get()), "enabled"));
+    std::string error;
+    REQUIRE(controller_tank_set_enabled("tank", false, error) == ControllerResult::Ok);
+    response.reset(
+        controller_mqtt_command(ControllerKind::Tanks, payload, false, "test-boot", 1000));
+    REQUIRE(boolean(response.get(), "duplicate"));
+    REQUIRE(!boolean(item(module(ControllerKind::Tanks).get()), "enabled"));
+}
+
 }  // namespace
 
 int main(int argc, char** argv)
 {
     const std::vector<std::pair<std::string, std::function<void()>>> tests = {
+        {"irrigation_no_tank", irrigation_no_tank},
+        {"irrigation_remote_grant", irrigation_remote_grant},
+        {"irrigation_remote_reboot", irrigation_remote_reboot},
+        {"irrigation_rebind", irrigation_rebind},
+        {"irrigation_clock", irrigation_clock},
+        {"irrigation_tank_off", irrigation_tank_off},
+        {"irrigation_run", irrigation_run},
+        {"irrigation_water", irrigation_water},
+        {"irrigation_validation", irrigation_validation},
+        {"irrigation_eeprom", irrigation_eeprom},
+        {"tank_levels", tank_levels},
+        {"tank_three_levels", tank_three_levels},
+        {"tank_flags_faults", tank_flags_faults},
+        {"tank_validation", tank_validation},
+        {"tank_legacy_profile", tank_legacy_profile},
+        {"tank_mqtt", tank_mqtt},
         {"defaults", defaults},
         {"persistence", persistence},
         {"edges", edges},

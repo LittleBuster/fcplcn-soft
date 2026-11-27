@@ -35,6 +35,8 @@ export function EditorOverview({
   setDescription,
   saving,
 }: EditorOverviewProps) {
+  const armsHouse = definition.id === 'home' || definition.id === 'away';
+  const actionIcon = definition.id === 'prepare' ? 'car' : 'prepare';
   return (
     <>
       <div class="scene-editor-heading">
@@ -81,7 +83,7 @@ export function EditorOverview({
         </div>
       ) : null}
       <div class="scene-fixed-action">
-        <Icon name={definition.id === 'home' || definition.id === 'away' ? 'shield' : 'prepare'} />
+        <Icon name={armsHouse ? 'shield' : actionIcon} />
         <p>
           {definition.id === 'home'
             ? 'Сначала снять охрану со всех известных PLC с модулем охраны.'
@@ -92,13 +94,11 @@ export function EditorOverview({
       </div>
       <div class="scene-editor-section">
         <h3>
-          {definition.id === 'home' || definition.id === 'away'
-            ? 'Дополнительные действия'
-            : 'Действия'}
+          {armsHouse ? 'Дополнительные действия' : 'Действия'}
           <span>{actions.length} / 64</span>
         </h3>
         <p>
-          {definition.id === 'home' || definition.id === 'away'
+          {armsHouse
             ? 'Выполняются по порядку после действий с охраной. Например: включить контактор при возвращении и выключить при уходе.'
             : 'Выполняются последовательно в указанном порядке.'}{' '}
           Логика термостата остаётся на PLC.

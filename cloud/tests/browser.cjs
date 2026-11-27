@@ -45,6 +45,7 @@ async function run() {
   const db = new CloudDatabase(databaseURL, { schema });
   const illustrationOnly = process.env.FCPLCN_CLOUD_BROWSER_ILLUSTRATION_ONLY === '1';
   const securityOnly = process.env.FCPLCN_CLOUD_BROWSER_SECURITY_ONLY === '1';
+  const noticesOnly = process.env.FCPLCN_CLOUD_BROWSER_NOTICES_ONLY === '1';
   let server, engine, scenes, control, installer, browser, page, securityHarness;
   try {
     await db.migrate();
@@ -265,7 +266,7 @@ async function run() {
     await page.locator('[data-cloud-nav="control"]').click();
     const portal = page.frameLocator('[data-hub-portal]');
     await portal.locator('[data-device-id="fcplcn-demo-living"]').waitFor();
-    if (!illustrationOnly && !securityOnly)
+    if (!illustrationOnly && !securityOnly && !noticesOnly)
       await require('./portal-resize.cjs').checkPortalResize({
         page,
         artifacts,
@@ -276,7 +277,7 @@ async function run() {
       assert.deepEqual(external, []);
       return;
     }
-    if (!securityOnly)
+    if (!securityOnly && !noticesOnly)
       await require('../../hub/tests/illustration.browser.cjs').checkIllustration({
         page,
         scope: portal,
@@ -299,7 +300,60 @@ async function run() {
         label: 'cloud',
         expect,
       });
+    if (!illustrationOnly && !securityOnly && !noticesOnly) {
+      await portal.locator('[data-nav="pult"]').click();
+      await portal.locator('[data-pult-filter="irrigation"]').click();
+      const garden = portal.locator(
+        '[data-pult-tile="fcplcn-demo-utility/irrigation/irrigation-garden"]',
+      );
+      await expect(garden).toContainText('Полив сада');
+      await expect(garden).toContainText('07:00');
+      await garden.getByRole('button', { name: 'Настроить правило «Полив сада»' }).click();
+      const editor = portal.frameLocator('[data-plc-settings-frame]');
+      const rule = editor.locator('[data-irrigation-id="irrigation-garden"]');
+      await expect(rule).toBeVisible();
+      await expect(rule.locator('[data-irrigation-field="startTime"]')).toHaveValue('07:00');
+      const tank = rule.locator('[data-irrigation-field="tankId"]');
+      await expect(tank).toHaveValue('tank-water');
+      for (const tankId of ['', 'tank-water']) {
+        await tank.selectOption(tankId);
+        const reply = page.waitForResponse(
+          (r) =>
+            r.request().method() === 'POST' && r.url().endsWith('/service/controllers/irrigation'),
+        );
+        await editor.locator('#irrigation-save').click();
+        const response = await reply;
+        assert.equal(response.status(), 200, await response.text());
+        const saved = (await response.json()).items.find((row) => row.id === 'irrigation-garden');
+        assert.equal(saved.tankId, tankId);
+        if (tankId === '') assert.equal(saved.waterAvailable, null);
+      }
+      await portal.locator('[data-plc-settings-back]').click();
+    }
     if (!illustrationOnly && !securityOnly) {
+      await portal.locator('[data-nav="overview"]').click();
+      await portal.locator('[data-device-id="fcplcn-demo-utility"]').click();
+      await portal.locator('[data-plc-configure="fcplcn-demo-utility"]').click();
+      const tankEditor = portal.frameLocator('[data-plc-settings-frame]');
+      await tankEditor.locator('#app-view').waitFor({ state: 'visible' });
+      await tankEditor.locator('#tab-controllers').click();
+      await tankEditor.locator('#tanks-open').click();
+      await require('../../hub/tests/plc-notices.browser.cjs').checkPLCNotices({
+        page,
+        scope: portal,
+        service: base + '/api/v1/homes/' + homeId + '/hub/devices/fcplcn-demo-utility/service',
+        tankId: 'tank-water',
+        artifacts,
+        label: 'cloud',
+        expect,
+      });
+      await portal.locator('[data-plc-settings-back]').click();
+      await portal.locator('[data-nav="overview"]').click();
+      if (noticesOnly) {
+        assert.deepEqual(errors, []);
+        assert.deepEqual(external, []);
+        return;
+      }
       assert.equal(await portal.locator('.scene-cards .scene-card').count(), 3);
       await portal.locator('[data-device-id="fcplcn-demo-living"]').click();
       assert.equal(await portal.locator('.scene-cards .scene-card').count(), 0);

@@ -14,6 +14,12 @@ import {
 } from '../../shared/cloud.js';
 import { HubControl } from '../control.js';
 import { HubCloudStore, HubCloudError, checkedCloudOrigin } from './store.js';
+import {
+  cloudActivityActor,
+  cloudActivityEntry,
+  cloudSceneActivity,
+  withActivity,
+} from '../activity-context.js';
 
 interface Context {
   generation: number;
@@ -254,7 +260,9 @@ export class HubCloud {
       return;
     const snapshot = structuredClone(this.control.overview());
     // Full history is fetched explicitly. Periodic WAN snapshots keep a bounded recent summary.
-    snapshot.commands = snapshot.commands.slice(0, 30);
+    snapshot.commands = snapshot.commands.slice(0, 30).map(cloudActivityEntry);
+    snapshot.outages = snapshot.outages?.slice(0, 30);
+    snapshot.scenes = cloudSceneActivity(snapshot.scenes);
     snapshot.scenes.runs = snapshot.scenes.runs
       .slice(0, 5)
       .map((run) => ({ ...run, results: run.results.slice(0, 128) }));
@@ -271,6 +279,7 @@ export class HubCloud {
     if (Buffer.byteLength(encoded) > CLOUD_MAX_PACKET) {
       state.snapshot.scenes.runs = [];
       state.snapshot.commands = [];
+      state.snapshot.outages = [];
       (state.snapshot as unknown as Record<string, unknown>).cloudTruncated = true;
       encoded = JSON.stringify(state);
     }
@@ -316,6 +325,9 @@ export class HubCloud {
       !cloudObject(request.actor) ||
       typeof request.actor.userId !== 'string' ||
       request.actor.userId.length > 128 ||
+      (request.actor.displayName !== undefined &&
+        (typeof request.actor.displayName !== 'string' ||
+          request.actor.displayName.length > 128)) ||
       !cloudPermitted(request.actor, request.method, request.path, request.body)
     )
       return;
@@ -343,11 +355,14 @@ export class HubCloud {
       const signal = AbortSignal.any([connectionSignal, timeout]);
       try {
         if (!live() || signal.aborted) return;
-        const result = await this.control.dispatch(
-          request.method,
-          request.path,
-          request.body || {},
-          { actor: request.actor, signal, remainingMs: remaining },
+        const result = await withActivity(
+          { actor: cloudActivityActor(request.actor.userId, request.actor.displayName) },
+          () =>
+            this.control.dispatch(request.method, request.path, request.body || {}, {
+              actor: request.actor,
+              signal,
+              remainingMs: remaining,
+            }),
         );
         reply = {
           version: 1,

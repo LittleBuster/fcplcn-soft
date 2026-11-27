@@ -6,7 +6,7 @@
  * fails closed before any GPIO mapping is activated. Revisions never wrap.
  */
 #include "config/config.h"
-#include "util/operation_context.h"
+#include "platform/operation_context.h"
 
 #include <cmath>
 #include <cstdio>

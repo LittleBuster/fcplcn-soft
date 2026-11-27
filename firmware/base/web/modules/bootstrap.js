@@ -352,23 +352,32 @@ export function createBootstrapUI(context) {
               sensorType: 'reed',
               entryDelay: false,
             }
-          : model.isMeteo
-            ? newMeteoBinding(model, claims)
-            : {
-                relayId: model.snapshot.ports.relays.find(
-                  (id) => !claims.some((claim) => claim.portId === id),
-                ),
-                ...(model.isThermostat
-                  ? {
-                      meteoId: '',
-                      inputId: '',
-                      mode: 'heating',
-                      setpointC: 22,
-                      hysteresisC: 1,
-                    }
-                  : { inputId: '' }),
-              };
-        if (!binding || (model.isSecurity ? !binding.inputId : !model.isMeteo && !binding.relayId))
+          : model.isIrrigation
+            ? context.newIrrigationBinding(model, claims)
+            : model.isTank
+              ? context.newTankBinding(model, claims)
+              : model.isMeteo
+                ? newMeteoBinding(model, claims)
+                : {
+                    relayId: model.snapshot.ports.relays.find(
+                      (id) => !claims.some((claim) => claim.portId === id),
+                    ),
+                    ...(model.isThermostat
+                      ? {
+                          meteoId: '',
+                          inputId: '',
+                          mode: 'heating',
+                          setpointC: 22,
+                          hysteresisC: 1,
+                        }
+                      : { inputId: '' }),
+                  };
+        if (
+          !binding ||
+          (model.isSecurity
+            ? !binding.inputId
+            : !model.isMeteo && !model.isTank && !model.isIrrigation && !binding.relayId)
+        )
           return;
         const random = new Uint32Array(2);
         window.crypto.getRandomValues(random);

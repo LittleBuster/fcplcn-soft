@@ -33,16 +33,16 @@ def make_backup(stack, *, restart=True):
     root = stack.state / "backups"
     root.mkdir(parents=True, exist_ok=True, mode=0o700)
     stamp = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    temporary = Path(tempfile.mkdtemp(prefix=".backup-", dir=root))
     volumes = stack.volumes()
     if not volumes:
-        shutil.rmtree(temporary)
         raise DeploymentError("Не найдены постоянные volumes; создание пустой копии отменено.")
+    stack.prepare_archive_helper()
     was_running = stack.running()
+    temporary = Path(tempfile.mkdtemp(prefix=".backup-", dir=root))
     stopped = False
     completed = False
     try:
-        # Preserve the exact locally built image, including when no registry exists.
+        # Preserve the exact pinned images, including local builds without a registry.
         stack.archive_image(temporary / "application-image.tar")
         # Stop even when Compose reports a partially started stack.
         stopped = True
@@ -131,34 +131,41 @@ def restore_backup(runner, state, metadata, backup, *, current=None, confirm=Non
     target_metadata = dict(manifest["metadata"])
     target = Stack(runner, state, target_metadata, record)
     target.write_override()
-    expected_image = record.get("imageId")
-    if not expected_image or not expected_image.startswith("sha256:"):
-        raise DeploymentError("Копия не содержит точный идентификатор Docker образа.")
-    available = runner.run(target.prefix + ["image", "inspect", "--format", "{{.Id}}", expected_image], check=False)
+    images = list(dict.fromkeys(target.image_ids().values()))
+    if not all(isinstance(image, str) and image.startswith("sha256:") for image in images):
+        raise DeploymentError("Копия не содержит точные идентификаторы Docker образов.")
+    inspect = target.prefix + ["image", "inspect", "--format", "{{.Id}}"]
+    available = runner.run(inspect + images, check=False)
     if available.returncode:
         with (directory / "application-image.tar").open("rb") as stream:
             runner.run(target.prefix + ["image", "load"], stdin=stream,
-                       label="Загрузка точного образа из резервной копии")
-        actual = runner.output(target.prefix + ["image", "inspect", "--format", "{{.Id}}", expected_image])
+                       label="Загрузка точных образов из резервной копии")
+        actual = runner.output(inspect + images).splitlines()
     else:
-        actual = (available.stdout or b"").decode().strip()
-    if actual != expected_image:
-        raise DeploymentError("Тег Docker образа изменился. Нужен прежний образ с идентификатором из копии.")
+        actual = (available.stdout or b"").decode().splitlines()
+    if set(actual) != set(images):
+        raise DeploymentError("Тег Docker образа изменился. Нужны прежние образы с идентификаторами из копии.")
     # Resolve expected volume names without modifying either the live data or its env.
-    expected = {f"{target.project}_{suffix}" for suffix in
-                (["hub-data", "broker-data"] if target.role == "hub" else
-                 ["private", "broker", "cloud", "database", "caddy-data", "caddy-config"])}
+    expected = target.expected_volumes()
     if set(manifest["volumes"]) != expected:
         raise DeploymentError("Список volumes копии не совпадает с установленным проектом.")
+    dormant_database = (target.role == "hub" and not target.uses_hub_database
+                        and target.volume_exists(target.hub_database_volume))
     if current:
         safety = make_backup(current, restart=False)
         print(f"Перед восстановлением сохранены текущие данные: {safety}")
     else:
         # Do not overwrite an existing unknown installation that lacks metadata/current.
+        if dormant_database:
+            raise DeploymentError("Найден существующий PostgreSQL без управляемой установки. Автозамена отменена.")
         for volume in expected:
             found = runner.run(target.prefix + ["volume", "inspect", volume], check=False)
             if found.returncode == 0:
                 raise DeploymentError("Найден существующий volume без управляемой установки. Автозамена отменена.")
+    if dormant_database:
+        # This volume contains a later copy of the imported state. A future migration
+        # must never treat it as the database for the restored, now-writable legacy files.
+        atomic_json(target.hub_database_fence, {"version": 1})
     try:
         runtime = Path(state) / "runtime"
         runtime.mkdir(parents=True, exist_ok=True, mode=0o700)

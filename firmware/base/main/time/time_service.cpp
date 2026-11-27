@@ -6,8 +6,8 @@
  * retry spacing. Manual system time remains useful when the optional RTC is offline.
  */
 #include "time/time_service.h"
-#include "util/operation_context.h"
-#include "system/runtime_supervisor.h"
+#include "platform/operation_context.h"
+#include "platform/runtime_supervisor.h"
 #include "hardware/board_profile.h"
 #include "config/config.h"
 #include "time/rtc_clock.h"

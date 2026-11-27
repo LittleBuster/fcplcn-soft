@@ -1,0 +1,215 @@
+.fleet-connection-history {
+  --fleet-columns: clamp(94px, 23%, 180px) minmax(0, 1fr);
+  min-width: 0;
+  margin: 14px 0 0;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--bg);
+}
+
+.fleet-connection-range,
+.fleet-connection-axis,
+.fleet-connection-legend {
+  color: var(--muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.fleet-connection-range {
+  margin-bottom: 12px;
+}
+
+.fleet-connection-scroll {
+  max-height: clamp(240px, 56vh, 380px);
+  overflow: auto;
+}
+
+.fleet-connection-axis,
+.fleet-connection-row {
+  display: grid;
+  grid-template-columns: var(--fleet-columns);
+}
+
+.fleet-connection-axis {
+  position: sticky;
+  z-index: 1;
+  top: 0;
+  padding: 5px 0 7px;
+  background: var(--bg);
+}
+
+.fleet-connection-ticks {
+  display: grid;
+  grid-template-columns: 0.5fr repeat(3, 1fr) 0.5fr;
+  text-align: center;
+}
+
+.fleet-connection-ticks :first-child {
+  text-align: start;
+}
+
+.fleet-connection-ticks :last-child {
+  text-align: end;
+}
+
+.fleet-connection-row {
+  border-top: 1px solid var(--line);
+}
+
+.fleet-connection-row:last-child {
+  border-bottom: 1px solid var(--line);
+}
+
+.fleet-connection-device {
+  display: grid;
+  align-content: center;
+  gap: 3px;
+  padding: 8px 7px 8px 0;
+  overflow-wrap: anywhere;
+}
+
+.fleet-connection-device strong {
+  font-weight: 600;
+}
+
+.fleet-connection-status {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.fleet-connection-status[data-status='online'],
+.fleet-connection-legend [data-status='online'] {
+  color: var(--green);
+}
+
+.fleet-connection-status[data-status='offline'],
+.fleet-connection-legend [data-status='offline'] {
+  color: var(--red);
+}
+
+.fleet-connection-track {
+  position: relative;
+  min-width: 0;
+  min-height: 54px;
+}
+
+.fleet-connection-track svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.fleet-connection-track line,
+.fleet-connection-track path {
+  fill: none;
+  vector-effect: non-scaling-stroke;
+}
+
+.fleet-connection-gridline {
+  stroke: var(--line);
+}
+
+.fleet-connection-baseline {
+  stroke: var(--green);
+  stroke-width: 2px;
+}
+
+.fleet-connection-baseline[data-unknown] {
+  stroke: var(--muted);
+  stroke-dasharray: 4 4;
+}
+
+.fleet-connection-dip {
+  stroke: var(--red);
+  stroke-width: 2px;
+}
+
+.fleet-connection-outage-fill {
+  fill: var(--red);
+  fill-opacity: 0.13;
+}
+
+.fleet-connection-selected-band {
+  fill: var(--red);
+  fill-opacity: 0.08;
+}
+
+.fleet-connection-hit {
+  position: absolute;
+  inset-block: 4px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+}
+
+.fleet-connection-hit:focus-visible {
+  outline-offset: -2px;
+}
+
+.fleet-connection-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px 16px;
+  margin-block: 10px;
+}
+
+.fleet-connection-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.fleet-connection-legend span::before {
+  width: 13px;
+  height: 2px;
+  border-radius: 2px;
+  background: currentColor;
+  content: '';
+}
+
+.fleet-connection-details {
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+}
+
+.fleet-connection-details h3 {
+  overflow-wrap: anywhere;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.fleet-connection-details dl {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  margin: 8px 0 0;
+}
+
+.fleet-connection-details dt,
+.fleet-connection-empty {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.fleet-connection-details dd {
+  margin: 3px 0 0;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 420px) {
+  .fleet-connection-history {
+    --fleet-columns: 80px minmax(0, 1fr);
+    padding: 9px;
+  }
+
+  .fleet-connection-axis,
+  .fleet-connection-device,
+  .fleet-connection-status {
+    font-size: 11px;
+  }
+}

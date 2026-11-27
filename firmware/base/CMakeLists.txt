@@ -3,6 +3,10 @@ get_filename_component(FCPLCN_IDENTITY_FILE "${CMAKE_CURRENT_LIST_DIR}/../../con
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${FCPLCN_IDENTITY_FILE}")
 file(READ "${FCPLCN_IDENTITY_FILE}" FCPLCN_IDENTITY_JSON)
 string(JSON FCPLCN_PRODUCT_NAME GET "${FCPLCN_IDENTITY_JSON}" name)
+string(JSON FCPLCN_PRODUCT_FULL_NAME GET "${FCPLCN_IDENTITY_JSON}" fullName)
+set(FCPLCN_GENERATED_INCLUDE_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated")
+configure_file(main/system/product_identity.h.in
+    "${FCPLCN_GENERATED_INCLUDE_DIR}/product_identity.h" @ONLY)
 set(PROJECT_VER "0.1.0-base")
 set(FCPLCN_BOOT_BOARD_ID "fcplcn-161608-1v0" CACHE STRING "Hardware profile used when no settings are saved")
 set(FCPLCN_REGISTERED_BOOT_BOARDS "fcplcn-161608-1v0" "fcplc-080806-3v1")
@@ -10,10 +14,11 @@ set_property(CACHE FCPLCN_BOOT_BOARD_ID PROPERTY STRINGS ${FCPLCN_REGISTERED_BOO
 if(NOT FCPLCN_BOOT_BOARD_ID IN_LIST FCPLCN_REGISTERED_BOOT_BOARDS)
     message(FATAL_ERROR "Unsupported FCPLCN_BOOT_BOARD_ID: ${FCPLCN_BOOT_BOARD_ID}")
 endif()
+list(APPEND EXTRA_COMPONENT_DIRS
+    "${CMAKE_CURRENT_LIST_DIR}/main/platform"
+    "${CMAKE_CURRENT_LIST_DIR}/main/hardware")
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 project(${FCPLCN_PRODUCT_NAME})
-idf_component_get_property(FCPLCN_MAIN_LIB main COMPONENT_LIB)
-target_compile_definitions(${FCPLCN_MAIN_LIB} PUBLIC FCPLCN_BOOT_BOARD_ID="${FCPLCN_BOOT_BOARD_ID}")
 file(WRITE "${CMAKE_BINARY_DIR}/firmware-profile.json"
     "{\n  \"schemaVersion\": 1,\n  \"product\": \"${FCPLCN_PRODUCT_NAME}\",\n  \"target\": \"${IDF_TARGET}\",\n  \"bootBoardId\": \"${FCPLCN_BOOT_BOARD_ID}\"\n}\n")
 message(STATUS "FCPLCn first-boot board profile: ${FCPLCN_BOOT_BOARD_ID}")

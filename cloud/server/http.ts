@@ -522,6 +522,7 @@ export function createCloudServer(options: CloudServerOptions) {
               payload = ['GET', 'HEAD'].includes(method) ? undefined : await body(request);
             const actor: CloudActor = {
               userId: current.user.id,
+              displayName: current.user.name || current.user.username,
               role: membership.role,
               securityControl: membership.securityControl,
             };

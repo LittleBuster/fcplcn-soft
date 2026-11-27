@@ -3,10 +3,13 @@
 import type { ComponentChildren } from 'preact';
 
 export type IconName =
+  | 'tank'
+  | 'irrigation'
   | 'tablet'
   | 'home'
   | 'away'
   | 'prepare'
+  | 'car'
   | 'plc'
   | 'activity'
   | 'settings'
@@ -42,6 +45,18 @@ export type IconName =
   | 'key';
 
 const drawings: Record<IconName, ComponentChildren> = {
+  irrigation: (
+    <>
+      <path d="M3 21h18M10 21v-3h4v3M9 18h6M12 15v-3M9 13c-1.5-4-4-6-7-5M15 13c1.5-4 4-6 7-5" />
+      <path d="M12 8V5m0-3v.3M6 6l-2-2m14 2 2-2M3 12l-1 2m19-2 1 2" />
+    </>
+  ),
+  tank: (
+    <>
+      <ellipse cx="12" cy="5" rx="8" ry="3" />
+      <path d="M4 5v14c0 4 16 4 16 0V5M4 13c0 4 16 4 16 0" />
+    </>
+  ),
   tablet: (
     <>
       <rect x="2" y="4" width="20" height="16" rx="3" />
@@ -115,6 +130,13 @@ const drawings: Record<IconName, ComponentChildren> = {
     <>
       <path d="M5 18a7 7 0 0 1 14 0M3 18h18M2 22h20M12 2v3M3 7l2 2m16-2-2 2M1 14h3m16 0h3" />
       <path d="M8 17c-2-2 2-3 0-5m4 5c-2-2 2-3 0-5m4 5c-2-2 2-3 0-5" />
+    </>
+  ),
+  car: (
+    <>
+      <path d="M4 16H2v-3a2 2 0 0 1 1-1.7L6 10l3-4h7l4 4 2 2v4h-2m-4 0H8M6 10h14" />
+      <circle cx="6" cy="16" r="2" />
+      <circle cx="18" cy="16" r="2" />
     </>
   ),
   home: (

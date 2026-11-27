@@ -33,14 +33,19 @@ const writes = new Set([
 export function serviceRoute(method: string, path: string): boolean {
   if (method === 'GET')
     return (
-      reads.has(path) || /^\/controllers\/(sockets|lights|meteo|thermostats|security)$/.test(path)
+      reads.has(path) ||
+      /^\/controllers\/(sockets|lights|meteo|thermostats|security|tanks|irrigation)$/.test(path)
     );
   return (
     method === 'POST' &&
     (writes.has(path) ||
-      /^\/controllers\/(sockets|lights|meteo|thermostats|security)$/.test(path) ||
+      /^\/controllers\/(sockets|lights|meteo|thermostats|security|tanks|irrigation)$/.test(path) ||
       /^\/controllers\/(sockets|lights)\/state$/.test(path) ||
-      path === '/controllers/thermostats/enabled' ||
+      [
+        '/controllers/thermostats/enabled',
+        '/controllers/tanks/enabled',
+        '/controllers/irrigation/enabled',
+      ].includes(path) ||
       path === '/controllers/security/armed' ||
       path === '/controllers/meteo/scan' ||
       path === '/controllers/security/scan')

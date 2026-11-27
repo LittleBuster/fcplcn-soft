@@ -1,7 +1,10 @@
 /** @file Крупная touch-карточка канала: подтверждённое состояние, явная команда и переход к PLC. */
+import { IrrigationCard } from '../../components/irrigation-card';
+import { TankCard } from '../../components/tank-card';
 import { Icon, type IconName } from '../../icons';
 import { deviceName, number, temperature, text } from '../../model';
-import type { CommandAction } from '../../components/types';
+import type { CommandAction, ConfigureIrrigation } from '../../components/types';
+import { MeteoHistoryButton } from '../meteo/history-button';
 import { pultFresh, pultLabels, type PultEntry } from './model';
 
 interface PultControlTileProps {
@@ -10,8 +13,19 @@ interface PultControlTileProps {
   connected: boolean;
   controlsBlocked: boolean;
   onCommand: CommandAction;
+  configureIrrigation?: ConfigureIrrigation;
   openDevice: (id: string) => void;
 }
+
+const thermostatCaptions = {
+  heating: 'Нагрев',
+  cooling: 'Охлаждение',
+  holding: 'Поддержание',
+  waiting: 'Ожидаем датчик',
+  off: 'Выключен',
+  error: 'Ошибка термостата',
+  unknown: 'Состояние неизвестно',
+};
 
 /** Показывает переключение только после ответа PLC; устаревшие данные блокируют команду. */
 export function PultControlTile({
@@ -20,9 +34,26 @@ export function PultControlTile({
   connected,
   controlsBlocked,
   onCommand,
+  configureIrrigation,
   openDevice,
 }: PultControlTileProps) {
   const { device, module, item, kind } = entry;
+  if (kind === 'tanks' || kind === 'irrigation') {
+    const Card = kind === 'tanks' ? TankCard : IrrigationCard;
+    return (
+      <Card
+        device={device}
+        module={module}
+        item={item}
+        pending={pending}
+        connected={connected}
+        controlsBlocked={controlsBlocked}
+        configureIrrigation={configureIrrigation}
+        onCommand={onCommand}
+        openDevice={openDevice}
+      />
+    );
+  }
   const id = text(item.id);
   const name = text(item.name, id);
   const sensor = kind === 'meteo';
@@ -55,7 +86,19 @@ export function PultControlTile({
           : item.sensorType === 'dht22'
             ? 'weather'
             : 'thermometer';
-  const error = fresh ? text(item.error) : '';
+  const diagnostic = fresh ? text(item.error) : '';
+  let thermostatState: keyof typeof thermostatCaptions | undefined;
+  if (thermostat) {
+    if (!known) thermostatState = 'unknown';
+    else if (item.inhibited === true) thermostatState = 'error';
+    else if (!active) thermostatState = 'off';
+    else if (diagnostic && (item.sensorAvailable === true || item.actual === null))
+      thermostatState = 'error';
+    else if (!available || typeof item.actual !== 'boolean') thermostatState = 'waiting';
+    else if (!item.actual) thermostatState = 'holding';
+    else thermostatState = item.mode === 'cooling' ? 'cooling' : 'heating';
+  }
+  const error = thermostatState === 'off' ? '' : diagnostic;
   const caption = !fresh
     ? 'Нет свежих данных'
     : !moduleEnabled
@@ -68,23 +111,15 @@ export function PultControlTile({
             : 'Датчик недоступен'
           : !known
             ? 'Состояние неизвестно'
-            : thermostat
-              ? !value
-                ? 'Выключен'
-                : !available || typeof item.actual !== 'boolean'
-                  ? 'Ожидаем датчик'
-                  : item.actual
-                    ? item.mode === 'cooling'
-                      ? 'Охлаждение'
-                      : 'Нагрев'
-                    : 'Поддержание'
+            : thermostatState
+              ? thermostatCaptions[thermostatState]
               : value
                 ? 'Включено'
                 : 'Выключено';
   const tone =
     !fresh || !known
       ? 'unknown'
-      : error
+      : thermostatState === 'error' || (!thermostat && error)
         ? 'error'
         : active || (sensor && measurementKnown)
           ? 'on'
@@ -113,6 +148,14 @@ export function PultControlTile({
                   : '—'}
                 <small>%</small>
               </span>
+            ) : thermostat ? (
+              <span class="pult-tile-reading pult-tile-setpoint" data-pult-setpoint>
+                <span class="pult-setpoint-label">Задано</span>
+                <span>
+                  {fresh ? temperature(item.setpointC) : '—'}
+                  <small>°C</small>
+                </span>
+              </span>
             ) : null}
           </span>
         ) : (
@@ -123,12 +166,13 @@ export function PultControlTile({
       </span>
       <span class="pult-tile-name">{name}</span>
       <span class="pult-tile-state">
-        <span class="pult-state-dot" />
+        <span
+          class="pult-state-dot"
+          data-thermostat-state={thermostatState && pending && active ? 'waiting' : thermostatState}
+          aria-hidden="true"
+        />
         {caption}
       </span>
-      {thermostat ? (
-        <span class="pult-tile-extra">Задано {fresh ? temperature(item.setpointC) : '—'} °C</span>
-      ) : null}
       {error ? <span class="pult-tile-error">{error}</span> : null}
     </>
   );
@@ -149,6 +193,7 @@ export function PultControlTile({
           aria-label={`${name}: ${caption}`}
         >
           {contents}
+          <MeteoHistoryButton deviceId={device.id} sensorId={id} name={name} />
         </div>
       ) : (
         <button

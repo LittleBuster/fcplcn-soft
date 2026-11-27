@@ -8,7 +8,7 @@
 #include "controllers/socket_controller.h"
 #include "hardware/board_profile.h"
 #include "security/auth.h"
-#include "util/operation_context.h"
+#include "platform/operation_context.h"
 #include "test_platform.h"
 #include "meteo_fake.h"
 #include "ibutton_fake.h"
@@ -177,7 +177,9 @@ void reads()
                              "/controllers/lights",
                              "/controllers/meteo",
                              "/controllers/thermostats",
-                             "/controllers/security"}) {
+                             "/controllers/security",
+                             "/controllers/tanks",
+                             "/controllers/irrigation"}) {
         const auto result = f.call("GET", path);
         REQUIRE(status(result) == 200);
         auto response = parse(result.payload);
@@ -307,6 +309,35 @@ void controllers()
     step();
     REQUIRE(status(f.call("POST", "/controllers/security/armed", R"({"value":true})")) == 200);
     REQUIRE(status(f.call("POST", "/controllers/security/armed", R"({"value":false})")) == 200);
+    REQUIRE(
+        status(f.configure(
+            "tanks",
+            R"([{"id":"tank","name":"Tank","pumpRelayId":"rly-0/4","valveRelayId":"rly-0/5","levelInputs":["in-0/4","in-0/5"],"fillLevel":2}])"))
+        == 200);
+    REQUIRE(status(f.call("POST", "/controllers/tanks/enabled", R"({"id":"tank","value":true})"))
+            == 200);
+    backup_test::input(3, false);
+    step();
+    step();
+    step();
+    REQUIRE(backup_test::relay(3) && backup_test::relay(4));
+    REQUIRE(status(f.call("POST", "/hardware/relay", R"({"id":"rly-0/4","value":false})")) == 409);
+    REQUIRE(status(f.call("POST", "/controllers/tanks/enabled", R"({"id":"tank","value":false})"))
+            == 200);
+    REQUIRE(!backup_test::relay(3) && !backup_test::relay(4));
+    REQUIRE(
+        status(f.configure(
+            "irrigation",
+            R"([{"id":"garden","name":"Garden","relayId":"rly-0/6","tankId":"tank","days":[1,5],"startTime":"07:30","durationMinutes":15}])"))
+        == 200);
+    REQUIRE(
+        status(f.call("POST", "/controllers/irrigation/enabled", R"({"id":"garden","value":true})"))
+        == 200);
+    REQUIRE(!backup_test::relay(5));
+    REQUIRE(status(f.call("POST", "/hardware/relay", R"({"id":"rly-0/6","value":true})")) == 409);
+    REQUIRE(status(f.call(
+                "POST", "/controllers/irrigation/enabled", R"({"id":"garden","value":false})"))
+            == 200);
     REQUIRE(status(f.configure("sockets", "[]")) == 200);
     REQUIRE(!backup_test::relay(0));
     REQUIRE(status(f.call("POST", "/controllers/sockets/state", R"({"id":"plug","value":true})"))
@@ -395,7 +426,7 @@ void backup()
     REQUIRE(status(exported) == 200);
     REQUIRE(exported.payload.find("backup-secret") != std::string::npos);
     auto reply = parse(exported.payload);
-    REQUIRE(field(field(reply.get(), "data"), "version")->valuedouble == 8);
+    REQUIRE(field(field(reply.get(), "data"), "version")->valuedouble == 10);
 }
 
 /** @brief Reserve reboot before an atomic same-board restore and never repeat its commit on retry.

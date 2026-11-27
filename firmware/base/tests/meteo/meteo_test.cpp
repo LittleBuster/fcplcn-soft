@@ -1,4 +1,4 @@
-#include "sensors/meteo_codec.h"
+#include "hardware/meteo_codec.h"
 #include "sensors/meteo_sensors.h"
 #include "sensors/ibutton.h"
 #include "hardware/board_profile.h"

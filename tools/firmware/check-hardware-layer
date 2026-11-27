@@ -1,0 +1,50 @@
+#!/usr/bin/env python3
+"""Check that PLC drivers stay below services and controller logic."""
+
+import re
+from pathlib import Path
+
+
+MAIN = Path(__file__).resolve().parents[2] / "firmware/base/main"
+INCLUDE = re.compile(r'^[ \t]*#[ \t]*include[ \t]*[<"]([^>"]+)[>"]', re.MULTILINE)
+DRIVER_PREFIXES = ("driver/", "hal/", "soc/", "esp_lcd_", "onewire_")
+DRIVER_HEADERS = {"dht.h", "esp_eth_mac_w5500.h", "esp_eth_phy_w5500.h"}
+LOWER_LAYERS = {"hardware": {"hardware", "platform"}, "platform": {"platform"}}
+
+
+def main():
+    """Report physical SDK includes and dependencies that cross a lower layer upwards."""
+    errors = []
+    for source in sorted(MAIN.rglob("*")):
+        if source.suffix not in {".c", ".cc", ".cpp", ".h", ".hpp"}:
+            continue
+        relative_path = source.relative_to(MAIN)
+        layer = relative_path.parts[0]
+        contents = source.read_text(encoding="utf-8")
+        for match in INCLUDE.finditer(contents):
+            header = match.group(1)
+            line = contents.count("\n", 0, match.start()) + 1
+            location = f"{relative_path}:{line}"
+            if layer != "hardware" and (
+                header.startswith(DRIVER_PREFIXES) or header in DRIVER_HEADERS
+            ):
+                errors.append(f"{location}: {header} belongs to the hardware component")
+            if layer not in LOWER_LAYERS:
+                continue
+            for include_root in (source.parent, MAIN):
+                candidate = (include_root / header).resolve()
+                if not candidate.is_relative_to(MAIN) or not candidate.is_file():
+                    continue
+                target_layer = candidate.relative_to(MAIN).parts[0]
+                if target_layer not in LOWER_LAYERS[layer]:
+                    errors.append(f"{location}: {layer} must not depend on {header}")
+                break
+    if errors:
+        print("\n".join(errors))
+        return 1
+    print("FCPLCn hardware layer: include boundaries passed")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

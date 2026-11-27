@@ -5,7 +5,197 @@ const fs = require('node:fs/promises');
 const os = require('node:os');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
-const { chromium } = require('@playwright/test');
+const { chromium, expect } = require('@playwright/test');
+
+/** View the same rolling connection history without leaving the current Pult filter. */
+async function checkConnectionHistory(page) {
+  const trigger = page.getByRole('button', { name: 'Графики связи', exact: true });
+  const dialog = page.getByRole('dialog', { name: 'Графики связи', exact: true });
+  const controller = dialog.getByLabel('Контроллер', { exact: true });
+  const fleet = dialog.locator('.fleet-connection-history');
+  const chartHours = (chart) =>
+    chart.evaluate(
+      ({ dataset }) => (Date.parse(dataset.to) - Date.parse(dataset.from)) / 3_600_000,
+    );
+  const route = page.url();
+  const viewport = page.viewportSize();
+
+  await expect(trigger).toHaveAttribute('aria-haspopup', 'dialog');
+  await trigger.tap();
+  await expect(dialog).toBeVisible();
+  await expect(controller.locator('option:checked')).toHaveText('Все контроллеры');
+  await expect(fleet.locator('[data-fleet-device="fcplcn-demo-garage"]')).toBeVisible();
+  await expect.poll(() => chartHours(fleet)).toBe(24);
+  await dialog.getByRole('button', { name: '7 дней', exact: true }).tap();
+  await expect.poll(() => chartHours(fleet)).toBe(168);
+  await controller.selectOption('fcplcn-demo-garage');
+  const individual = dialog.getByRole('img', { name: 'График связи с PLC', exact: true });
+  await expect(individual).toBeVisible();
+  await expect.poll(() => chartHours(individual)).toBe(168);
+  await page.keyboard.press('Escape');
+  await expect(dialog).toBeHidden();
+  await expect(trigger).toBeFocused();
+
+  try {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await trigger.tap();
+    await controller.selectOption({ label: 'Все контроллеры' });
+    await expect(fleet).toBeVisible();
+    assert.equal(
+      await dialog.evaluate((element) => element.scrollWidth > element.clientWidth),
+      false,
+      'Connection history modal has no horizontal overflow on mobile',
+    );
+    await dialog.getByRole('button', { name: 'Закрыть', exact: true }).tap();
+    await expect(dialog).toBeHidden();
+    await expect(trigger).toBeFocused();
+  } finally {
+    await page.setViewportSize(viewport);
+  }
+
+  assert.equal(page.url(), route);
+  await expect(page.locator('[data-pult-filter="lights"]')).toHaveAttribute('aria-pressed', 'true');
+}
+
+/** Render authoritative thermostat snapshots without moving its autonomous loop into the browser. */
+async function checkThermostat({ page, base, artifacts }) {
+  const endpoint = base + '/api/v1/overview';
+  const tile = page.locator('[data-controller-kind="thermostats"][data-item-id="thermo-room"]');
+  const caption = tile.locator('.pult-tile-state');
+  const dot = caption.locator('.pult-state-dot');
+  const reading = tile.locator('[data-pult-reading]');
+  const setpoint = tile.locator('[data-pult-setpoint]');
+  const cases = [
+    { state: 'heating', caption: 'Нагрев', values: { actual: true } },
+    {
+      state: 'cooling',
+      caption: 'Охлаждение',
+      values: { mode: 'cooling', actual: true, temperatureC: 25.6 },
+    },
+    { state: 'holding', caption: 'Поддержание', values: { actual: false, temperatureC: 21 } },
+    {
+      state: 'waiting',
+      caption: 'Ожидаем датчик',
+      values: {
+        sensorAvailable: false,
+        available: false,
+        actual: false,
+        temperatureC: null,
+        error: 'Температура Метео недоступна',
+      },
+    },
+    { state: 'off', caption: 'Выключен', values: { enabled: false, actual: false } },
+    {
+      state: 'error',
+      caption: 'Ошибка термостата',
+      values: {
+        available: false,
+        actual: false,
+        inhibited: true,
+        error: 'Реле не подтвердило состояние; задан безопасный OFF',
+      },
+    },
+    { state: 'unknown', caption: 'Нет свежих данных', values: {} },
+  ];
+  let current = cases[0];
+  const projection = async (route) => {
+    const response = await route.fetch();
+    const data = await response.json();
+    const module = data.devices.find((device) => device.id === 'fcplcn-demo-utility').controllers
+      .thermostats;
+    module.data.enabled = true;
+    module.fresh = current.state !== 'unknown';
+    Object.assign(
+      module.data.items.find((item) => item.id === 'thermo-room'),
+      {
+        enabled: true,
+        mode: 'heating',
+        sensorAvailable: true,
+        available: true,
+        actual: true,
+        temperatureC: 19.4,
+        setpointC: 21,
+        error: null,
+        inhibited: false,
+        ...current.values,
+      },
+    );
+    await route.fulfill({ response, json: data });
+  };
+  await page.locator('[data-pult-filter="thermostats"]').click();
+  await page.route(endpoint, projection);
+  try {
+    const colors = new Map();
+    for (const entry of cases) {
+      current = entry;
+      await page.getByRole('button', { name: 'Обновить состояния', exact: true }).click();
+      await expect(dot).toHaveAttribute('data-thermostat-state', entry.state);
+      await expect(caption).toHaveText(entry.caption);
+      colors.set(
+        entry.state,
+        await dot.evaluate((element) => getComputedStyle(element).backgroundColor),
+      );
+      if (entry.state === 'heating') {
+        await expect(reading).toContainText('19,4');
+        await expect(setpoint).toContainText('21');
+        await expect(tile).toContainText('Задано');
+        const primary = await reading.boundingBox();
+        const target = await setpoint.boundingBox();
+        assert.ok(
+          primary && target && target.y >= primary.y + primary.height - 1,
+          'Setpoint sits below the current temperature',
+        );
+        const styles = await tile.evaluate((element) => {
+          const current = getComputedStyle(element.querySelector('[data-pult-reading]'));
+          const target = getComputedStyle(element.querySelector('[data-pult-setpoint]'));
+          return {
+            currentSize: parseFloat(current.fontSize),
+            targetSize: parseFloat(target.fontSize),
+            currentColor: current.color,
+            targetColor: target.color,
+          };
+        });
+        assert.ok(
+          styles.targetSize < styles.currentSize,
+          'Setpoint is smaller than the current reading',
+        );
+        assert.notEqual(
+          styles.currentColor,
+          styles.targetColor,
+          'Target and current temperatures use distinct colors',
+        );
+      }
+      if (entry.state === 'waiting') {
+        await expect(reading).toContainText('—');
+        await expect(tile).not.toHaveClass(/pult-state-error/);
+      }
+      if (entry.state === 'error') await expect(tile).toContainText(entry.values.error);
+      if (entry.state === 'unknown') {
+        await expect(tile.locator('[data-pult-command]')).toBeDisabled();
+        await expect(reading).toContainText('—');
+        await expect(setpoint).toContainText('—');
+      }
+      if (artifacts)
+        await tile.screenshot({
+          path: path.join(artifacts, `hub-pult-thermostat-${entry.state}.png`),
+          animations: 'disabled',
+        });
+    }
+    const meanings = ['heating', 'cooling', 'holding', 'waiting', 'off', 'error'];
+    assert.equal(
+      new Set(meanings.map((state) => colors.get(state))).size,
+      meanings.length,
+      `Thermostat dots distinguish heating, cooling, holding, waiting, off and faults: ${JSON.stringify(Object.fromEntries(colors))}`,
+    );
+    console.log(
+      'Pult thermostat passed: smaller stacked setpoint, semantic captions and distinct heating/cooling/holding/waiting/off/error dots, stale blocking.',
+    );
+  } finally {
+    await page.unroute(endpoint, projection);
+    await page.getByRole('button', { name: 'Обновить состояния', exact: true }).click();
+    await page.locator('[data-pult-filter="all"]').click();
+  }
+}
 
 async function checkPult() {
   const root = path.resolve(__dirname, '..');
@@ -86,6 +276,7 @@ async function checkPult() {
       ]),
       ['lights'],
     );
+    await checkConnectionHistory(page);
 
     const tile = tiles.first();
     const key = await tile.getAttribute('data-pult-tile');
@@ -168,6 +359,8 @@ async function checkPult() {
     await page.locator(`[data-pult-tile="${key}"] [data-pult-command]:not([disabled])`).waitFor();
     await page.locator('[data-pult-filter="all"]').click();
 
+    await checkThermostat({ page, base, artifacts });
+
     for (const [name, width, height] of [
       ['landscape', 1194, 834],
       ['small-landscape', 1024, 768],
@@ -215,10 +408,13 @@ async function checkPult() {
       'Reload retains login and pult route',
     );
     assert.deepEqual(errors, []);
+    await require('./tanks.browser.cjs').checkTanks({ page, context, base, artifacts });
+    await require('./irrigation.browser.cjs').checkIrrigation({ page, base });
     await require('./pult-settings.browser.cjs').checkPultSettings({ page, context, base });
+    await require('./pult-scenes.browser.cjs').checkPultScenes({ page, context, base });
     await require('./pult-wake.browser.cjs').checkPultWake({ browser, base });
     console.log(
-      'FCPLCn pult checks passed: deep link, room/type filters, confirmed commands, stale blocking, tablet layouts, wake recovery.',
+      'FCPLCn pult checks passed: deep link, room/type filters, connection charts, confirmed commands, stale blocking, tablet layouts, wake recovery.',
     );
   } finally {
     scheduler.stop();

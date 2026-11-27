@@ -3,6 +3,7 @@
 import type { ScenesSnapshot } from '../../../../shared/types.js';
 import { Icon } from '../../icons';
 import { canConfigure } from '../../portal';
+import { weekdays } from './editor-options';
 import { scenes, readableError } from './labels';
 import type { ScenesPanelModel } from './use-scenes-panel';
 
@@ -76,11 +77,12 @@ export function SceneLibrary({
       <p class="scene-library-hint">
         {group === 'instant'
           ? 'Запускаются только по нажатию кнопки.'
-          : 'Запускаются хабом в выбранные дни и время. Любой из них можно выполнить прямо сейчас.'}
+          : 'Хаб запускает сценарий в выбранные дни и время, когда его расписание включено.'}
       </p>
       <div class="scene-library-grid">
         {grouped.map((definition) => {
           const builtin = scenes.some((scene) => scene.id === definition.id);
+          const groupIcon = definition.schedule?.enabled ? 'clock' : 'activity';
           return (
             <article
               class="scene-library-card panel"
@@ -90,7 +92,7 @@ export function SceneLibrary({
             >
               <div class="scene-library-card-heading">
                 <span class="scene-library-icon">
-                  <Icon name={definition.schedule?.enabled ? 'clock' : 'activity'} />
+                  <Icon name={definition.id === 'prepare' ? 'car' : groupIcon} />
                 </span>
                 <div>
                   <h3>{definition.name}</h3>
@@ -117,12 +119,11 @@ export function SceneLibrary({
                   <Icon name="clock" />
                   <div>
                     <strong>
-                      {definition.schedule.days
-                        .map((day) => ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'][day - 1])
-                        .join(', ')}{' '}
-                      · {definition.schedule.time}
+                      {definition.schedule.days.map((day) => weekdays[day - 1]).join(', ')} ·{' '}
+                      {definition.schedule.time}
                     </strong>
                     <span>{definition.schedule.timeZone}</span>
+                    {definition.schedule.paused && <span>Расписание выключено</span>}
                   </div>
                 </div>
               ) : null}

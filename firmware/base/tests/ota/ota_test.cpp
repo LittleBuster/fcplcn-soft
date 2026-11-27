@@ -1,6 +1,6 @@
 /** @file ota_test.cpp @brief Real OTA state-machine tests with fault-injected inactive flash. */
 #include "system/firmware_update.h"
-#include "util/operation_context.h"
+#include "platform/operation_context.h"
 #include "esp_app_desc.h"
 #include "esp_app_format.h"
 #include "platform.h"

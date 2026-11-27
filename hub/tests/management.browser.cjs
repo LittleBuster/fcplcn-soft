@@ -33,7 +33,7 @@ async function checkManagement({ page, context, base, artifacts }) {
     page.waitForResponse(
       (reply) => reply.url() === service + route && reply.request().method() === method,
     );
-  const kinds = ['sockets', 'lights', 'meteo', 'thermostats', 'security'];
+  const kinds = ['sockets', 'lights', 'meteo', 'thermostats', 'security', 'tanks'];
   async function open(kind) {
     await frame.locator('#tab-controllers').click();
     for (const previous of kinds)
@@ -66,6 +66,7 @@ async function checkManagement({ page, context, base, artifacts }) {
       meteo: 'meteo',
       thermostats: 'thermostat',
       security: 'security',
+      tanks: 'tank',
     })[kind];
   const row = (kind, id) => frame.locator(`[data-${prefix(kind)}-id="${id}"]`);
   const field = (kind, id, name) => row(kind, id).locator(`[data-${prefix(kind)}-field="${name}"]`);
@@ -155,6 +156,38 @@ async function checkManagement({ page, context, base, artifacts }) {
   assert.equal(thermo.hysteresisC, 2);
   assert.equal(thermo.meteoId, sensor);
 
+  await open('tanks');
+  await enable('tanks');
+  const tank = await add('tanks', 'Бак через хаб');
+  await expect(field('tanks', tank, 'levelCount')).toHaveValue('2');
+  await field('tanks', tank, 'pumpRelayId').selectOption('rly-0/11');
+  await field('tanks', tank, 'valveRelayId').selectOption('rly-0/12');
+  await row('tanks', tank).locator('[data-tank-level-index="0"]').selectOption('in-0/14');
+  await row('tanks', tank).locator('[data-tank-level-index="1"]').selectOption('in-0/15');
+  await field('tanks', tank, 'fillLevel').selectOption('2');
+  await save('tanks');
+  assert.equal(
+    (await read('/controllers/tanks')).items.find((item) => item.id === tank).enabled,
+    false,
+  );
+  const tankToggle = row('tanks', tank).locator('[data-tank-enabled]');
+  const tankEnabled = response('/controllers/tanks/enabled');
+  await tankToggle.click();
+  assert.equal((await tankEnabled).status(), 200);
+  await expect
+    .poll(async () => {
+      const item = (await read('/controllers/tanks')).items.find((item) => item.id === tank);
+      return [item.enabled, item.levelPct, item.pumpActual, item.valveActual];
+    })
+    .toEqual([true, 0, false, true]);
+
+  await require('./plc-notices.browser.cjs').checkPLCNotices({
+    page,
+    service,
+    tankId: tank,
+    artifacts,
+  });
+
   await open('security');
   const shield = frame.locator('[data-security-armed]');
   if ((await shield.getAttribute('aria-pressed')) === 'true') {
@@ -211,9 +244,10 @@ async function checkManagement({ page, context, base, artifacts }) {
   const backupFile = path.join(artifacts, 'hub-plc-backup.json');
   await download.saveAs(backupFile);
   const backup = JSON.parse(await fs.readFile(backupFile, 'utf8'));
-  assert.equal(backup.version, 8);
+  assert.equal(backup.version, 10);
   assert.equal(backup.config.device.name, 'PLC · настроен через хаб');
   assert.ok(backup.controllers.sockets.items.some((item) => item.id === socket));
+  assert.ok(backup.controllers.tanks.items.some((item) => item.id === tank));
   await frame.locator('#config-backup-file').setInputFiles(backupFile);
   await frame.locator('#config-backup-preview').waitFor({ state: 'visible' });
   assert.equal(await frame.locator('#config-backup-profile-warning').isVisible(), false);
@@ -245,6 +279,7 @@ async function checkManagement({ page, context, base, artifacts }) {
 
   // Delete in dependency order; saved removal releases its ports for other controllers.
   for (const [kind, id] of [
+    ['tanks', tank],
     ['security', zone],
     ['thermostats', thermostat],
     ['meteo', oneWire],
@@ -253,6 +288,14 @@ async function checkManagement({ page, context, base, artifacts }) {
     ['sockets', socket],
   ]) {
     await open(kind);
+    if (kind === 'tanks') {
+      const toggle = row(kind, id).locator('[data-tank-enabled]');
+      if ((await toggle.getAttribute('aria-pressed')) === 'true') {
+        const pending = response('/controllers/tanks/enabled');
+        await toggle.click();
+        assert.equal((await pending).status(), 200);
+      }
+    }
     if (kind === 'security') {
       // Earlier scene checks can leave asynchronous whole-house security work.
       // Wait only for in-flight work, not for matching the whole-house intent:

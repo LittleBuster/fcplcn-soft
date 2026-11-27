@@ -2,7 +2,7 @@
  * @file runtime_policy_test.cpp
  * @brief Native fault-injection coverage for bounded independent worker supervision.
  */
-#include "system/runtime_policy.h"
+#include "platform/runtime_policy.h"
 
 #include <cstdint>
 #include <iostream>

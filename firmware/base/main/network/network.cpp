@@ -8,16 +8,18 @@
  */
 #include "network/network.h"
 #include "hardware/board_profile.h"
+#include "hardware/ethernet_w5500.h"
 #include "config/config.h"
 #include "system/system_metrics.h"
 #include "controllers/socket_controller.h"
 #include "network/socket_mqtt.h"
 #include "controllers/security_sync.h"
+#include "controllers/irrigation_water.h"
 #include "network/mqtt_telemetry.h"
 #include "network/management_mqtt.h"
 #include "network/management_routes.h"
 #include "time/time_service.h"
-#include "system/runtime_supervisor.h"
+#include "platform/runtime_supervisor.h"
 
 #include <algorithm>
 #include <atomic>
@@ -30,12 +32,7 @@
 #include <string_view>
 #include <utility>
 
-#include "driver/gpio.h"
-#include "driver/spi_master.h"
-#include "esp_eth.h"
-#include "esp_eth_mac_w5500.h"
 #include "esp_eth_netif_glue.h"
-#include "esp_eth_phy_w5500.h"
 #include "esp_app_desc.h"
 #include "esp_event.h"
 #include "esp_log.h"
@@ -75,11 +72,7 @@ esp_netif_t* ap_netif = nullptr;
 esp_netif_t* sta_netif = nullptr;
 esp_netif_t* eth_netif =
     nullptr;  // Published under state_mutex; never destroyed after publication.
-esp_eth_handle_t eth_driver = nullptr;  // Only the network manager changes driver/client lifecycle.
-esp_eth_netif_glue_handle_t eth_glue = nullptr;
-esp_eth_mac_t* eth_mac_driver = nullptr;
-esp_eth_phy_t* eth_phy_driver = nullptr;
-bool eth_spi_ready = false;
+EthernetW5500 eth_driver;  // Only the network manager changes driver/client lifecycle.
 bool eth_started = false;
 bool wifi_started = false;
 std::atomic<bool> wifi_applying{false};
@@ -101,6 +94,15 @@ std::string security_command_topic;
 std::string security_ack_topic;
 std::string security_hub_topic;
 std::string security_event_topic;
+std::string tank_status_topic;
+std::string tank_command_topic;
+std::string tank_ack_topic;
+std::string irrigation_status_topic;
+std::string irrigation_command_topic;
+std::string irrigation_ack_topic;
+std::string irrigation_water_request_topic;
+std::string irrigation_water_reply_topic;
+std::string irrigation_water_source_topic;
 std::string management_request_topic;
 std::string management_reply_topic;
 std::string boot_id;
@@ -115,6 +117,7 @@ std::uint64_t management_fragment_generation = 0;
 TaskHandle_t management_task = nullptr;
 TaskHandle_t management_restart_task = nullptr;
 TaskHandle_t security_event_task = nullptr;
+TaskHandle_t irrigation_water_task = nullptr;
 std::atomic<bool> management_restart_pending{false};
 
 /** @brief One owned request from exactly one MQTT connection generation. */
@@ -129,6 +132,7 @@ struct Status {
     bool sta_connected = false;
     bool eth_link = false;
     bool mqtt_connected = false;
+    bool irrigation_water_subscribed = false;
     bool socket_commands_ready = false;
     bool socket_subscription_failed = false;
     std::string wifi_error;
@@ -391,138 +395,48 @@ esp_err_t apply_wifi(const WifiConfig& cfg)
     return error;
 }
 
-// No objects become visible to HTTP status until construction has succeeded.
 /**
- * @brief Construct W5500 SPI, MAC/PHY and netif objects from the active board profile.
+ * @brief Attach the hardware Ethernet driver to a network interface with the LAN route priority.
  * @return ESP_OK for an existing or newly attached interface; otherwise a profile, memory or SDK
  * error.
  * @pre Only the network manager calls this after board activation and esp_netif initialization.
- * @details Reset and SPI settings come from the profile. Partially constructed Ethernet objects are
- * @details released on failure; eth_netif becomes visible under state_mutex only after attachment
- * succeeds.
+ * @details On success the netif and glue live until reboot. The netif becomes visible under
+ * state_mutex only after attachment succeeds.
  */
 esp_err_t initialize_ethernet()
 {
-    if (eth_driver != nullptr)
+    if (eth_netif != nullptr)
         return ESP_OK;
-    const auto& hardware = board_profile_active().w5500;
-    if (!hardware.present)
-        return ESP_ERR_NOT_SUPPORTED;
-    const spi_host_device_t spi_host = hardware.spiBus == BoardSpiBus::Spi2 ? SPI2_HOST : SPI3_HOST;
-    const auto cs = static_cast<gpio_num_t>(hardware.csGpio);
-    const auto reset = static_cast<gpio_num_t>(hardware.resetGpio);
-    esp_err_t error = ESP_OK;
-    esp_netif_t* netif = nullptr;
-    esp_eth_handle_t driver = nullptr;
-    esp_eth_netif_glue_handle_t glue = nullptr;
-    esp_eth_mac_t* mac = nullptr;
-    esp_eth_phy_t* phy = nullptr;
-    do {
-        error = gpio_set_level(cs, 1);
-        if (error != ESP_OK)
-            break;
-        error = gpio_set_direction(cs, GPIO_MODE_OUTPUT);
-        if (error != ESP_OK)
-            break;
-        error = gpio_set_level(reset, 0);
-        if (error != ESP_OK)
-            break;
-        error = gpio_set_direction(reset, GPIO_MODE_OUTPUT);
-        if (error != ESP_OK)
-            break;
-        pause_ms(hardware.resetAssertMs);
-        error = gpio_set_level(reset, 1);
-        if (error != ESP_OK)
-            break;
-        pause_ms(hardware.resetRecoverMs);
+    auto error = eth_driver.initialize(board_profile_active().w5500);
+    if (error != ESP_OK)
+        return error;
 
-        if (!eth_spi_ready) {
-            spi_bus_config_t bus{};
-            bus.mosi_io_num = hardware.mosiGpio;
-            bus.miso_io_num = hardware.misoGpio;
-            bus.sclk_io_num = hardware.clockGpio;
-            bus.quadwp_io_num = -1;
-            bus.quadhd_io_num = -1;
-            bus.max_transfer_sz = 1600;
-            error = spi_bus_initialize(spi_host, &bus, SPI_DMA_CH_AUTO);
-            if (error != ESP_OK)
-                break;
-            eth_spi_ready = true;
-        }
-        error = gpio_install_isr_service(0);
-        if (error != ESP_OK && error != ESP_ERR_INVALID_STATE)
-            break;
-        error = ESP_OK;
-        spi_device_interface_config_t spi{};
-        spi.mode = hardware.spiMode;
-        spi.clock_speed_hz = static_cast<int>(hardware.spiClockHz);
-        spi.spics_io_num = hardware.csGpio;
-        spi.queue_size = 16;
-        eth_w5500_config_t w5500 = ETH_W5500_DEFAULT_CONFIG(spi_host, &spi);
-        w5500.base.int_gpio_num = hardware.interruptGpio;
-        eth_mac_config_t mac_config = ETH_MAC_DEFAULT_CONFIG();
-        mac_config.rx_task_stack_size = 4096;
-        eth_phy_config_t phy_config = ETH_PHY_DEFAULT_CONFIG();
-        phy_config.reset_gpio_num = -1;  // The board reset/filter was handled above.
-        mac = esp_eth_mac_new_w5500(&w5500, &mac_config);
-        phy = esp_eth_phy_new_w5500(&phy_config);
-        if (mac == nullptr || phy == nullptr) {
-            error = ESP_ERR_NO_MEM;
-            break;
-        }
-        esp_eth_config_t driver_config = ETH_DEFAULT_CONFIG(mac, phy);
-        error = esp_eth_driver_install(&driver_config, &driver);
-        if (error != ESP_OK)
-            break;
-        uint8_t mac_bytes[6];
-        error = esp_read_mac(mac_bytes, ESP_MAC_ETH);
-        if (error != ESP_OK)
-            break;
-        error = esp_eth_ioctl(driver, ETH_CMD_S_MAC_ADDR, mac_bytes);
-        if (error != ESP_OK)
-            break;
-        esp_netif_inherent_config_t inherent = ESP_NETIF_INHERENT_DEFAULT_ETH();
-        inherent.route_prio = 150;
-        esp_netif_config_t netif_config = ESP_NETIF_DEFAULT_ETH();
-        netif_config.base = &inherent;
-        netif = esp_netif_new(&netif_config);
-        if (netif == nullptr) {
-            error = ESP_ERR_NO_MEM;
-            break;
-        }
-        esp_netif_set_hostname(netif, device_id().c_str());
-        glue = esp_eth_new_netif_glue(driver);
-        if (glue == nullptr) {
-            error = ESP_ERR_NO_MEM;
-            break;
-        }
-        error = esp_netif_attach(netif, glue);
-        if (error != ESP_OK)
-            break;
-        char formatted_mac[18];
-        std::snprintf(formatted_mac, sizeof(formatted_mac), MACSTR, MAC2STR(mac_bytes));
-        {
-            StateLock lock;
-            eth_netif = netif;
-            status.eth_mac = formatted_mac;
-        }
-        eth_driver = driver;
-        eth_glue = glue;
-        eth_mac_driver = mac;
-        eth_phy_driver = phy;
-        return ESP_OK;
-    } while (false);
-    if (glue != nullptr)
-        esp_eth_del_netif_glue(glue);
-    if (netif != nullptr)
+    esp_netif_inherent_config_t inherent = ESP_NETIF_INHERENT_DEFAULT_ETH();
+    inherent.route_prio = 150;
+    esp_netif_config_t netif_config = ESP_NETIF_DEFAULT_ETH();
+    netif_config.base = &inherent;
+    auto* netif = esp_netif_new(&netif_config);
+    if (netif == nullptr) {
+        eth_driver.discard();
+        return ESP_ERR_NO_MEM;
+    }
+    esp_netif_set_hostname(netif, device_id().c_str());
+    auto glue = esp_eth_new_netif_glue(eth_driver.handle());
+    error = glue != nullptr ? esp_netif_attach(netif, glue) : ESP_ERR_NO_MEM;
+    if (error != ESP_OK) {
+        if (glue != nullptr)
+            esp_eth_del_netif_glue(glue);
         esp_netif_destroy(netif);
-    if (driver != nullptr)
-        esp_eth_driver_uninstall(driver);
-    if (phy != nullptr)
-        phy->del(phy);
-    if (mac != nullptr)
-        mac->del(mac);
-    return error;
+        eth_driver.discard();
+        return error;
+    }
+
+    char formatted_mac[18];
+    std::snprintf(formatted_mac, sizeof(formatted_mac), MACSTR, MAC2STR(eth_driver.mac_address()));
+    StateLock lock;
+    eth_netif = netif;
+    status.eth_mac = formatted_mac;
+    return ESP_OK;
 }
 
 /**
@@ -536,7 +450,7 @@ esp_err_t initialize_ethernet()
 esp_err_t apply_ethernet(const EthernetConfig& cfg)
 {
     if (eth_started) {
-        const esp_err_t error = esp_eth_stop(eth_driver);
+        const esp_err_t error = esp_eth_stop(eth_driver.handle());
         if (error != ESP_OK)
             return error;
         eth_started = false;
@@ -575,7 +489,7 @@ esp_err_t apply_ethernet(const EthernetConfig& cfg)
     }
     if (error != ESP_OK)
         return error;
-    error = esp_eth_start(eth_driver);
+    error = esp_eth_start(eth_driver.handle());
     eth_started = error == ESP_OK;
     return error;
 }
@@ -796,9 +710,11 @@ void mqtt_event(void*, esp_event_base_t, int32_t id, void* data)
     if (id == MQTT_EVENT_CONNECTED) {
         cancel_management();
         security_sync_connection(true, boot_id);
+        irrigation_water_connection(true);
         {
             StateLock lock;
             status.mqtt_connected = true;
+            status.irrigation_water_subscribed = false;
             status.socket_commands_ready = false;
             status.socket_subscription_failed = false;
             status.mqtt_error.clear();
@@ -807,6 +723,13 @@ void mqtt_event(void*, esp_event_base_t, int32_t id, void* data)
     } else if (id == MQTT_EVENT_SUBSCRIBED) {
         const bool failed = event->error_handle != nullptr
                             && event->error_handle->error_type == MQTT_ERROR_TYPE_SUBSCRIBE_FAILED;
+        // The SDK exposes one return code per filter. The single optional subscription
+        // is independent of the multi-filter command subscription and its readiness.
+        if (event->data_len == 1) {
+            StateLock lock;
+            status.irrigation_water_subscribed = !failed;
+            return;
+        }
         {
             StateLock lock;
             status.socket_commands_ready = !failed;
@@ -831,6 +754,17 @@ void mqtt_event(void*, esp_event_base_t, int32_t id, void* data)
                                       event->retain,
                                       boot_id,
                                       esp_timer_get_time() / 1000);
+            return;
+        }
+        if (matches(irrigation_water_reply_topic)) {
+            if (event->current_data_offset == 0 && event->data != nullptr && event->data_len > 0
+                && event->data_len == event->total_data_len
+                && static_cast<std::size_t>(event->data_len) <= kIrrigationWaterReplyMaxBytes)
+                irrigation_water_receive(std::string_view(event->data, event->data_len),
+                                         event->retain,
+                                         device_id(),
+                                         boot_id,
+                                         esp_timer_get_time());
             return;
         }
         if (matches(management_request_topic)) {
@@ -859,6 +793,12 @@ void mqtt_event(void*, esp_event_base_t, int32_t id, void* data)
         } else if (matches(security_command_topic)) {
             kind = ControllerKind::Security;
             acknowledgement = &security_ack_topic;
+        } else if (matches(tank_command_topic)) {
+            kind = ControllerKind::Tanks;
+            acknowledgement = &tank_ack_topic;
+        } else if (matches(irrigation_command_topic)) {
+            kind = ControllerKind::Irrigation;
+            acknowledgement = &irrigation_ack_topic;
         } else
             return;
         const bool whole = event->current_data_offset == 0 && event->data_len > 0
@@ -879,17 +819,21 @@ void mqtt_event(void*, esp_event_base_t, int32_t id, void* data)
     } else if (id == MQTT_EVENT_DISCONNECTED) {
         cancel_management();
         security_sync_connection(false, boot_id);
+        irrigation_water_connection(false);
         notify_manager(kMqttRetry);
         StateLock lock;
         status.mqtt_connected = false;
+        status.irrigation_water_subscribed = false;
         status.socket_commands_ready = false;
         status.socket_subscription_failed = false;
     } else if (id == MQTT_EVENT_ERROR) {
         cancel_management();
         security_sync_connection(false, boot_id);
+        irrigation_water_connection(false);
         notify_manager(kMqttRetry);
         StateLock lock;
         status.mqtt_connected = false;
+        status.irrigation_water_subscribed = false;
         status.socket_commands_ready = false;
         status.socket_subscription_failed = false;
         status.mqtt_error = "Local MQTT connection failed";
@@ -911,6 +855,7 @@ void apply_mqtt(const LinuxConfig& cfg)
 {
     cancel_management();
     security_sync_connection(false, boot_id);
+    irrigation_water_connection(false);
     std::lock_guard<std::mutex> lifecycle(mqtt_lifecycle_mutex);
     // Stop/destroy may wait for MQTT's worker: never call them from an MQTT/HTTP callback.
     auto client = mqtt_client.exchange(nullptr);
@@ -926,6 +871,7 @@ void apply_mqtt(const LinuxConfig& cfg)
     {
         StateLock lock;
         status.mqtt_connected = false;
+        status.irrigation_water_subscribed = false;
         status.socket_commands_ready = false;
         status.socket_subscription_failed = false;
         status.mqtt_error.clear();
@@ -1011,6 +957,11 @@ void publish_heartbeat()
     cJSON_AddNumberToObject(heartbeat.get(),
                             "securityCommandSequence",
                             controller_mqtt_sequence(ControllerKind::Security));
+    cJSON_AddNumberToObject(
+        heartbeat.get(), "tankCommandSequence", controller_mqtt_sequence(ControllerKind::Tanks));
+    cJSON_AddNumberToObject(heartbeat.get(),
+                            "irrigationCommandSequence",
+                            controller_mqtt_sequence(ControllerKind::Irrigation));
     cJSON_AddBoolToObject(heartbeat.get(), "wifiConnected", current.sta_connected);
     cJSON_AddBoolToObject(heartbeat.get(), "ethernetLinkUp", current.eth_link);
     cJSON_AddNumberToObject(heartbeat.get(), "freeHeap", esp_get_free_heap_size());
@@ -1031,7 +982,7 @@ void publish_heartbeat()
 }
 
 /**
- * @brief Queue changed retained snapshots and periodic refreshes for all five controllers.
+ * @brief Queue changed retained snapshots and periodic refreshes for all controllers.
  * @pre Only the network manager calls this.
  * @details Ignores continuously changing ages for comparison but retains original sample times
  * and validity. A successful enqueue updates the cache; pressure/allocation failures are retried.
@@ -1045,13 +996,28 @@ void publish_controller_status()
         if (client == nullptr || !status.mqtt_connected)
             return;
     }
-    for (unsigned index = 0; index < 5; ++index) {
-        const auto kind = index == 0   ? ControllerKind::Sockets
-                          : index == 1 ? ControllerKind::Lights
-                          : index == 2 ? ControllerKind::Meteo
-                          : index == 3 ? ControllerKind::Thermostats
-                                       : ControllerKind::Security;
-        Json snapshot(index == 2 ? controller_status_json(kind) : controller_mqtt_status_json(kind),
+    constexpr std::array<ControllerKind, kMqttTelemetryChannelCount> kinds{{
+        ControllerKind::Sockets,
+        ControllerKind::Lights,
+        ControllerKind::Meteo,
+        ControllerKind::Thermostats,
+        ControllerKind::Security,
+        ControllerKind::Tanks,
+        ControllerKind::Irrigation,
+    }};
+    const std::array<const std::string*, kMqttTelemetryChannelCount> topics{{
+        &socket_status_topic,
+        &light_status_topic,
+        &meteo_status_topic,
+        &thermostat_status_topic,
+        &security_status_topic,
+        &tank_status_topic,
+        &irrigation_status_topic,
+    }};
+    for (std::size_t index = 0; index < kinds.size(); ++index) {
+        const auto kind = kinds[index];
+        Json snapshot(kind == ControllerKind::Meteo ? controller_status_json(kind)
+                                                    : controller_mqtt_status_json(kind),
                       cJSON_Delete);
         const auto channel = static_cast<MqttTelemetryChannel>(index);
         mqtt_telemetry_compact(channel, snapshot.get());
@@ -1065,11 +1031,7 @@ void publish_controller_status()
             continue;
         char* payload = cJSON_PrintUnformatted(snapshot.get());
         if (payload != nullptr) {
-            const auto& topic = index == 0   ? socket_status_topic
-                                : index == 1 ? light_status_topic
-                                : index == 2 ? meteo_status_topic
-                                : index == 3 ? thermostat_status_topic
-                                             : security_status_topic;
+            const auto& topic = *topics[index];
             if (enqueue_message(client, topic, payload, 0, true))
                 telemetry_cache.accepted(channel, std::move(key), now_ms);
             cJSON_free(payload);
@@ -1141,6 +1103,60 @@ void security_event_worker(void*)
                 ++status.tx_dropped;
             status.last_tx_error = result;
         }
+    }
+}
+
+/** @brief Publish one private water packet on the current connection with no offline queue.
+ * @param client Stable client handle protected by mqtt_lifecycle_mutex.
+ * @param topic Topic owned by this PLC.
+ * @param packet Borrowed JSON measurement or request.
+ * @return True when the direct QoS-0 publish succeeds.
+ */
+bool publish_water_packet(esp_mqtt_client_handle_t client,
+                          const std::string& topic,
+                          const cJSON* packet)
+{
+    if (!packet)
+        return false;
+    char* payload = cJSON_PrintUnformatted(packet);
+    if (!payload)
+        return false;
+    const int result = esp_mqtt_client_publish(client, topic.c_str(), payload, 0, 0, false);
+    cJSON_free(payload);
+    return result >= 0;
+}
+
+/** @brief Exchange fresh water observations and catalogue challenges once per second.
+ * @note Direct MQTT sends are isolated from autonomous controller and security-event workers.
+ */
+void irrigation_water_worker(void*)
+{
+    bool advertised_tanks = false;
+    while (true) {
+        pause_ms(1000);
+        std::lock_guard<std::mutex> lifecycle(mqtt_lifecycle_mutex);
+        const auto client = mqtt_client.load();
+        bool catalogue_ready;
+        {
+            StateLock lock;
+            if (!client || !status.mqtt_connected || !status.socket_commands_ready)
+                continue;
+            catalogue_ready = status.irrigation_water_subscribed;
+        }
+        // Prepare each message immediately before sending. QoS0 publish does not replay a
+        // missed source observation or challenge when the broker next becomes available.
+        if (catalogue_ready) {
+            Json request(irrigation_water_request(boot_id, esp_timer_get_time()), cJSON_Delete);
+            publish_water_packet(client, irrigation_water_request_topic, request.get());
+        }
+        Json source(irrigation_water_source(boot_id), cJSON_Delete);
+        if (!source)
+            continue;
+        const bool has_tanks =
+            cJSON_GetArraySize(cJSON_GetObjectItemCaseSensitive(source.get(), "items")) > 0;
+        if ((has_tanks || advertised_tanks)
+            && publish_water_packet(client, irrigation_water_source_topic, source.get()))
+            advertised_tanks = has_tanks;
     }
 }
 
@@ -1227,7 +1243,7 @@ void network_manager(void*)
                         set_error(&Status::wifi_error, "Wi-Fi apply", error);
                     retry_sta_at = 0;
                 }
-                if (eth_changed || (cfg.ethernet.enabled && eth_driver == nullptr)) {
+                if (eth_changed || (cfg.ethernet.enabled && eth_netif == nullptr)) {
                     const esp_err_t error = apply_ethernet(cfg.ethernet);
                     if (error != ESP_OK)
                         set_error(&Status::eth_error, "W5500 apply", error);
@@ -1262,6 +1278,13 @@ void network_manager(void*)
             subscription_at = now;
             heartbeat_at = 0;
             sockets_at = 0;
+            const auto client = mqtt_client.load();
+            esp_mqtt5_subscribe_property_config_t optional{};
+            optional.retain_as_published_flag = true;
+            optional.retain_handle = 2;
+            if (client && esp_mqtt5_client_set_subscribe_property(client, &optional) == ESP_OK)
+                static_cast<void>(esp_mqtt_client_subscribe_single(
+                    client, irrigation_water_reply_topic.c_str(), 0));
         }
         if (mqtt_retry_at != 0 && now >= mqtt_retry_at) {
             bool connected;
@@ -1322,11 +1345,14 @@ void network_manager(void*)
                                                    {light_command_topic.c_str(), 1},
                                                    {thermostat_command_topic.c_str(), 1},
                                                    {security_command_topic.c_str(), 1},
+                                                   {tank_command_topic.c_str(), 1},
+                                                   {irrigation_command_topic.c_str(), 1},
                                                    {security_hub_topic.c_str(), 0},
                                                    {management_request_topic.c_str(), 1}};
+                constexpr auto topic_count = static_cast<int>(sizeof(topics) / sizeof(topics[0]));
                 const bool sent =
                     esp_mqtt5_client_set_subscribe_property(client, &subscription) == ESP_OK
-                    && esp_mqtt_client_subscribe_multiple(client, topics, 6) >= 0;
+                    && esp_mqtt_client_subscribe_multiple(client, topics, topic_count) >= 0;
                 subscription_at = now + (sent ? 10'000'000 : 5'000'000);
                 if (!sent) {
                     StateLock lock;
@@ -1455,6 +1481,15 @@ esp_err_t network_init()
     security_ack_topic = "fcplcn/" + device_id() + "/controllers/security/ack";
     security_hub_topic = "fcplcn/" + device_id() + "/controllers/security/hub";
     security_event_topic = "fcplcn/" + device_id() + "/controllers/security/event";
+    tank_status_topic = "fcplcn/" + device_id() + "/controllers/tanks/status";
+    tank_command_topic = "fcplcn/" + device_id() + "/controllers/tanks/set";
+    tank_ack_topic = "fcplcn/" + device_id() + "/controllers/tanks/ack";
+    irrigation_status_topic = "fcplcn/" + device_id() + "/controllers/irrigation/status";
+    irrigation_command_topic = "fcplcn/" + device_id() + "/controllers/irrigation/set";
+    irrigation_ack_topic = "fcplcn/" + device_id() + "/controllers/irrigation/ack";
+    irrigation_water_request_topic = "fcplcn/" + device_id() + "/irrigation-water/request";
+    irrigation_water_reply_topic = "fcplcn/" + device_id() + "/irrigation-water/reply";
+    irrigation_water_source_topic = "fcplcn/" + device_id() + "/irrigation-water/source";
     management_request_topic = "fcplcn/" + device_id() + "/management/request";
     management_reply_topic = "fcplcn/" + device_id() + "/management/reply";
     char boot[24];
@@ -1470,6 +1505,10 @@ esp_err_t network_init()
         return ESP_ERR_NO_MEM;
     if (xTaskCreate(
             security_event_worker, "fcplcn_security_tx", 4096, nullptr, 3, &security_event_task)
+        != pdPASS)
+        return ESP_ERR_NO_MEM;
+    if (xTaskCreate(
+            irrigation_water_worker, "fcplcn_water_tx", 4096, nullptr, 3, &irrigation_water_task)
         != pdPASS)
         return ESP_ERR_NO_MEM;
     if (xTaskCreate(network_manager, "fcplcn_network", 8192, nullptr, 5, &manager_task) != pdPASS) {

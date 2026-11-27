@@ -17,6 +17,8 @@ enum gpio_pullup_t { GPIO_PULLUP_DISABLE = 0, GPIO_PULLUP_ENABLE = 1 };
 
 enum gpio_pulldown_t { GPIO_PULLDOWN_DISABLE = 0, GPIO_PULLDOWN_ENABLE = 1 };
 
+enum gpio_pull_mode_t { GPIO_PULLUP_ONLY = 0, GPIO_FLOATING = 3 };
+
 enum gpio_int_type_t { GPIO_INTR_DISABLE = 0 };
 
 struct gpio_config_t {
@@ -31,3 +33,4 @@ esp_err_t gpio_config(const gpio_config_t* config);
 esp_err_t gpio_set_level(gpio_num_t gpio, std::uint32_t level);
 int gpio_get_level(gpio_num_t gpio);
 esp_err_t gpio_set_direction(gpio_num_t gpio, gpio_mode_t mode);
+esp_err_t gpio_set_pull_mode(gpio_num_t gpio, gpio_pull_mode_t mode);

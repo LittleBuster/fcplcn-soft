@@ -24,8 +24,8 @@
 #include "nvs.h"
 #include "config/settings_json.h"
 #include "config/model.h"
-#include "system/runtime_supervisor.h"
-#include "util/checksum.h"
+#include "platform/runtime_supervisor.h"
+#include "platform/checksum.h"
 
 /** @cond FCPLCN_CONTROLLER_INTERNALS */
 namespace fcplcn::controllers::detail {
@@ -242,6 +242,8 @@ void worker_step()
     if (!mutation) {
         if (settings_restore_pending()) {
             std::lock_guard<std::mutex> lock(controller_mutex);
+            tanks_off_locked();
+            irrigation_off_locked();
             const auto module = index(ControllerKind::Thermostats);
             const auto& config = configurations[module];
             if (!initialized || config.boardId != board_profile_active().id)
@@ -264,8 +266,12 @@ void worker_step()
         return;
     }
     std::lock_guard<std::mutex> lock(controller_mutex);
-    if (!initialized || worker_error != ESP_OK)
+    if (!initialized)
         return;
+    if (worker_error != ESP_OK) {
+        irrigation_off_locked();
+        return;
+    }
     for (std::size_t module = 0; module < kRelayControllerCount; ++module) {
         auto& config = configurations[module];
         auto& runtime = runtimes[module];
@@ -313,6 +319,8 @@ void worker_step()
             set_state_locked(static_cast<ControllerKind>(module), i, !item.state, error);
         }
     }
+    tanks_step_locked();
+    irrigation_step_locked();
     thermostats_step_locked();
     security_step_locked();
 }
@@ -363,8 +371,20 @@ esp_err_t apply_relay_recovery_policies()
     const auto& thermostats = configurations[index(ControllerKind::Thermostats)].items;
     for (std::size_t i = 0; i < board.relayCount; ++i) {
         const auto* id = board.relays[i].name;
+        const auto& tanks = configurations[index(ControllerKind::Tanks)].items;
+        const auto& rules = configurations[index(ControllerKind::Irrigation)].items;
         const bool controlled =
-            id == configurations[index(ControllerKind::Security)].security.sirenRelayId
+            std::any_of(rules.begin(),
+                        rules.end(),
+                        [&](const auto& rule) {
+                            return rule.relayId == id;
+                        })
+            || std::any_of(tanks.begin(),
+                           tanks.end(),
+                           [&](const auto& item) {
+                               return item.pumpRelayId == id || item.valveRelayId == id;
+                           })
+            || id == configurations[index(ControllerKind::Security)].security.sirenRelayId
             || std::any_of(thermostats.begin(), thermostats.end(), [&](const auto& item) {
                    return item.relayId == id;
                });

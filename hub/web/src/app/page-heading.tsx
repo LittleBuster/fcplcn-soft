@@ -36,7 +36,7 @@ export function PageHeading({
     : selected
       ? deviceName(selected)
       : view === 'activity'
-        ? 'Журнал команд'
+        ? 'Журнал событий'
         : view === 'devices'
           ? 'Контроллеры'
           : view === 'scenes'
@@ -83,7 +83,7 @@ export function PageHeading({
             : selected
               ? 'Состояния и управление устройствами этого PLC.'
               : view === 'activity'
-                ? 'Результаты команд, подтверждённые контроллерами.'
+                ? 'Команды, запуски сценариев и история связи с контроллерами.'
                 : view === 'devices'
                   ? 'Все PLC вашего дома в одном месте.'
                   : view === 'scenes'

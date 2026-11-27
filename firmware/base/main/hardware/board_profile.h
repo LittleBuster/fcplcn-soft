@@ -21,6 +21,7 @@ inline constexpr const char* kLegacyBoardProfileId = "wifi-relay-16-r2-stack";
 inline constexpr const char* kFcplc080806BoardProfileId = "fcplc-080806-3v1";
 
 #ifndef FCPLCN_BOOT_BOARD_ID
+/// Default boot profile for standalone builds that omit the CMake definition.
 #define FCPLCN_BOOT_BOARD_ID "fcplcn-161608-1v0"
 #endif
 /// First-boot default only; a valid persisted profile always takes precedence.

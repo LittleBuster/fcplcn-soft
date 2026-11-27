@@ -28,6 +28,17 @@ std::uint8_t meteo_crc8(const std::uint8_t* bytes, std::size_t size);
 std::string meteo_rom_address(std::uint64_t address);
 
 /**
+ * @brief Parse a OneWire ROM of the expected family and validate its CRC.
+ * @param text Exactly sixteen hexadecimal characters in wire order.
+ * @param family Required first byte.
+ * @param[out] bytes Wire-order ROM, assigned only on success.
+ * @return True when the family and CRC both match.
+ */
+bool onewire_parse_address(std::string_view text,
+                           std::uint8_t family,
+                           std::array<std::uint8_t, 8>& bytes);
+
+/**
  * @brief Parse and validate a DS18B20 ROM.
  * @param text Exactly sixteen hex characters; uppercase input is accepted.
  * @param[out] bytes Wire-order ROM, assigned only on success.

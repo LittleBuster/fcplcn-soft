@@ -1,4 +1,4 @@
-/** @file Real MQTT5 iButton authority, exact PLC ACL scope and reconnect without source replay. */
+/** @file Exercise per-PLC MQTT5 ACLs and the hub channels for iButton and irrigation. */
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
@@ -35,7 +35,7 @@ const end = (client: MqttClient | undefined) =>
     : Promise.resolve();
 
 test(
-  'real broker scopes key events, preserves nonretained lease/fence ordering and retires reconnect authority',
+  'real broker scopes iButton and irrigation, rejects retained reports and retires reconnect authority',
   { timeout: 25000 },
   async (t) => {
     const find = (name: string, paths: string[]) =>
@@ -95,7 +95,8 @@ test(
       up = () => 100000 + Date.now() - began;
     const leases: { body: SecurityLeasePacket; packet: IPublishPacket }[] = [],
       commands: Record<string, unknown>[] = [],
-      events: SecurityTouchEvent[] = [];
+      events: SecurityTouchEvent[] = [],
+      tankReplies: { body: Record<string, unknown>; packet: IPublishPacket }[] = [];
     let heartbeatSequence = 0,
       commandSequence = 0;
     const engine = createEngine({
@@ -149,6 +150,7 @@ test(
       });
       plc.on('message', (topic, bytes, packet) => {
         const data = JSON.parse(bytes.toString());
+        if (topic.endsWith('/irrigation-water/reply')) tankReplies.push({ body: data, packet });
         if (topic.endsWith('/hub')) leases.push({ body: data as SecurityLeasePacket, packet });
         if (topic.endsWith('/set')) {
           commands.push(data);
@@ -167,7 +169,11 @@ test(
         }
       });
       await plc.subscribeAsync(
-        [`fcplcn/${id}/controllers/security/hub`, `fcplcn/${id}/controllers/security/set`],
+        [
+          `fcplcn/${id}/controllers/security/hub`,
+          `fcplcn/${id}/controllers/security/set`,
+          `fcplcn/${id}/irrigation-water/reply`,
+        ],
         { qos: 0, rap: true, rh: 2 },
       );
     };
@@ -225,7 +231,11 @@ test(
       await until(() => engine.snapshot().broker.connected);
       await delay(80);
       await announce();
-      await until(() => engine.snapshot().devices[0]?.controllers.security?.fresh === true);
+      await until(
+        () =>
+          engine.snapshot().devices.find((device) => device.id === id)?.controllers.security
+            ?.fresh === true,
+      );
       outsider = await mqtt.connectAsync(url, {
         protocolVersion: 5,
         username: other,
@@ -244,6 +254,67 @@ test(
         outsider.publishAsync(`fcplcn/${id}/controllers/security/event`, '{}', { qos: 1 }),
         /authorized/i,
       );
+      const sourceBoot = 'water-source-boot';
+      const tankReference = other + '/tank-water';
+      await outsider.publishAsync(
+        `fcplcn/${other}/system/status`,
+        JSON.stringify({
+          schemaVersion: 1,
+          deviceId: other,
+          product: 'FCPLCn',
+          bootId: sourceBoot,
+          sequence: 1,
+          uptimeSec: Math.floor(up() / 1000),
+          boardId: 'integration',
+          firmwareVersion: 'tank-feed',
+          socketCommandSequence: 0,
+          lightCommandSequence: 0,
+          thermostatCommandSequence: 0,
+          securityCommandSequence: 0,
+        }),
+      );
+      await until(() =>
+        engine.snapshot().devices.some((device) => device.id === other && device.online),
+      );
+      await assert.rejects(
+        outsider.publishAsync(`fcplcn/${id}/irrigation-water/reply`, '{}', { qos: 1 }),
+        /authorized/i,
+      );
+      const report = (water: boolean, retain: boolean) =>
+        outsider!.publishAsync(
+          `fcplcn/${other}/irrigation-water/source`,
+          JSON.stringify({
+            bootId: sourceBoot,
+            uptimeMs: up(),
+            items: [{ id: 'tank-water', name: 'Бак', water }],
+          }),
+          { qos: 1, retain },
+        );
+      const requestTank = async (sequence: number) => {
+        if (sequence > 1) await delay(525);
+        await plc!.publishAsync(
+          `fcplcn/${id}/irrigation-water/request`,
+          JSON.stringify({ bootId, sequence, sources: [tankReference] }),
+          { qos: 1 },
+        );
+        const reply = () =>
+          tankReplies.find(({ body }) => body.sequence === sequence && body.source === other);
+        await until(() => Boolean(reply()));
+        assert.equal(reply()!.packet.retain, false);
+        assert.equal(reply()!.packet.qos, 0);
+        return reply()!.body.water;
+      };
+      await report(true, true);
+      assert.equal(await requestTank(1), null, 'Retained water never authorizes watering');
+      await report(true, false);
+      assert.equal(await requestTank(2), true);
+      await report(false, false);
+      assert.equal(await requestTank(3), false);
+      await outsider.publishAsync(`fcplcn/${other}/availability`, 'offline', { qos: 1 });
+      await until(
+        () => engine.snapshot().devices.find((device) => device.id === other)?.online === false,
+      );
+      assert.equal(await requestTank(4), null);
       const fence = await engine.sendSecurityLease!(id, {
         hubEpoch: 'integration-hub-epoch',
         modeRevision: 0,
@@ -294,7 +365,11 @@ test(
       await until(() => engine.snapshot().broker.connected);
       await delay(80);
       await announce();
-      await until(() => engine.snapshot().devices[0]?.controllers.security?.fresh === true);
+      await until(
+        () =>
+          engine.snapshot().devices.find((device) => device.id === id)?.controllers.security
+            ?.fresh === true,
+      );
       const next = await engine.sendSecurityLease!(id, {
         hubEpoch: 'integration-hub-epoch',
         modeRevision: 1,

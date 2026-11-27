@@ -2,6 +2,7 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { performance } from 'node:perf_hooks';
 import type {
   ControllerKind,
   ManagementReply,
@@ -11,6 +12,15 @@ import type {
 import { HubRegistry, type CommandPacket } from './registry.js';
 import { DemoPLC, demoRoms, demoKeys } from './demo-plc.js';
 import { demoPresets } from './demo-presets.js';
+import { remoteTankReference } from '../../shared/irrigation.js';
+
+type RemoteTank = Parameters<
+  DemoPLC['fixture']['controllers']['setRemoteIrrigationTanks']
+>[0][number];
+interface WaterRound {
+  sequence: number;
+  rows: Map<string, RemoteTank>;
+}
 
 /** @brief Start an isolated object; no operation is sent to real MQTT, GPIO or network configuration. */
 export function createDemo(
@@ -32,6 +42,9 @@ export function createDemo(
     : mkdtempSync(join(tmpdir(), 'fcplcn-hub-demo-'));
   const devices: DemoPLC[] = [];
   const timers = new Set<ReturnType<typeof setTimeout>>();
+  const waterRounds = new Map<DemoPLC, WaterRound>();
+  let waterSequence = 0;
+  let waterPollAt = 0;
   let stopped = false;
 
   function publish(device: DemoPLC): void {
@@ -52,6 +65,8 @@ export function createDemo(
         lightCommandSequence: device.sequences.lights,
         thermostatCommandSequence: device.sequences.thermostats,
         securityCommandSequence: device.sequences.security,
+        tankCommandSequence: device.sequences.tanks,
+        irrigationCommandSequence: device.sequences.irrigation,
         managementVersion: 1,
         managementSequence: device.managementSequence,
       }),
@@ -67,6 +82,49 @@ export function createDemo(
           uptimeMs: up,
         }),
       );
+  }
+
+  function exchangeTankReports(): void {
+    // Emit the actual local safety observation, independently from the public tank dashboard.
+    for (const device of devices) {
+      const { bootId, preset } = device;
+      registry.receive(
+        `${product.id}/${preset.id}/irrigation-water/source`,
+        JSON.stringify({
+          bootId,
+          uptimeMs: device.uptimeMs(),
+          items: device.fixture.controllers.irrigationWaterSource(),
+        }),
+      );
+    }
+    for (const device of devices) {
+      const controllers = device.fixture.controllers;
+      const requested = controllers.exportSettings().irrigation.items;
+      const sources = Array.isArray(requested)
+        ? [
+            ...new Set(
+              requested.map(({ tankId }) => tankId).filter((ref) => remoteTankReference(ref)),
+            ),
+          ]
+        : [];
+      const started = performance.now();
+      const round = { sequence: ++waterSequence, rows: new Map<string, RemoteTank>() };
+      waterRounds.set(device, round);
+      registry.receive(
+        `${product.id}/${device.preset.id}/irrigation-water/request`,
+        JSON.stringify({
+          bootId: device.bootId,
+          sequence: round.sequence,
+          sources,
+        }),
+      );
+      waterRounds.delete(device);
+      controllers.setRemoteIrrigationTanks(
+        [...round.rows.values()],
+        Math.floor(3000 - (performance.now() - started)),
+      );
+      publish(device);
+    }
   }
   try {
     for (const preset of demoPresets(product, demoRoms, demoKeys)) {
@@ -92,14 +150,40 @@ export function createDemo(
   }
   const interval = setInterval(() => {
     for (const device of devices) publish(device);
+    const now = performance.now();
+    if (now >= waterPollAt) {
+      exchangeTankReports();
+      waterPollAt = now + 1000;
+    }
   }, 500).unref();
   return {
     command(topic, payload) {
       if (stopped) throw new Error('Demo stopped');
       const parts = topic.split('/');
       const device = devices.find((entry) => entry.preset.id === parts[1]);
+      if (parts[2] === 'irrigation-water' && parts[3] === 'reply') {
+        const round = device && waterRounds.get(device);
+        const reply = JSON.parse(payload);
+        const id = `${reply.source}/${reply.id}`;
+        if (
+          round &&
+          reply.bootId === device.bootId &&
+          reply.sequence === round.sequence &&
+          !round.rows.has(id)
+        )
+          round.rows.set(id, {
+            id,
+            name: reply.name,
+            deviceName: reply.sourceName,
+            waterAvailable: reply.water,
+          });
+        return;
+      }
       const kind = parts[3] as ControllerKind;
-      if (!device || !['sockets', 'lights', 'thermostats', 'security'].includes(kind))
+      if (
+        !device ||
+        !['sockets', 'lights', 'thermostats', 'security', 'tanks', 'irrigation'].includes(kind)
+      )
         throw new Error('Demo PLC not found');
       if (parts[4] === 'hub' && kind === 'security') {
         device.receiveSecurityLease(JSON.parse(payload));

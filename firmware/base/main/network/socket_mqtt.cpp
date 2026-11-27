@@ -34,18 +34,20 @@ struct CommandState {
 };
 
 std::mutex command_mutex;
-std::array<CommandState, 5> states;
+std::array<CommandState, static_cast<std::size_t>(ControllerKind::Irrigation) + 1> states;
 
 /**
  * @brief Locate the cached command result for a controllable module.
- * @param[in] kind Sockets, Lights or Thermostats; Meteo has no SET commands.
+ * @param[in] kind Sockets, Lights, Thermostats, Security, Tanks or Irrigation; Meteo has no SET
+ * commands.
  * @return Borrowed state slot, or nullptr for an unsupported module.
  * @pre The caller holds command_mutex before reading or changing the returned slot.
  */
 CommandState* command_state(ControllerKind kind)
 {
     if (kind != ControllerKind::Sockets && kind != ControllerKind::Lights
-        && kind != ControllerKind::Thermostats && kind != ControllerKind::Security)
+        && kind != ControllerKind::Thermostats && kind != ControllerKind::Security
+        && kind != ControllerKind::Tanks && kind != ControllerKind::Irrigation)
         return nullptr;
     const auto index = static_cast<std::size_t>(kind);
     return index < states.size() ? &states[index] : nullptr;
@@ -104,7 +106,7 @@ cJSON* ack(std::string_view boot,
 /**
  * @cond FCPLCN_SOURCE_CONTRACTS
  * @brief Validate and execute one complete explicit SET command.
- * @param kind Sockets, Lights or Thermostats; Meteo is read-only.
+ * @param kind Sockets, Lights, Thermostats, Security, Tanks or Irrigation; Meteo is read-only.
  * @param payload Borrowed complete JSON message, at most 512 bytes.
  * @param retained Broker RETAIN flag; retained commands are rejected.
  * @param bootId Current local boot identifier against which the payload is checked.
@@ -113,9 +115,9 @@ cJSON* ack(std::string_view boot,
  * @details Rejects wrong boot, malformed/expired or out-of-order commands. An
  * identical retry of the last sequence returns its cached result without another
  * actuation. The same sequence with different content is a conflict. Failures
- * also consume accepted sequences. Thermostats change their durable enabled flag,
- * never the heat/cool demand directly. Actual deadline checks are repeated by the
- * controller after lock waits and, for relay writes, by the hardware service.
+ * also consume accepted sequences. Thermostats, Tanks and Irrigation change their durable enabled
+ * flag, never the heat/cool demand directly. Actual deadline checks are repeated by the controller
+ * after lock waits and, for relay writes, by the hardware service.
  * @endcond
  */
 cJSON* controller_mqtt_command(ControllerKind kind,
@@ -200,6 +202,12 @@ cJSON* controller_mqtt_command(ControllerKind kind,
                             on, static_cast<std::int64_t>(deadline), fence, error)
                       : controller_security_set_armed_until(
                             on, static_cast<std::int64_t>(deadline), error))
+        : kind == ControllerKind::Irrigation
+            ? controller_irrigation_set_enabled_until(
+                  id->valuestring, on, static_cast<std::int64_t>(deadline), error)
+        : kind == ControllerKind::Tanks
+            ? controller_tank_set_enabled_until(
+                  id->valuestring, on, static_cast<std::int64_t>(deadline), error)
         : kind == ControllerKind::Thermostats
             ? controller_thermostat_set_enabled_until(
                   id->valuestring, on, static_cast<std::int64_t>(deadline), error)
@@ -242,7 +250,7 @@ cJSON* controller_mqtt_status_json(ControllerKind kind)
     const auto* state = command_state(kind);
     if (!state)
         return nullptr;
-    Json snapshot(controller_status_json(kind), cJSON_Delete);
+    Json snapshot(controller_status_json(kind, false), cJSON_Delete);
     if (!snapshot || !cJSON_AddNumberToObject(snapshot.get(), "commandSequence", state->sequence))
         return nullptr;
     return snapshot.release();

@@ -2,11 +2,11 @@
  * @file state_memory.cpp
  * @brief Immutable-profile dispatch to the fitted FRAM or EEPROM state-memory driver.
  */
-#include "hardware/state_memory.h"
+#include "state_memory.h"
 
-#include "hardware/board_profile.h"
-#include "hardware/eeprom.h"
-#include "hardware/fram.h"
+#include "board_profile.h"
+#include "eeprom.h"
+#include "fram.h"
 
 /**
  * @cond FCPLCN_SOURCE_CONTRACTS

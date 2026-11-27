@@ -10,6 +10,8 @@ export const titles: Record<ControllerKind, string> = {
   meteo: 'Метео',
   thermostats: 'Термостаты',
   security: 'Охрана',
+  tanks: 'Баки',
+  irrigation: 'Полив',
 };
 export const moduleIcons: Record<ControllerKind, IconName> = {
   sockets: 'socket',
@@ -17,8 +19,18 @@ export const moduleIcons: Record<ControllerKind, IconName> = {
   meteo: 'weather',
   thermostats: 'thermometer',
   security: 'shield',
+  tanks: 'tank',
+  irrigation: 'irrigation',
 };
-export const kinds: ControllerKind[] = ['sockets', 'lights', 'meteo', 'thermostats', 'security'];
+export const kinds: ControllerKind[] = [
+  'sockets',
+  'lights',
+  'meteo',
+  'thermostats',
+  'security',
+  'tanks',
+  'irrigation',
+];
 
 /** Принимает только строку; значения другого типа заменяются запасной подписью. */
 export const text = (value: unknown, fallback = ''): string =>
@@ -100,6 +112,14 @@ export function metrics(snapshot: HubSnapshot) {
         sensors += rows(module.data.items).filter(
           (item) => item.available === true && number(item.temperatureC) !== null,
         ).length;
+      if (kind === 'irrigation') {
+        // Several rules on the same PLC can use one valve.
+        const opened = rows(module.data.items).filter((item) => item.valveActual === true);
+        outputs += new Set(opened.map((item) => item.relayId)).size;
+      }
+      if (kind === 'tanks')
+        for (const item of rows(module.data.items))
+          outputs += Number(item.pumpActual === true) + Number(item.valveActual === true);
       if (['sockets', 'lights', 'thermostats'].includes(kind))
         outputs += rows(module.data.items).filter((item) => item.actual === true).length;
     }

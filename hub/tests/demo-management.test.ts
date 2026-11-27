@@ -46,10 +46,10 @@ async function service(
   assert.ok(engine.service);
   return engine.service(living, method, path, body);
 }
-async function until(check: () => boolean, timeout = 4000) {
+async function until(check: () => boolean | Promise<boolean>, timeout = 4000) {
   const deadline = Date.now() + timeout;
   while (Date.now() < deadline) {
-    if (check()) return;
+    if (await check()) return;
     await new Promise((resolve) => setTimeout(resolve, 25));
   }
   assert.fail('Virtual PLC did not settle');
@@ -128,7 +128,7 @@ test('demo management CRUD, core commands, hardware claims, backup and reboot sh
     200,
   );
   const backup = record(await service(engine, '/config/backup'));
-  assert.equal(backup.version, 8);
+  assert.equal(backup.version, 10);
   const bad = structuredClone(backup);
   bad.boardId = 'different-board';
   const now = record(await service(engine, '/config'));
@@ -225,6 +225,170 @@ test('demo preserves network settings and the actual account verifier across hub
   } finally {
     await second.stop();
   }
+});
+
+test('tank monitoring survives a demo restart while automatic outputs use newly observed contacts', async (t) => {
+  const { engine, directory } = await fixture(t);
+  const utility = 'fcplcn-demo-utility';
+  const tank = (current: HubEngine) =>
+    (
+      current.snapshot().devices.find((device) => device.id === utility)!.controllers.tanks!.data
+        .items as Data[]
+    )[0];
+  await until(() => tank(engine).levelPct === 50);
+  assert.equal(tank(engine).pumpActual, true, 'The lower wet contact starts the draining pump');
+  assert.equal(tank(engine).valveActual, true, 'The dry upper contact independently opens filling');
+  assert.equal((await engine.command(utility, 'tanks', 'tank-water', false)).status, 'applied');
+  await until(() => tank(engine).enabled === false);
+  assert.equal(tank(engine).pumpActual, false);
+  assert.equal(tank(engine).valveActual, false);
+  assert.equal(tank(engine).levelPct, null);
+  assert.equal((await engine.command(utility, 'tanks', 'tank-water', true)).status, 'applied');
+  await until(() => tank(engine).levelPct === 50);
+  await engine.stop();
+  const restarted = createEngine(options(directory));
+  await restarted.start();
+  try {
+    await until(() => tank(restarted).levelPct === 0);
+    assert.equal(tank(restarted).enabled, true, 'Monitoring permission is durable');
+    assert.equal(
+      tank(restarted).pumpActual,
+      false,
+      'A prior ON output is never restored as intent',
+    );
+    assert.equal(
+      tank(restarted).valveActual,
+      true,
+      'Filling follows the newly observed dry contacts',
+    );
+  } finally {
+    await restarted.stop();
+  }
+});
+
+test('irrigation commands enable a local schedule across a demo restart with the valve closed', async (t) => {
+  const { engine, directory } = await fixture(t);
+  const deviceId = 'fcplcn-demo-utility';
+  const rule = (current: HubEngine) =>
+    items(
+      current.snapshot().devices.find((device) => device.id === deviceId)!.controllers.irrigation!
+        .data,
+    )[0];
+  await until(() => rule(engine)?.waterAvailable === true);
+  assert.equal(rule(engine).tankId, 'tank-water');
+  assert.deepEqual(rule(engine).days, [1, 3, 5]);
+  assert.equal(rule(engine).enabled, false);
+  assert.equal(
+    (await engine.command(deviceId, 'irrigation', 'irrigation-garden', true)).status,
+    'applied',
+  );
+  await until(() => rule(engine).enabled === true);
+  assert.equal(rule(engine).actual, false);
+  await engine.stop();
+  const restarted = createEngine(options(directory));
+  await restarted.start();
+  try {
+    await until(() => rule(restarted).waterAvailable === false);
+    assert.equal(rule(restarted).enabled, true);
+    assert.equal(rule(restarted).valveActual, false);
+    assert.equal(
+      (await restarted.command(deviceId, 'irrigation', 'irrigation-garden', false)).status,
+      'applied',
+    );
+    await until(() => rule(restarted).enabled === false);
+  } finally {
+    await restarted.stop();
+  }
+});
+
+test('a PLC without any tanks preserves a timer-only irrigation rule across a restart', async (t) => {
+  const { engine, directory } = await fixture(t);
+  const path = '/controllers/irrigation';
+  assert.deepEqual(items(record(await service(engine, '/controllers/tanks'))), []);
+  const initial = record(await service(engine, path));
+  const saved = await service(engine, path, {
+    baseRevision: initial.revision,
+    enabled: true,
+    items: [
+      {
+        id: 'lawn',
+        name: 'Газон',
+        relayId: 'rly-0/12',
+        days: [2, 6],
+        startTime: '06:30',
+        durationMinutes: 12,
+      },
+    ],
+  });
+  assert.equal(saved.status, 200);
+  assert.equal(items(record(saved))[0].tankId, '');
+  assert.equal((await engine.command(living, 'irrigation', 'lawn', true)).status, 'applied');
+  await engine.stop();
+  const restarted = createEngine(options(directory));
+  await restarted.start();
+  try {
+    const [rule] = items(record(await service(restarted, path)));
+    assert.equal(rule.tankId, '');
+    assert.equal(rule.waterAvailable, null);
+    assert.equal(rule.error, null);
+    assert.equal(rule.enabled, true);
+    assert.equal(rule.actual, false);
+    assert.deepEqual(rule.days, [2, 6]);
+  } finally {
+    await restarted.stop();
+  }
+});
+
+test('the demo offers another PLC’s tank and follows its monitoring state', async (t) => {
+  const { engine } = await fixture(t);
+  const source = 'fcplcn-demo-utility';
+  const reference = source + '/tank-water';
+  const path = '/controllers/irrigation';
+  const catalogue = async () => record(await service(engine, path));
+  const findTank = (data: Data) =>
+    (data.remoteTanks as Data[] | undefined)?.find(({ id }) => id === reference);
+  await until(async () => findTank(await catalogue())?.waterAvailable === true, 6000);
+  const initial = await catalogue();
+  const selected = findTank(initial);
+  assert.equal(selected?.name, 'Бак с водой');
+  assert.equal(selected?.deviceName, 'Котельная');
+  assert.equal(selected?.waterAvailable, true);
+  const saved = await service(engine, path, {
+    baseRevision: initial.revision,
+    enabled: true,
+    items: [
+      {
+        id: 'remote-watering',
+        name: 'Полив из котельной',
+        relayId: 'rly-0/12',
+        tankId: reference,
+        days: [2, 6],
+        startTime: '06:30',
+        durationMinutes: 12,
+      },
+    ],
+  });
+  assert.equal(saved.status, 200);
+  assert.equal(items(record(saved))[0].tankId, reference);
+  assert.equal(
+    (await engine.command(living, 'irrigation', 'remote-watering', true)).status,
+    'applied',
+  );
+  const rule = () =>
+    items(
+      engine.snapshot().devices.find((device) => device.id === living)!.controllers.irrigation!
+        .data,
+    )[0];
+  await until(() => rule().waterAvailable === true, 6000);
+  assert.equal((await engine.command(source, 'tanks', 'tank-water', false)).status, 'applied');
+  await until(() => rule().waterAvailable === null, 6000);
+  assert.equal(rule().actual, false);
+  assert.equal(rule().valveActual, false);
+  assert.equal(rule().tankId, reference);
+  assert.match(String(rule().error), /бака/);
+  assert.equal((await engine.command(source, 'tanks', 'tank-water', true)).status, 'applied');
+  await until(() => rule().waterAvailable === true, 6000);
+  assert.equal(rule().actual, false);
 });
 
 test('demo supports CRC-valid OneWire and iButton enrollment without touching an armed guard', async (t) => {

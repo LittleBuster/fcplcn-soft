@@ -98,6 +98,41 @@ BackupResult conflict(std::string& error, const char* message)
 }
 
 /**
+ * @brief Check the controller inventory declared by a portable backup.
+ * @param[in] controllers Controller configuration section.
+ * @param version Supported portable format version.
+ * @return True when every required module occurs and there are no unknown fields.
+ */
+bool valid_controller_fields(const cJSON* controllers, std::uint32_t version)
+{
+    switch (version) {
+        case 1:
+            return settings_json_fields(controllers, {"sockets"});
+        case 2:
+            return settings_json_fields(controllers, {"sockets", "lights"});
+        case 3:
+            return settings_json_fields(controllers, {"sockets", "lights", "meteo"});
+        case 4:
+        case 5:
+        case 6:
+        case 7:
+            return settings_json_fields(controllers, {"sockets", "lights", "meteo", "thermostats"});
+        case 8:
+            return settings_json_fields(controllers,
+                                        {"sockets", "lights", "meteo", "thermostats", "security"});
+        case 9:
+            return settings_json_fields(
+                controllers, {"sockets", "lights", "meteo", "thermostats", "security", "tanks"});
+        case 10:
+            return settings_json_fields(
+                controllers,
+                {"sockets", "lights", "meteo", "thermostats", "security", "tanks", "irrigation"});
+        default:
+            return false;
+    }
+}
+
+/**
  * @brief Copy an older controller document into the current module layout.
  * @param[in] controllers Borrowed controller object already checked against its legacy version.
  * @param[in] version Supported older backup version, 1 through 6.
@@ -182,7 +217,7 @@ cJSON* backup_export_json(std::string& error)
     }
     Json root(cJSON_CreateObject(), cJSON_Delete);
     if (!root || !cJSON_AddStringToObject(root.get(), "format", "fcplcn-config")
-        || !cJSON_AddNumberToObject(root.get(), "version", 8)
+        || !cJSON_AddNumberToObject(root.get(), "version", 10)
         || !cJSON_AddStringToObject(root.get(), "product", FCPLCN_PRODUCT_NAME)
         || !cJSON_AddStringToObject(root.get(), "boardId", board_profile_active().id)
         || !cJSON_AddStringToObject(root.get(), "sourceDeviceId", device_id().c_str()))
@@ -227,7 +262,7 @@ BackupResult backup_stage_restore(const cJSON* request, std::string& error)
             {"sourceDeviceId"})
         || !text(get(document, "format"), "fcplcn-config")
         || !text(get(document, "product"), FCPLCN_PRODUCT_NAME)
-        || !integer(get(document, "version"), version) || (version < 1 || version > 8))
+        || !integer(get(document, "version"), version) || (version < 1 || version > 10))
         return invalid(error, "Неизвестный формат, продукт или версия резервной копии");
     if (get(document, "sourceDeviceId") != nullptr
         && (!cJSON_IsString(get(document, "sourceDeviceId"))
@@ -244,15 +279,7 @@ BackupResult backup_stage_restore(const cJSON* request, std::string& error)
         || board_profile_canonical_id(configured_board->valuestring) != board_profile_active().id)
         return conflict(error, "Профиль резервной копии не совпадает с активной платой");
     const auto* incoming_controllers = get(document, "controllers");
-    if (!(version == 1   ? settings_json_fields(incoming_controllers, {"sockets"})
-          : version == 2 ? settings_json_fields(incoming_controllers, {"sockets", "lights"})
-          : version == 3
-              ? settings_json_fields(incoming_controllers, {"sockets", "lights", "meteo"})
-          : version < 8
-              ? settings_json_fields(incoming_controllers,
-                                     {"sockets", "lights", "meteo", "thermostats"})
-              : settings_json_fields(incoming_controllers,
-                                     {"sockets", "lights", "meteo", "thermostats", "security"})))
+    if (!valid_controller_fields(incoming_controllers, version))
         return invalid(error, "Неизвестный или отсутствующий контроллер в резервной копии");
     Json upgraded(nullptr, cJSON_Delete);
     if (version == 4) {
@@ -341,7 +368,7 @@ BackupResult backup_stage_restore(const cJSON* request, std::string& error)
         return BackupResult::StorageError;
     }
     std::uint32_t current_revision, socket_revision, light_revision, meteo_revision,
-        thermostat_revision, security_revision;
+        thermostat_revision, security_revision, tank_revision, irrigation_revision;
     if (!config_record_revision(current.sections[0], current_revision, error)
         || !controllers_record_revisions(current.sections[2],
                                          socket_revision,
@@ -349,12 +376,15 @@ BackupResult backup_stage_restore(const cJSON* request, std::string& error)
                                          meteo_revision,
                                          thermostat_revision,
                                          error,
-                                         &security_revision))
+                                         &security_revision,
+                                         &tank_revision,
+                                         &irrigation_revision))
         return BackupResult::StorageError;
     if (base_revision != current_revision || current_revision == UINT32_MAX
         || socket_revision == UINT32_MAX || light_revision == UINT32_MAX
         || meteo_revision == UINT32_MAX || thermostat_revision == UINT32_MAX
-        || security_revision == UINT32_MAX)
+        || security_revision == UINT32_MAX || tank_revision == UINT32_MAX
+        || irrigation_revision == UINT32_MAX)
         return conflict(error, "Настройки уже изменились: обновите страницу перед импортом");
     if (!config_backup_record(
             get(document, "config"), current_revision + 1, replacement.sections[0], error)
@@ -365,7 +395,9 @@ BackupResult backup_stage_restore(const cJSON* request, std::string& error)
                                       thermostat_revision + 1,
                                       replacement.sections[2],
                                       error,
-                                      security_revision + 1))
+                                      security_revision + 1,
+                                      tank_revision + 1,
+                                      irrigation_revision + 1))
         return BackupResult::InvalidInput;
     const auto result =
         settings_store_stage(replacement, current.generation, prepare_restore_states);

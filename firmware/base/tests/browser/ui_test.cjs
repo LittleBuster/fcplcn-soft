@@ -12,6 +12,7 @@ const path = require('node:path');
 const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
 const { createHardwareMock } = require('./hardware_mock.cjs');
+const { fixedUtcOffsetMinutes } = require('./irrigation_mock.cjs');
 const { createControllersMock } = require('./controllers_mock.cjs');
 const { createStaticAssets } = require('./static_assets.cjs');
 const { createFirmwareMock } = require('./firmware_mock.cjs');
@@ -84,11 +85,51 @@ function createMock({
   managementToken,
   initialBackup,
   initialFirmware,
+  sessionNow = Date.now,
 } = {}) {
   const registry = JSON.parse(JSON.stringify(profiles));
   const account = verifier('admin', '');
   const identity = deviceId || (interactive ? 'fcplcn-simulator' : 'fcplcn-test');
   let session = '';
+  // Only the desktop simulator needs concurrent browser sessions. Keep the ordinary
+  // fixture's deterministic session unchanged; production auth remains C++-owned.
+  const simulatorSessions = new Map();
+  const sessionLifetimeMs = 8 * 60 * 60 * 1000;
+  const requestToken = (request) =>
+    String(request.headers.cookie || '')
+      .split(';')
+      .map((cookie) => cookie.trim())
+      .find((cookie) => cookie.startsWith('session='))
+      ?.slice('session='.length) || '';
+  function expireSimulatorSessions() {
+    const now = sessionNow();
+    for (const [token, entry] of simulatorSessions)
+      if (now >= entry.expiresAt) simulatorSessions.delete(token);
+    return now;
+  }
+  function revokeSessions() {
+    session = '';
+    simulatorSessions.clear();
+  }
+  function createSimulatorSession(previous) {
+    const now = expireSimulatorSessions();
+    // A browser re-login rotates its own token, leaving other browsers signed in.
+    simulatorSessions.delete(previous);
+    if (simulatorSessions.size >= 4) {
+      const oldest = [...simulatorSessions].sort((a, b) => a[1].lastUsed - b[1].lastUsed)[0];
+      simulatorSessions.delete(oldest[0]);
+    }
+    const token = crypto.randomBytes(32).toString('hex');
+    simulatorSessions.set(token, { expiresAt: now + sessionLifetimeMs, lastUsed: now });
+    return token;
+  }
+  function simulatorAuthenticated(token) {
+    const now = expireSimulatorSessions();
+    const entry = simulatorSessions.get(token);
+    if (!entry) return false;
+    entry.lastUsed = now;
+    return true;
+  }
   let rebootCount = 0;
   let rebootRequests = 0;
   let configRequests = 0;
@@ -173,14 +214,12 @@ function createMock({
     }
   }
 
+  const localOffsetMinutes = () => fixedUtcOffsetMinutes(config.time.timezone);
   function localTime(unixTime) {
-    const match = /^UTC([+-])(\d{1,2})(?::(\d{2}))?$/.exec(config.time.timezone);
-    const minutes = match
-      ? (match[1] === '-' ? 1 : -1) * (Number(match[2]) * 60 + Number(match[3] || 0))
-      : 0;
+    const minutes = localOffsetMinutes() || 0;
     return (
       new Date(unixTime * 1000 + minutes * 60000).toISOString().slice(0, 19).replace('T', ' ') +
-      (match ? ` UTC${minutes >= 0 ? '+' : '-'}${Math.abs(minutes) / 60}` : ' UTC')
+      (minutes ? ` UTC${minutes >= 0 ? '+' : '-'}${Math.abs(minutes) / 60}` : ' UTC')
     );
   }
 
@@ -194,6 +233,7 @@ function createMock({
   const controllers = createControllersMock({
     hardware,
     statePath,
+    irrigationClock: () => (unixTime() + localOffsetMinutes() * 60) * 1000,
     boardId: activeBoardId,
     normalizeId: (id) => normalizeBoardId(id, registry),
   });
@@ -215,7 +255,7 @@ function createMock({
     }
     return {
       format: 'fcplcn-config',
-      version: 8,
+      version: 10,
       product: product.name,
       boardId: config.hardware.boardId,
       sourceDeviceId: identity,
@@ -247,7 +287,7 @@ function createMock({
     bootTime = Date.now();
     hardware.reboot();
     controllers.reboot();
-    session = '';
+    revokeSessions();
     restorePending = false;
     rebootTimer = undefined;
   }
@@ -285,7 +325,7 @@ function createMock({
           );
         data = data.replace(
           '</body>',
-          '<section class="shell notice" aria-label="Охрана симулятора"><strong>Охрана — только демонстрация</strong><p id="simulator-security-status">После входа здесь доступны контакты iButton и датчики.</p><div id="simulator-security-keys" class="button-row"></div><div id="simulator-security-zones" class="button-row"></div></section><section id="simulator-input-tools" class="shell notice simulator-buttons" aria-label="Кнопки симулятора"><strong>Кнопки симулятора — только демонстрация</strong><p id="simulator-input-status">После входа здесь появятся кнопки входов, назначенных розеткам, свету или термостатам. Нажатие даёт LOW, отпускание — HIGH; автоматика входов для них отключена.</p><div id="simulator-input-buttons" class="button-row"></div></section><section class="shell notice" aria-label="Температуры симулятора"><strong>Температура — только демонстрация</strong><p id="simulator-temperature-status">Сохраните метеоточку, чтобы менять виртуальную температуру и наблюдать автономную работу термостата.</p><div id="simulator-temperatures"></div></section><script src="/simulator-inputs.js" defer></script></body>',
+          '<section class="shell notice" aria-label="Охрана симулятора"><strong>Охрана — только демонстрация</strong><p id="simulator-security-status">После входа здесь доступны контакты iButton и датчики.</p><div id="simulator-security-keys" class="button-row"></div><div id="simulator-security-zones" class="button-row"></div></section><section id="simulator-input-tools" class="shell notice simulator-buttons" aria-label="Кнопки симулятора"><strong>Кнопки симулятора — только демонстрация</strong><p id="simulator-input-status">После входа здесь появятся кнопки входов, назначенных розеткам, свету или термостатам. Нажатие даёт LOW, отпускание — HIGH; автоматика входов для них отключена.</p><div id="simulator-input-buttons" class="button-row"></div></section><section class="shell notice" aria-label="Температуры симулятора"><strong>Температура — только демонстрация</strong><p id="simulator-temperature-status">Сохраните метеоточку, чтобы менять виртуальную температуру и наблюдать автономную работу термостата.</p><div id="simulator-temperatures"></div></section><section class="shell notice" aria-label="Вода в баках симулятора"><strong>Баки — только демонстрация</strong><p id="simulator-tanks-status">Сохраните бак и назначьте входы, чтобы менять виртуальные уровни воды.</p><div id="simulator-tanks"></div></section><script src="/simulator-inputs.js" defer></script></body>',
         );
       }
       if (interactive && file === 'style.css')
@@ -339,8 +379,10 @@ function createMock({
         if (data.username !== account.username || !verifyPassword(account, data.password)) {
           return json({ error: 'Неверный логин или пароль' }, 401);
         }
-        session = interactive ? crypto.randomBytes(32).toString('hex') : 'fcplcn-ui-test-session';
-        response.setHeader('Set-Cookie', `session=${session}; HttpOnly; SameSite=Strict; Path=/`);
+        const token = interactive
+          ? createSimulatorSession(requestToken(request))
+          : (session = 'fcplcn-ui-test-session');
+        response.setHeader('Set-Cookie', `session=${token}; HttpOnly; SameSite=Strict; Path=/`);
         return json({ ok: true, username: account.username });
       }
       const trustedManagement =
@@ -349,10 +391,12 @@ function createMock({
         request.headers['x-fcplcn-management-token'] === managementToken;
       if (
         !trustedManagement &&
-        (!session ||
-          !String(request.headers.cookie || '')
-            .split(';')
-            .some((cookie) => cookie.trim() === `session=${session}`))
+        !(interactive
+          ? simulatorAuthenticated(requestToken(request))
+          : session &&
+            String(request.headers.cookie || '')
+              .split(';')
+              .some((cookie) => cookie.trim() === `session=${session}`))
       ) {
         return json({ error: 'Требуется вход' }, 401);
       }
@@ -370,7 +414,7 @@ function createMock({
             firmware.reboot();
             hardware.reboot();
             controllers.reboot();
-            session = '';
+            revokeSessions();
             rebootTimer = undefined;
           }, 1000).unref();
         }
@@ -394,6 +438,12 @@ function createMock({
         request.method === 'POST'
       ) {
         const result = await controllers.simulateSecurityZone(data);
+        return json(result.data, result.status);
+      }
+      if (simulatorRequest && request.url === '/__simulator/tanks' && request.method === 'GET')
+        return json({ tanks: controllers.simulatedTanks() });
+      if (simulatorRequest && request.url === '/__simulator/tank' && request.method === 'POST') {
+        const result = controllers.simulateTankLevel(data);
         return json(result.data, result.status);
       }
       if (simulatorRequest && request.url === '/__simulator/inputs' && request.method === 'GET')
@@ -448,7 +498,7 @@ function createMock({
         return json(result.data, result.status);
       }
       const controllerRoute =
-        /^\/api\/v1\/controllers\/(sockets|lights|meteo|thermostats|security)(\/(?:state|scan|enabled|armed))?$/.exec(
+        /^\/api\/v1\/controllers\/(sockets|lights|meteo|thermostats|security|tanks|irrigation)(\/(?:state|scan|enabled|armed))?$/.exec(
           request.url,
         );
       if (controllerRoute) {
@@ -460,9 +510,12 @@ function createMock({
         }
         const module = controllers.modules[controllerRoute[1]];
         if (controllerRoute[2] === '/enabled') {
-          if (controllerRoute[1] !== 'thermostats' || request.method !== 'POST')
+          if (
+            !['thermostats', 'tanks', 'irrigation'].includes(controllerRoute[1]) ||
+            request.method !== 'POST'
+          )
             return json({ error: 'Not found' }, 404);
-          const result = await thermostats.enabled(data);
+          const result = await module.enabled(data);
           return json(result.data, result.status);
         }
         if (controllerRoute[2] === '/scan') {
@@ -471,7 +524,10 @@ function createMock({
           const result = await module.scan(data);
           return json(result.data, result.status);
         }
-        if (['meteo', 'thermostats'].includes(controllerRoute[1]) && controllerRoute[2])
+        if (
+          ['meteo', 'thermostats', 'tanks', 'irrigation'].includes(controllerRoute[1]) &&
+          controllerRoute[2]
+        )
           return json({ error: 'Not found' }, 404);
         const result =
           controllerRoute[2] && request.method === 'POST'
@@ -651,7 +707,7 @@ function createMock({
         config.user.username = data.username;
         if ('newPassword' in data)
           Object.assign(account, verifier(data.username, data.newPassword));
-        session = '';
+        revokeSessions();
         return json({ ok: true, reauthenticate: true });
       }
       if (request.url === '/api/v1/time' && request.method === 'POST') {
@@ -687,13 +743,19 @@ function createMock({
             hardware.reboot();
             controllers.reboot();
             firmware.reboot();
-            session = '';
+            revokeSessions();
             rebootTimer = undefined;
           }, 1000).unref();
         return json({ ok: true });
       }
       if (request.url === '/api/v1/logout' && request.method === 'POST') {
-        session = '';
+        if (interactive) {
+          simulatorSessions.delete(requestToken(request));
+          response.setHeader(
+            'Set-Cookie',
+            'session=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0',
+          );
+        } else session = '';
         return json({ ok: true });
       }
       return json({ error: 'Not found' }, 404);
@@ -1476,6 +1538,21 @@ async function run() {
   let browser;
   try {
     browser = await chromium.launch({ headless: true });
+    if (process.env.FCPLCN_UI_SESSIONS_ONLY === '1') {
+      await require('./simulator_sessions_checks.cjs').checkSimulatorSessions({
+        browser,
+        createMock,
+      });
+      return;
+    }
+    if (process.env.FCPLCN_UI_IRRIGATION_ONLY === '1') {
+      await require('./irrigation_checks.cjs').checkIrrigation({ browser, createMock });
+      return;
+    }
+    if (process.env.FCPLCN_UI_TANKS_ONLY === '1') {
+      await require('./tanks_checks.cjs').checkTanks({ browser, createMock, artifacts });
+      return;
+    }
     if (process.env.FCPLCN_UI_SECURITY_ONLY === '1') {
       await require('./security_checks.cjs').checkSecurity({ browser, createMock, artifacts });
       return;
@@ -1534,6 +1611,10 @@ async function run() {
       await require('./backup_checks.cjs').checkBackup({ browser, createMock, artifacts });
       return;
     }
+    await require('./simulator_sessions_checks.cjs').checkSimulatorSessions({
+      browser,
+      createMock,
+    });
     const context = await browser.newContext({ viewport: { width: 1200, height: 1000 } });
     const page = await context.newPage();
     page.setDefaultTimeout(10000);
@@ -1838,6 +1919,8 @@ async function run() {
     await require('./meteo_checks.cjs').checkMeteo({ browser, createMock, artifacts });
     await require('./thermostats_checks.cjs').checkThermostats({ browser, createMock, artifacts });
     await require('./security_checks.cjs').checkSecurity({ browser, createMock, artifacts });
+    await require('./tanks_checks.cjs').checkTanks({ browser, createMock, artifacts });
+    await require('./irrigation_checks.cjs').checkIrrigation({ browser, createMock });
     await require('./backup_checks.cjs').checkBackup({ browser, createMock, artifacts });
   } finally {
     if (browser) await browser.close();

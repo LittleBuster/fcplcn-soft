@@ -6,19 +6,35 @@ import { Badge } from './components';
 import { Icon } from './icons';
 import { deviceName, statusText } from './model';
 import { homeId, portal } from './portal';
+import type { Notice } from './app/types';
+import { usePLCNotices } from './hooks/use-plc-notices';
 
 /** Сохраняет уже открытый iframe при потере статуса PLC, чтобы не потерять черновик настроек. */
 export function PLCSettings({
   deviceId,
+  irrigationRule,
   device,
   onBack,
+  onNotice,
 }: {
   deviceId: string;
+  irrigationRule?: string;
   device?: DeviceView;
   onBack: () => void;
+  onNotice: (notice: Notice | null) => void;
 }) {
+  const framePath = portal
+    ? `/plc/${encodeURIComponent(homeId)}/${encodeURIComponent(deviceId)}/`
+    : `/plc/${encodeURIComponent(deviceId)}/`;
+  const fragment =
+    irrigationRule === undefined
+      ? ''
+      : irrigationRule
+        ? `#irrigation/${encodeURIComponent(irrigationRule)}`
+        : '#irrigation';
   const supported = device?.management?.supported === true;
   const [opened, setOpened] = useState(supported);
+  const noticeBridge = usePLCNotices(deviceId, onNotice);
 
   useEffect(() => {
     if (supported) setOpened(true);
@@ -72,14 +88,12 @@ export function PLCSettings({
       {opened ? (
         <iframe
           key={deviceId}
+          ref={noticeBridge.frame}
+          onLoad={noticeBridge.loaded}
           class="plc-settings-frame"
           data-plc-settings-frame
           title={`Настройки PLC ${device ? deviceName(device) : deviceId}`}
-          src={
-            portal
-              ? `/plc/${encodeURIComponent(homeId)}/${encodeURIComponent(deviceId)}/`
-              : `/plc/${encodeURIComponent(deviceId)}/`
-          }
+          src={framePath + fragment}
         />
       ) : null}
     </section>

@@ -155,6 +155,7 @@ async function run() {
     await command(page.locator('[data-item-id="socket-window"] button'), true);
     await command(page.locator('[data-item-id="thermo-floor"] button'), false);
     assert.ok((await page.locator('[data-controller-kind="meteo"] .reading').count()) >= 2);
+    await require('./meteo-history.browser.cjs').checkMeteoHistory({ page, base });
     await screenshot('hub-controller-desktop');
     await page.getByRole('button', { name: 'Имя и помещение' }).click();
     await page.getByLabel('Название', { exact: true }).fill('Гостиная · проверено');
@@ -186,6 +187,7 @@ async function run() {
     await page.locator('[data-nav="activity"]').click();
     assert.ok((await page.locator('.command-row').count()) >= 5);
     await screenshot('hub-journal-mobile');
+    await require('./activity.browser.cjs').checkActivity({ page, base, screenshot });
     await page.setViewportSize({ width: 360, height: 800 });
     await page.locator('[data-nav="overview"]').click();
     await screenshot('hub-overview-narrow');

@@ -1,9 +1,17 @@
 /** @file Применение подтверждённых изменений сценариев к текущему снимку хаба. */
+import { useRef } from 'preact/hooks';
+import { api, jsonBody } from '../api';
+import type { HubSession } from './use-hub-session';
 import type { SceneRun, SceneDefinition } from '../../../shared/types.js';
 import type { HubSnapshotState } from './use-hub-snapshot';
 
 /** Отделяет локальное подтверждение сценария от более старого ответа периодического опроса. */
-export function useHubScenes(data: HubSnapshotState) {
+export function useHubScenes(
+  data: HubSnapshotState,
+  { sessionVersion }: HubSession,
+  onStarting: (starting: boolean) => void,
+) {
+  const runVersion = useRef<number | null>(null);
   const { setSnapshot, sceneVersion, refresh } = data;
 
   /** Сразу показывает принятый запуск, не дожидаясь следующего опроса. */
@@ -25,6 +33,41 @@ export function useHubScenes(data: HubSnapshotState) {
         : current,
     );
     void refresh();
+  }
+
+  /** Блокировка действует до ответа хаба, в том числе после перехода на другую вкладку. */
+  async function runScene(id: string) {
+    const version = sessionVersion.current;
+    if (runVersion.current === version) return;
+    runVersion.current = version;
+    onStarting(true);
+    try {
+      const run = await api<SceneRun>(`/scenes/${encodeURIComponent(id)}/run`, {
+        method: 'POST',
+        ...jsonBody({}),
+      });
+      if (sessionVersion.current === version) acceptSceneRun(run);
+    } finally {
+      if (runVersion.current === version) runVersion.current = null;
+      if (sessionVersion.current === version) onStarting(false);
+    }
+  }
+
+  async function setScheduleEnabled(scene: SceneDefinition, enabled: boolean) {
+    const version = sessionVersion.current;
+    try {
+      const confirmed = await api<SceneDefinition>(
+        `/scenes/${encodeURIComponent(scene.id)}/schedule`,
+        {
+          method: 'PUT',
+          ...jsonBody({ baseRevision: scene.revision, enabled }),
+        },
+      );
+      if (sessionVersion.current === version) acceptSceneDefinition(confirmed);
+    } catch (error) {
+      if (sessionVersion.current === version) void refresh();
+      throw error;
+    }
   }
 
   /** Применяет подтверждённую редакцию сценария. */
@@ -65,5 +108,5 @@ export function useHubScenes(data: HubSnapshotState) {
     void refresh();
   }
 
-  return { acceptSceneRun, acceptSceneDefinition, deleteSceneDefinition };
+  return { runScene, setScheduleEnabled, acceptSceneDefinition, deleteSceneDefinition };
 }

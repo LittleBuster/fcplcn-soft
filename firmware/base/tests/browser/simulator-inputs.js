@@ -243,3 +243,74 @@
   refreshSecurity();
   window.setInterval(refreshSecurity, 1000);
 })();
+
+// Separate raw contact controls permit every pattern, including deliberately inconsistent wiring.
+(() => {
+  const container = document.getElementById('simulator-tanks');
+  if (!container) return;
+  const status = document.getElementById('simulator-tanks-status');
+  let busy = false;
+  async function refreshTanks() {
+    if (busy || document.hidden) return;
+    busy = true;
+    try {
+      const reply = await fetch('/__simulator/tanks');
+      if (reply.status === 401) {
+        container.replaceChildren();
+        return;
+      }
+      const data = await reply.json();
+      if (!reply.ok) throw new Error(data.error || 'Уровни недоступны');
+      container.replaceChildren();
+      status.textContent = data.tanks.length
+        ? 'Только симулятор: переключайте контакт каждого датчика. Можно проверить и ошибочную последовательность уровней.'
+        : 'Сначала сохраните бак с цифровыми входами.';
+      for (const tank of data.tanks) {
+        const row = document.createElement('div');
+        row.className = 'button-row';
+        const label = document.createElement('strong');
+        label.textContent = tank.name;
+        row.append(label);
+        tank.levelInputs.forEach((id, index) => {
+          const button = document.createElement('button');
+          button.type = 'button';
+          button.className = 'button secondary';
+          button.dataset.simulatorTank = tank.id;
+          button.dataset.simulatorTankLevel = String(index);
+          const wet = tank.simulatedWet[index];
+          button.textContent = `${id}: ${wet ? 'в воде' : 'сухо'}`;
+          button.setAttribute('aria-pressed', String(wet));
+          button.addEventListener('click', async () => {
+            if (busy) return;
+            busy = true;
+            button.disabled = true;
+            try {
+              const next = [...tank.simulatedWet];
+              next[index] = !wet;
+              const response = await fetch('/__simulator/tank', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: tank.id, wet: next }),
+              });
+              const value = await response.json();
+              if (!response.ok) throw new Error(value.error);
+            } catch (error) {
+              status.textContent = error.message;
+            } finally {
+              busy = false;
+              void refreshTanks();
+            }
+          });
+          row.append(button);
+        });
+        container.append(row);
+      }
+    } catch (error) {
+      status.textContent = error.message;
+    } finally {
+      busy = false;
+    }
+  }
+  void refreshTanks();
+  window.setInterval(refreshTanks, 1000);
+})();

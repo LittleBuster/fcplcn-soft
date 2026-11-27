@@ -260,7 +260,7 @@ async function checkBackup({ browser, createMock, artifacts }) {
     await download.saveAs(file);
     const document = JSON.parse(fs.readFileSync(file, 'utf8'));
     assert.equal(document.boardId, canonicalBoardId);
-    assert.equal(document.version, 8);
+    assert.equal(document.version, 10);
     assert.equal(document.config.hardware.boardId, canonicalBoardId);
     assert.equal(source.backupRequests, 1);
     assert.equal(
@@ -417,7 +417,7 @@ async function checkBackup({ browser, createMock, artifacts }) {
       doc.boardId = doc.config.hardware.boardId = 'wrong-board';
     }, 409);
     await reject((doc) => {
-      doc.version = 9;
+      doc.version = 11;
     }, 400);
     await reject((doc) => {
       delete doc.controllers.thermostats.items[0].enabled;
@@ -431,6 +431,8 @@ async function checkBackup({ browser, createMock, artifacts }) {
     for (const invalid of ['missing', 'range'])
       await reject((doc) => {
         doc.version = 6;
+        delete doc.controllers.irrigation;
+        delete doc.controllers.tanks;
         delete doc.controllers.security;
         for (const item of doc.controllers.thermostats.items) {
           item.minOnSeconds = 2;
@@ -671,7 +673,9 @@ async function checkBackup({ browser, createMock, artifacts }) {
     for (const version of [7, 6, 5, 4, 3, 2, 1]) {
       const legacy = clone(document);
       legacy.version = version;
-      delete legacy.controllers.security;
+      delete legacy.controllers.irrigation;
+      delete legacy.controllers.tanks;
+      if (version < 8) delete legacy.controllers.security;
       legacy.boardId = legacyBoardId;
       legacy.config.hardware.boardId = legacyBoardId;
       if (version < 4) delete legacy.controllers.thermostats;
@@ -706,7 +710,7 @@ async function checkBackup({ browser, createMock, artifacts }) {
       const migrated = await (
         await targetContext.request.get(`${targetUrl}/api/v1/config/backup`)
       ).json();
-      assert.equal(migrated.version, 8);
+      assert.equal(migrated.version, 10);
       assert.deepEqual(migrated.controllers.sockets, document.controllers.sockets);
       assert.deepEqual(
         migrated.controllers.meteo,

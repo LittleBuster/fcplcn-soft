@@ -24,7 +24,7 @@ import {
 import { Badge, Empty } from './common';
 import { ItemCard } from './equipment-card';
 import { SecurityPanel } from './security-panel';
-import type { CommandAction } from './types';
+import type { CommandAction, ConfigureIrrigation } from './types';
 
 /** Объединяет управление оборудованием, сведения о PLC и черновики имени и иллюстрации. */
 export function DeviceDetail({
@@ -34,6 +34,7 @@ export function DeviceDetail({
   pending,
   connected,
   onCommand,
+  configureIrrigation,
   onRename,
   controlsBlocked = false,
   onConfigure,
@@ -45,6 +46,7 @@ export function DeviceDetail({
   pending: Set<string>;
   connected: boolean;
   onCommand: CommandAction;
+  configureIrrigation?: ConfigureIrrigation;
   onRename: (
     deviceId: string,
     name: string,
@@ -230,6 +232,20 @@ export function DeviceDetail({
                     <Icon name={moduleIcons[kind]} />
                     {titles[kind]}
                   </h2>
+                  {kind === 'irrigation' &&
+                  configureIrrigation &&
+                  connected &&
+                  device.online &&
+                  device.management?.supported ? (
+                    <button
+                      type="button"
+                      class="button secondary small"
+                      onClick={() => configureIrrigation(device.id)}
+                    >
+                      <Icon name="settings" />
+                      {items.length ? 'Настроить полив' : 'Добавить правило полива'}
+                    </button>
+                  ) : null}
                   <Badge
                     tone={
                       !module.fresh ? 'muted' : module.data.enabled === true ? 'green' : 'muted'
@@ -271,6 +287,7 @@ export function DeviceDetail({
                         pending={busy}
                         connected={connected}
                         controlsBlocked={controlsBlocked}
+                        configureIrrigation={configureIrrigation}
                         onCommand={onCommand}
                       />
                     ))}

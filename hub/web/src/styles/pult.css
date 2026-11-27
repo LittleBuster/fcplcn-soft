@@ -1,5 +1,6 @@
 /* Крупные touch-элементы домашнего пульта; все правила ограничены его страницей. */
 .pult-page {
+  --pult-on-accent: #9cdbb9;
   font-size: 16px;
 }
 .pult-page .pult-summary {
@@ -34,7 +35,7 @@
   width: 32px;
   height: 32px;
 }
-.pult-page .pult-summary-card > div {
+.pult-page .pult-summary-card > :is(div, .pult-network-content) {
   min-width: 0;
   display: grid;
   align-content: center;
@@ -216,6 +217,39 @@
   width: 18px;
   height: 18px;
 }
+.pult-page .pult-tank-top {
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr) 34px;
+  gap: 6px;
+  width: 100%;
+  min-height: 46px;
+  margin-bottom: 7px;
+}
+.pult-page .pult-tank-top .tank-cylinder {
+  width: 56px;
+  height: 46px;
+  margin: 0;
+}
+.pult-page .pult-tank-top .pult-tank-reading {
+  text-align: center;
+  color: #91dcf2;
+}
+.pult-page .pult-tile-face.pult-tank-face {
+  padding-bottom: 8px;
+}
+.pult-page .pult-tank-statuses {
+  display: grid;
+  gap: 2px;
+  margin-top: 6px;
+}
+.pult-page .pult-tank-statuses .pult-tile-state {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.3;
+}
+.pult-page .pult-state-unknown .tank-cylinder {
+  opacity: 0.65;
+}
 .pult-page .pult-tile-name {
   display: block;
   font-size: 17px;
@@ -240,12 +274,6 @@
   flex-shrink: 0;
   opacity: 0.8;
 }
-.pult-page .pult-tile-extra {
-  color: #93a9c1;
-  display: block;
-  font-size: 12px;
-  margin-top: 6px;
-}
 .pult-page .pult-tile-reading {
   white-space: nowrap;
   color: var(--amber);
@@ -262,15 +290,36 @@
   gap: 14px;
   margin-left: auto;
 }
-.pult-page .pult-kind-meteo .pult-tile-readings {
+.pult-page :is(.pult-kind-meteo, .pult-kind-thermostats) .pult-tile-readings {
   flex-direction: column;
   align-items: flex-end;
   gap: 6px;
 }
-.pult-page .pult-tile-humidity {
+.pult-page .pult-kind-thermostats .pult-tile-top {
+  flex-wrap: nowrap;
+}
+.pult-page .pult-kind-thermostats .pult-tile-readings {
+  min-width: 0;
+  flex-shrink: 1;
+}
+.pult-page :is(.pult-tile-humidity, .pult-tile-setpoint) {
   font-size: calc(29px / 1.5);
   letter-spacing: 0;
+}
+.pult-page .pult-tile-humidity {
   color: var(--cyan);
+}
+.pult-page .pult-tile-setpoint {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: flex-end;
+  gap: 3px 5px;
+  color: var(--pult-on-accent);
+}
+.pult-page .pult-setpoint-label {
+  font-size: 10px;
+  font-weight: 500;
 }
 .pult-page .pult-tile-reading small {
   font-size: 14px;
@@ -314,7 +363,43 @@
 }
 .pult-page .pult-state-on .pult-tile-icon,
 .pult-page .pult-state-on .pult-tile-state {
-  color: #9cdbb9;
+  color: var(--pult-on-accent);
+}
+.pult-page [data-tank-output] > .pult-state-dot {
+  color: #8497aa;
+}
+.pult-page
+  .pult-state-on
+  .pult-tile-state:not([data-tank-output])
+  > .pult-state-dot:not([data-thermostat-state]),
+.pult-page [data-tank-output][data-output-state='on'] > .pult-state-dot {
+  background: #52f77c;
+  box-shadow: 0 0 8px #52f77c50;
+  opacity: 1;
+}
+.pult-page .pult-state-dot[data-thermostat-state] {
+  color: #8497aa;
+  opacity: 1;
+}
+.pult-page .pult-state-dot[data-thermostat-state='heating'] {
+  color: #ffab61;
+}
+.pult-page .pult-state-dot[data-thermostat-state='cooling'] {
+  color: #79c8ff;
+}
+.pult-page .pult-state-dot[data-thermostat-state='holding'] {
+  color: #52f77c;
+}
+.pult-page .pult-state-dot[data-thermostat-state='waiting'] {
+  color: var(--amber);
+}
+.pult-page .pult-state-dot[data-thermostat-state='error'] {
+  color: var(--red);
+}
+.pult-page [data-tank-output][data-output-state='unknown'] > .pult-state-dot,
+.pult-page .pult-state-dot[data-thermostat-state='unknown'] {
+  background: transparent;
+  border: 1px solid currentColor;
 }
 .pult-page .pult-state-on .pult-tile-power {
   color: #142a22;
@@ -341,6 +426,24 @@
 .pult-page .pult-kind-meteo.pult-state-on .pult-tile-icon,
 .pult-page .pult-kind-meteo.pult-state-on .pult-tile-state {
   color: #8bced5;
+}
+.pult-page :is(.pult-kind-tanks, .pult-kind-irrigation).pult-state-on {
+  background:
+    radial-gradient(ellipse at 15% 0%, #54bded20, transparent 72%),
+    linear-gradient(135deg, #20394b, #182b3a);
+  border-color: #4e91b1;
+  box-shadow:
+    inset 0 0 28px #6ccfff0c,
+    0 0 18px #36b8f018;
+}
+.pult-page .pult-kind-tanks.pult-state-on .pult-tile-state,
+.pult-page .pult-kind-irrigation.pult-state-on .irrigation-state {
+  color: #9bdcf2;
+}
+.pult-page .pult-kind-tanks.pult-state-on .pult-tile-power {
+  color: #173547;
+  background: #a2def3;
+  border-color: #a2def3;
 }
 .pult-page .pult-tile.pult-state-unknown {
   background: #17212e;
@@ -439,9 +542,39 @@
   }
 }
 @media (max-width: 680px) {
+  .pult-page .pult-tank-top {
+    grid-template-columns: 38px minmax(0, 1fr) 28px;
+    gap: 4px;
+    min-height: 34px;
+  }
+  .pult-page .pult-tank-top .tank-cylinder {
+    width: 38px;
+    height: 32px;
+  }
+  .pult-page .pult-tank-top .pult-tile-power {
+    width: 28px;
+    height: 28px;
+  }
+  .pult-page .pult-tank-reading {
+    font-size: 23px;
+  }
+  .pult-page .pult-tank-reading small {
+    margin-left: 2px;
+    font-size: 11px;
+  }
   .pult-page .pult-tile-icon .icon {
     width: 52px;
     height: 52px;
+  }
+  .pult-page .pult-kind-thermostats [data-pult-reading] {
+    font-size: 22px;
+  }
+  .pult-page .pult-tile-setpoint {
+    font-size: 15px;
+  }
+  .pult-page .pult-kind-thermostats .pult-tile-reading small {
+    margin-left: 2px;
+    font-size: 11px;
   }
   .pult-page .pult-summary {
     grid-template-columns: 1fr 1fr;

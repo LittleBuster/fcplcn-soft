@@ -1,74 +1,17 @@
 /** @file Запуск, права доступа и открытие черновика редактора сценария. */
 
 import { useState } from 'preact/hooks';
-import type { SceneDefinition, SceneId, SceneRun } from '../../../../shared/types.js';
-import { api, jsonBody } from '../../api';
-import { canConfigure, canControl, canManageSecurity } from '../../portal';
+import type { SceneDefinition } from '../../../../shared/types.js';
+import { canConfigure } from '../../portal';
 import type { ScenesPanelProps } from './types';
-import { useRunNotice } from './use-run-notice';
+import { useSceneRun } from './use-scene-run';
 
 /** Хранит состояние панели; сетевые ответы не применяются после её закрытия. */
-export function useScenesPanel({
-  snapshot,
-  unavailable,
-  manualBusy,
-  onRunAccepted,
-  onStarting,
-  clearNoticeToken = 0,
-}: Pick<
-  ScenesPanelProps,
-  'snapshot' | 'unavailable' | 'manualBusy' | 'onRunAccepted' | 'onStarting' | 'clearNoticeToken'
->) {
-  // Черновик редактора и выбранная группа библиотеки.
-  const [starting, setStarting] = useState<SceneId | null>(null);
+export function useScenesPanel(props: ScenesPanelProps) {
+  const { snapshot } = props;
+  const runner = useSceneRun(props);
   const [editing, setEditing] = useState<SceneDefinition | null>(null);
-  const [error, setError] = useState('');
   const [group, setGroup] = useState<'instant' | 'scheduled'>('instant');
-  const { current, visibleRunId, setVisibleRunId, setNoticeDetailsOpen, mounted } = useRunNotice(
-    snapshot,
-    clearNoticeToken,
-    () => setError(''),
-  );
-  const storageError =
-    'storageError' in snapshot && typeof snapshot.storageError === 'string'
-      ? snapshot.storageError
-      : '';
-
-  const busy = Boolean(starting || snapshot.activeRun);
-
-  const blocked = !canControl || busy || unavailable || manualBusy || Boolean(storageError);
-
-  /** Проверяет право управления охраной для встроенных и пользовательских сценариев. */
-  const allowed = (id: string) =>
-    canManageSecurity ||
-    (!['home', 'away'].includes(id) &&
-      !snapshot.definitions
-        .find((entry) => entry.id === id)
-        ?.actions.some((entry) => entry.controller === 'security'));
-
-  /** Запускает один разрешённый сценарий и принимает результат только пока панель открыта. */
-  async function run(id: SceneId) {
-    if (blocked || !allowed(id)) return;
-    setStarting(id);
-    setError('');
-    setVisibleRunId(null);
-    onStarting(true);
-    try {
-      const result = await api<SceneRun>(`/scenes/${encodeURIComponent(id)}/run`, {
-        method: 'POST',
-        ...jsonBody({}),
-      });
-      if (mounted.current) onRunAccepted(result);
-    } catch (error) {
-      if (mounted.current)
-        setError(error instanceof Error ? error.message : 'Не удалось запустить сценарий');
-    } finally {
-      if (mounted.current) {
-        setStarting(null);
-        onStarting(false);
-      }
-    }
-  }
 
   /** Открывает редактор с отдельными копиями действий и дней расписания текущего сценария. */
   function edit(definition: SceneDefinition) {
@@ -104,23 +47,11 @@ export function useScenesPanel({
     (definition) => Boolean(definition.schedule?.enabled) === (group === 'scheduled'),
   );
   return {
-    starting,
+    ...runner,
     editing,
     setEditing,
-    error,
-    setError,
     group,
     setGroup,
-    current,
-    visibleRunId,
-    setVisibleRunId,
-    setNoticeDetailsOpen,
-    mounted,
-    storageError,
-    busy,
-    blocked,
-    allowed,
-    run,
     edit,
     create,
     grouped,

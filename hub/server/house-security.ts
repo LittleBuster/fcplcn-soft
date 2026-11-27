@@ -1,5 +1,6 @@
 /** @file Durable whole-house intent; recovery applies current guard state without replaying scenes. */
 import { randomUUID } from 'node:crypto';
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { performance } from 'node:perf_hooks';
 import {
   closeSync,
@@ -24,6 +25,7 @@ import type {
 } from '../shared/types.js';
 import type { SecurityTouchEvent } from '../shared/security-sync.js';
 import { Scenes } from './scenes.js';
+import { withActivity } from './activity-context.js';
 
 interface KnownDevice {
   deviceId: string;
@@ -55,7 +57,7 @@ interface Runtime {
 interface Options {
   directory?: string;
   isBusy?: () => boolean;
-  runScene?: (id: 'home' | 'away') => SceneRun;
+  runScene?: (id: 'home' | 'away', signal: AbortSignal) => SceneRun | Promise<SceneRun>;
   now?: () => number;
   pulseMs?: number;
   commandTimeoutMs?: number;
@@ -100,7 +102,11 @@ export class HouseSecurity {
   private unsubscribe?: () => void;
   private storageError: string | null = null;
   private stopped = false;
-  private touchContext: SecurityTouchEvent | null = null;
+  private readonly touchContext = new AsyncLocalStorage<{
+    event: SecurityTouchEvent;
+    expiresAt: number;
+  }>();
+  private readonly touchesStarting = new Set<string>();
 
   constructor(
     private readonly engine: HubEngine,
@@ -260,26 +266,8 @@ export class HouseSecurity {
   private touch(event: SecurityTouchEvent): void {
     if (this.stopped || this.storageError || event.hubEpoch !== this.hubEpoch) return;
     const eventId = `${event.deviceId}:${event.bootId}:${event.eventSequence}`;
-    if (this.store.consumed.includes(eventId)) return;
-    if (event.modeRevision !== this.store.revision || this.busy) {
-      this.commit({
-        ...this.store,
-        consumed: [...this.store.consumed, eventId].slice(-MAX_EVENTS),
-      });
-      const state = this.runtime.get(event.deviceId);
-      if (state && event.localApplied && this.store.desiredArmed !== null) {
-        state.needs = true;
-        state.reason = 'intent';
-        state.attempts = 0;
-        state.waitSample = null;
-        state.nextTry = 0;
-      }
-      return;
-    }
-    this.touchContext = event;
-    try {
-      (this.options.runScene || ((id) => this.scenes.run(id)))(event.value ? 'away' : 'home');
-    } catch {
+    if (this.store.consumed.includes(eventId) || this.touchesStarting.has(eventId)) return;
+    const refuse = () => {
       // A refused operation is consumed, never put back on a queue after a lock/reconnect clears.
       if (!this.storageError && !this.store.consumed.includes(eventId))
         this.commit({
@@ -294,8 +282,33 @@ export class HouseSecurity {
         state.waitSample = null;
         state.nextTry = 0;
       }
-    } finally {
-      this.touchContext = null;
+    };
+    if (event.modeRevision !== this.store.revision || this.busy) {
+      refuse();
+      return;
+    }
+    this.touchesStarting.add(eventId);
+    const done = () => this.touchesStarting.delete(eventId);
+    try {
+      const runScene =
+        this.options.runScene || ((id, signal) => this.scenes.startRun(id, 'manual', signal));
+      const run = this.touchContext.run(
+        { event, expiresAt: this.now() + SECURITY_COMMAND_TIMEOUT_MS },
+        () =>
+          withActivity(
+            { actor: { source: 'key', name: event.keyName || event.deviceId, id: event.deviceId } },
+            () =>
+              runScene(
+                event.value ? 'away' : 'home',
+                AbortSignal.timeout(SECURITY_COMMAND_TIMEOUT_MS),
+              ),
+          ),
+      );
+      if (run instanceof Promise) void run.catch(refuse).finally(done);
+      else done();
+    } catch {
+      refuse();
+      done();
     }
   }
   private accept(run: SceneRun): void {
@@ -303,8 +316,10 @@ export class HouseSecurity {
     if (this.stopped || this.pending.size || this.options.isBusy?.())
       throw failure('Охрана занята; повторите действие после завершения текущей операции');
     if (this.store.revision >= MAX_REVISION) throw failure('Исчерпан счётчик режимов охраны', 503);
-    const event = this.touchContext,
+    const touch = this.touchContext.getStore();
+    const event = touch?.event,
       eventId = event ? `${event.deviceId}:${event.bootId}:${event.eventSequence}` : null;
+    if (touch && this.now() >= touch.expiresAt) throw failure('Срок действия касания истёк', 408);
     if (
       event &&
       (event.modeRevision !== this.store.revision || this.store.consumed.includes(eventId!))
@@ -411,7 +426,10 @@ export class HouseSecurity {
       }
       if (state.attempts >= 3 || state.nextTry > this.now() || state.waitSample === currentSample)
         continue;
-      void this.synchronize(device.id, this.store.desiredArmed).catch(() => {});
+      const armed = this.store.desiredArmed;
+      void withActivity({ actor: { source: 'system', name: 'Синхронизация режима охраны' } }, () =>
+        this.synchronize(device.id, armed),
+      ).catch(() => {});
     }
   }
   private synchronize(deviceId: string, value: boolean): Promise<CommandView> {

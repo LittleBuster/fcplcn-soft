@@ -1,11 +1,6 @@
 /** @file Контракты панели, редактора и группы сценариев. */
 
-import type {
-  DeviceView,
-  SceneDefinition,
-  SceneRun,
-  ScenesSnapshot,
-} from '../../../../shared/types.js';
+import type { DeviceView, SceneDefinition, ScenesSnapshot } from '../../../../shared/types.js';
 
 /** Группа отображения пользовательской библиотеки. */
 export type SceneGroup = 'instant' | 'scheduled';
@@ -16,9 +11,8 @@ export interface ScenesPanelProps {
   devices: DeviceView[];
   unavailable: boolean;
   manualBusy: boolean;
-  onRunAccepted: (run: SceneRun) => void;
+  onRun: (id: string) => Promise<void>;
   onSaved: (definition: SceneDefinition) => void;
-  onStarting: (starting: boolean) => void;
   onDeleted: (id: string) => void;
   expanded?: boolean;
   clearNoticeToken?: number;

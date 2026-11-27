@@ -74,6 +74,7 @@ export function SceneEditor(props: SceneEditorProps) {
         />
         <EditorSchedule
           disabled={disabled}
+          paused={Boolean(definition.schedule?.paused)}
           schedule={schedule}
           setSchedule={setSchedule}
           saving={saving}

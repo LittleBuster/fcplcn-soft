@@ -137,14 +137,17 @@ test('a logout failure reported after the file commit cannot restore its revoked
   );
 });
 
-test('saving an unchanged account still revokes all sessions durably; the credential schema stays compatible', (t) => {
+test('saving an unchanged account still revokes all sessions durably; the credential schema stays compatible', async (t) => {
   const f = fixture(t);
   const first = f.login().cookie();
   const second = f.login().cookie();
   const before = readFileSync(f.credentials.path, 'utf8');
   const changed = response();
   assert.equal(
-    f.sessions.change(request(first), changed.message, { username: 'admin', currentPassword: '' }),
+    await f.sessions.change(request(first), changed.message, {
+      username: 'admin',
+      currentPassword: '',
+    }),
     200,
   );
   assert.match(changed.headers.get('set-cookie')!, /Max-Age=0/);
@@ -157,14 +160,14 @@ test('saving an unchanged account still revokes all sessions durably; the creden
   assert.equal(restarted.authenticated(request(second)), false);
 });
 
-test('a committed credential replacement invalidates a stale session file even when cleanup cannot be saved', (t) => {
+test('a committed credential replacement invalidates a stale session file even when cleanup cannot be saved', async (t) => {
   const f = fixture(t);
   const cookie = f.login().cookie();
   const oldSessions = readFileSync(f.store.path, 'utf8');
   rmSync(f.store.path);
   mkdirSync(f.store.path);
   const changed = response();
-  assert.throws(
+  await assert.rejects(
     () =>
       f.sessions.change(request(cookie), changed.message, {
         username: 'owner',

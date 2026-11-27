@@ -3,7 +3,7 @@
  * @brief Verify publication changes, measurement freshness and failed-enqueue recovery.
  */
 #include "network/mqtt_telemetry.h"
-#include "util/checksum.h"
+#include "platform/checksum.h"
 
 #include <array>
 #include <cstdio>
@@ -103,7 +103,7 @@ int main(int argc, char** argv)
         require(cache.needs_publish(kChannel, key(value.get()), 1300),
                 "sensor recovery was suppressed");
     } else if (name == "retry_reconnect") {
-        for (unsigned i = 0; i < 5; ++i) {
+        for (std::size_t i = 0; i < kMqttTelemetryChannelCount; ++i) {
             const auto slot = static_cast<MqttTelemetryChannel>(i);
             require(cache.needs_publish(slot, original, 1100), "initial state missing");
             // A failed outbox enqueue must leave this state eligible for the next polling step.
@@ -112,7 +112,7 @@ int main(int argc, char** argv)
             require(!cache.needs_publish(slot, original, 1300), "unchanged state was resent");
         }
         cache.reset();
-        for (unsigned i = 0; i < 5; ++i)
+        for (std::size_t i = 0; i < kMqttTelemetryChannelCount; ++i)
             require(cache.needs_publish(static_cast<MqttTelemetryChannel>(i), original, 1400),
                     "reconnect did not republish every status topic");
     } else if (name == "refresh") {
@@ -171,6 +171,50 @@ int main(int argc, char** argv)
         cJSON_SetValuestring(cJSON_GetObjectItemCaseSensitive(security.get(), "phase"), "alarm");
         require(cache.needs_publish(MqttTelemetryChannel::Security, key(security.get()), 2001),
                 "entry delay completion did not publish alarm");
+    } else if (name == "tanks") {
+        auto tank = json(
+            R"({"enabled":true,"items":[{"id":"tank","enabled":true,"available":true,"levelsWet":[true,false],"levelPct":50,"pumpActual":true,"valveActual":true,"error":null}]})");
+        mqtt_telemetry_compact(MqttTelemetryChannel::Tanks, tank.get());
+        const auto before = key(tank.get());
+        cache.accepted(MqttTelemetryChannel::Tanks, before, 1000);
+        require(!cache.needs_publish(MqttTelemetryChannel::Tanks, before, 1100),
+                "unchanged tank observations caused a status flood");
+        cJSON_ReplaceItemInArray(cJSON_GetObjectItemCaseSensitive(item(tank.get()), "levelsWet"),
+                                 0,
+                                 cJSON_CreateFalse());
+        cJSON_SetNumberValue(cJSON_GetObjectItemCaseSensitive(item(tank.get()), "levelPct"), 0);
+        cJSON_ReplaceItemInObjectCaseSensitive(item(tank.get()), "pumpActual", cJSON_CreateFalse());
+        require(cache.needs_publish(MqttTelemetryChannel::Tanks, key(tank.get()), 1200),
+                "empty tank and dry-run stop were suppressed");
+        cache.accepted(MqttTelemetryChannel::Tanks, key(tank.get()), 1200);
+        cJSON_ReplaceItemInObjectCaseSensitive(item(tank.get()), "available", cJSON_CreateFalse());
+        cJSON_ReplaceItemInObjectCaseSensitive(item(tank.get()), "levelPct", cJSON_CreateNull());
+        cJSON_ReplaceItemInObjectCaseSensitive(
+            item(tank.get()), "valveActual", cJSON_CreateFalse());
+        cJSON_ReplaceItemInObjectCaseSensitive(
+            item(tank.get()), "error", cJSON_CreateString("input fault"));
+        require(cache.needs_publish(MqttTelemetryChannel::Tanks, key(tank.get()), 1300),
+                "tank input fault and closed fill valve were suppressed");
+        cache.accepted(MqttTelemetryChannel::Tanks, key(tank.get()), 1300);
+        cJSON_ReplaceItemInObjectCaseSensitive(item(tank.get()), "enabled", cJSON_CreateFalse());
+        require(cache.needs_publish(MqttTelemetryChannel::Tanks, key(tank.get()), 1400),
+                "tank monitoring disable was suppressed");
+    } else if (name == "irrigation") {
+        auto rules = json(
+            R"({"items":[{"id":"garden","actual":true,"valveActual":true,"waterAvailable":true,"remainingSeconds":55}]})");
+        const auto channel = MqttTelemetryChannel::Irrigation;
+        cache.accepted(channel, key(rules.get()), 1000);
+        auto* row = item(rules.get());
+        cJSON_SetNumberValue(cJSON_GetObjectItemCaseSensitive(row, "remainingSeconds"), 54);
+        require(!cache.needs_publish(channel, key(rules.get()), 2000),
+                "Countdown flooded telemetry");
+        cJSON_ReplaceItemInObject(row, "waterAvailable", cJSON_CreateFalse());
+        require(cache.needs_publish(channel, key(rules.get()), 2001), "Empty tank was suppressed");
+        cache.accepted(channel, key(rules.get()), 2001);
+        cJSON_ReplaceItemInObject(row, "actual", cJSON_CreateFalse());
+        cJSON_ReplaceItemInObject(row, "valveActual", cJSON_CreateFalse());
+        require(cache.needs_publish(channel, key(rules.get()), 2002),
+                "Closed irrigation valve was suppressed");
     } else if (name == "large_discovery") {
         auto full = json("{\"items\":[]}");
         auto* rows = cJSON_GetObjectItemCaseSensitive(full.get(), "items");

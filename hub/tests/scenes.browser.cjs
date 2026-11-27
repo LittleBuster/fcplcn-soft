@@ -95,6 +95,10 @@ async function checkScenes({ page, context, base, engine, artifacts }) {
     assert.equal(await page.locator(`[data-scene-settings="${id}"]`).count(), 1);
     assert.ok((await page.locator(`[data-scene-id="${id}"] svg`).count()) >= 1);
   }
+  assert.equal(
+    await page.locator('[data-scene-id="prepare"] .scene-art [data-icon="car"]').count(),
+    1,
+  );
   const living = 'fcplcn-demo-living';
   await configure('home', [
     { deviceId: living, controller: 'sockets', itemId: 'socket-window', value: false },

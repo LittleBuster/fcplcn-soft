@@ -165,22 +165,26 @@ fcplcn_bootstrap() {
         fcplcn_require_local_docker || return 1
     fi
     if [ "$dry_run" = 1 ]; then
-        case "$fcplcn_system" in
-            Linux) fcplcn_note 'План: проверить Python 3.10+, Git, Docker Engine и Compose; отсутствующие зависимости установить из apt и официального репозитория Docker.' ;;
-            Darwin) fcplcn_note 'План: проверить Python, Git и Docker; при необходимости установить Homebrew и Docker Desktop. Первый запуск Desktop подтверждается в его окне.' ;;
+        case "$action:$fcplcn_system" in
+            install:Linux) fcplcn_note 'План: проверить Python 3.10+, Git, Docker Engine и Compose; отсутствующие зависимости установить из apt и официального репозитория Docker.' ;;
+            install:Darwin) fcplcn_note 'План: проверить Python, Git и Docker; при необходимости установить Homebrew и Docker Desktop. Первый запуск Desktop подтверждается в его окне.' ;;
+            update:*) fcplcn_note 'План: получить образы выбранного компонента и создать копию перед перезапуском контейнеров.' ;;
         esac
         fcplcn_find_python || :
         return 0
     fi
-    case "$action" in
-        install|update)
-            case "$fcplcn_system" in
-                Linux) fcplcn_linux_dependencies || return 1 ;;
-                Darwin) fcplcn_macos_dependencies || return 1 ;;
-            esac ;;
-    esac
-    fcplcn_find_python || { fcplcn_fail 'Требуется Python 3.10+. Выполните install для установки зависимостей.'; return 1; }
-    command -v docker >/dev/null 2>&1 || { fcplcn_fail 'Docker не установлен. Выполните install.'; return 1; }
+    if [ "$action" = install ]; then
+        case "$fcplcn_system" in
+            Linux) fcplcn_linux_dependencies || return 1 ;;
+            Darwin) fcplcn_macos_dependencies || return 1 ;;
+        esac
+    fi
+    fcplcn_find_python || { fcplcn_fail 'Требуется Python 3.10+. Для установки зависимостей используйте ./install.sh.'; return 1; }
+    command -v docker >/dev/null 2>&1 || { fcplcn_fail 'Требуется Docker. Для установки зависимостей используйте ./install.sh.'; return 1; }
+    if [ "$action" = update ] && ! command -v git >/dev/null 2>&1; then
+        fcplcn_fail 'Для обновления требуется Git.'
+        return 1
+    fi
     # doctor never triggers a sudo password prompt or starts a service.
     if [ "$action" = doctor ]; then
         docker info >/dev/null 2>&1 || { fcplcn_fail 'Docker недоступен текущему пользователю; проверьте службу или запустите doctor через sudo на Linux.'; return 1; }

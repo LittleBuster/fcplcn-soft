@@ -1,8 +1,9 @@
 /** @file Список отправленных команд с результатами, подтверждёнными PLC. */
 
 import type { CommandView, DeviceView } from '../../../shared/types.js';
+import { activityActorLabel, activityDateTime } from '../features/activity/labels';
 import { Icon } from '../icons';
-import { commandText, deviceName, moduleIcons, time, titles } from '../model';
+import { commandText, moduleIcons, time, titles } from '../model';
 import { Empty } from './common';
 
 /** Показывает результат каждой команды отдельно от факта её отправки на сервер. */
@@ -26,7 +27,7 @@ export function CommandLog({
     );
 
   return (
-    <div class="command-log panel" data-command-log>
+    <div class={`command-log panel${compact ? '' : ' command-log-full'}`} data-command-log>
       {entries.map((command) => (
         <div class="command-row" key={command.id}>
           <div
@@ -36,10 +37,9 @@ export function CommandLog({
           </div>
           <div class="command-copy">
             <strong>
-              {deviceName(
-                devices.find((device) => device.id === command.deviceId) ||
-                  ({ name: command.deviceId } as DeviceView),
-              )}
+              {(compact ? undefined : command.deviceName) ||
+                devices.find((device) => device.id === command.deviceId)?.name ||
+                command.deviceId}
               <span> · {titles[command.controller]}</span>
             </strong>
             <p>
@@ -50,10 +50,37 @@ export function CommandLog({
                 : `${command.itemId} · ${command.value ? 'включить' : 'выключить'}`}
               {command.error ? ` · ${command.error}` : ''}
             </p>
+            {compact ? null : (
+              <dl class="activity-facts command-facts">
+                <div>
+                  <dt>Инициатор</dt>
+                  <dd>{activityActorLabel(command.actor)}</dd>
+                </div>
+                <div>
+                  <dt>Отправлена</dt>
+                  <dd>
+                    <time dateTime={command.createdAt}>{activityDateTime(command.createdAt)}</time>
+                  </dd>
+                </div>
+              </dl>
+            )}
           </div>
           <div class="command-result">
             <span class={`result-${command.status}`}>{commandText(command)}</span>
-            <time>{time(command.completedAt || command.createdAt)}</time>
+            {compact ? (
+              <time>{time(command.completedAt || command.createdAt)}</time>
+            ) : command.completedAt ? (
+              <dl class="activity-facts command-facts">
+                <div>
+                  <dt>{command.status === 'applied' ? 'PLC подтвердил' : 'Статус зафиксирован'}</dt>
+                  <dd>
+                    <time dateTime={command.completedAt}>
+                      {activityDateTime(command.completedAt)}
+                    </time>
+                  </dd>
+                </div>
+              </dl>
+            ) : null}
           </div>
         </div>
       ))}

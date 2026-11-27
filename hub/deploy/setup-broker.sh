@@ -81,9 +81,12 @@ pattern write fcplcn/%u/controllers/+/status
 pattern write fcplcn/%u/controllers/+/ack
 pattern write fcplcn/%u/controllers/security/event
 pattern write fcplcn/%u/management/reply
+pattern write fcplcn/%u/irrigation-water/source
+pattern write fcplcn/%u/irrigation-water/request
 pattern read fcplcn/%u/controllers/+/set
 pattern read fcplcn/%u/controllers/security/hub
 pattern read fcplcn/%u/management/request
+pattern read fcplcn/%u/irrigation-water/reply
 
 # The single local hub coordinates all PLCs.
 user $hub_user
@@ -93,9 +96,12 @@ topic read fcplcn/+/controllers/+/status
 topic read fcplcn/+/controllers/+/ack
 topic read fcplcn/+/controllers/security/event
 topic read fcplcn/+/management/reply
+topic read fcplcn/+/irrigation-water/source
+topic read fcplcn/+/irrigation-water/request
 topic write fcplcn/+/controllers/+/set
 topic write fcplcn/+/controllers/security/hub
 topic write fcplcn/+/management/request
+topic write fcplcn/+/irrigation-water/reply
 EOF
     chmod 640 "$acl_file"
     chown 1883:1883 "$acl_file"

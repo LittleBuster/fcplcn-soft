@@ -1,8 +1,10 @@
 /** @file Cancellable private-chat polling; checkpoints precede every possible PLC operation. */
+import { formatTelegramMessage } from '../../shared/telegram-format.js';
 import type { TelegramContact, TelegramRuntimeStatus } from '../../shared/telegram.js';
 import { TelegramAPIError, TelegramClient, type TelegramTransport } from './client.js';
 import { TelegramMenu, type TelegramActions } from './menu.js';
-import { TelegramStore, telegramChatId } from './store.js';
+import { type HubTelegramStore, telegramChatId } from './store.js';
+import { withActivity } from '../activity-context.js';
 export type { TelegramActions } from './menu.js';
 
 export interface TelegramBotOptions {
@@ -23,6 +25,7 @@ interface Message {
 }
 interface Context {
   generation: number;
+  revision: number;
   token: string;
   abort: AbortController;
   transport: TelegramTransport;
@@ -96,7 +99,7 @@ export class TelegramBot {
   };
 
   constructor(
-    private readonly store: TelegramStore,
+    private readonly store: HubTelegramStore,
     actions: TelegramActions,
     private readonly options: TelegramBotOptions = {},
   ) {
@@ -134,6 +137,7 @@ export class TelegramBot {
     }
     const context = {
       generation: this.generation,
+      revision: config.revision,
       token: config.token,
       abort: new AbortController(),
       transport,
@@ -198,6 +202,7 @@ export class TelegramBot {
       this.generation === context.generation &&
       !context.abort.signal.aborted &&
       config.enabled &&
+      config.revision === context.revision &&
       config.token === context.token &&
       !this.store.error
     );
@@ -230,13 +235,13 @@ export class TelegramBot {
     )
       return null;
     const id = Number(value.update_id);
-    if (execute && !this.store.checkpoint(id)) return id;
+    const current = () => this.current(context);
+    if (execute && !(await this.store.checkpoint(id, current))) return id;
     const message = privateMessage(value);
-    if (!message || !this.current(context)) return id;
-    this.store.observeContact(this.contact(message));
-    if (!execute || !this.current(context)) return id;
-    const permitted = () =>
-      this.current(context) && this.store.allowed(message.chatId) && this.fresh(message);
+    if (!message || !current()) return id;
+    await this.store.observeContact(this.contact(message), current);
+    if (!execute || !current()) return id;
+    const permitted = () => current() && this.store.allowed(message.chatId) && this.fresh(message);
     if (!this.fresh(message)) return id;
     if (!this.store.allowed(message.chatId)) {
       const now = this.now();
@@ -247,7 +252,12 @@ export class TelegramBot {
         await context.transport.send(
           message.chatId,
           {
-            text: `Доступ к управлению не разрешён.\nВаш Chat ID: ${message.chatId}\nПопросите администратора добавить его в настройках хаба.`,
+            text: formatTelegramMessage([
+              '🔒 Доступ к управлению не разрешён.',
+              `Ваш Chat ID: ${message.chatId}`,
+              'Попросите администратора добавить его в настройках хаба.',
+            ]),
+            parse_mode: 'HTML',
             reply_markup: { remove_keyboard: true },
           },
           context.abort.signal,
@@ -255,7 +265,16 @@ export class TelegramBot {
       }
       return id;
     }
-    const reply = await this.menu.handle(message.chatId, message.text, permitted);
+    const account = this.store.config().chats.find((chat) => chat.chatId === message.chatId);
+    const name =
+      account?.name ||
+      message.name ||
+      (message.username && `@${message.username}`) ||
+      message.chatId;
+    const reply = await withActivity(
+      { actor: { source: 'telegram', name, id: message.chatId } },
+      () => this.menu.handle(message.chatId, message.text, permitted, context.abort.signal),
+    );
     if (permitted()) await context.transport.send(message.chatId, reply, context.abort.signal);
     return id;
   }
@@ -288,7 +307,8 @@ export class TelegramBot {
             if (id !== null) latest = id;
           }
           if (!this.current(context)) return;
-          this.store.bootstrapCheckpoint(latest);
+          await this.store.bootstrapCheckpoint(latest, () => this.current(context));
+          if (!this.current(context)) return;
           offset = latest + 1;
           bootstrap = false;
           this.status = {

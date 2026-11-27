@@ -13,6 +13,8 @@ for (const file of [
   'board_profiles_mock.cjs',
   'meteo_mock.cjs',
   'thermostats_mock.cjs',
+  'tanks_mock.cjs',
+  'irrigation_mock.cjs',
   'thermostat_policy.cjs',
   'security_mock.cjs',
   'firmware_mock.cjs',

@@ -1,6 +1,7 @@
 /** @file Reply keyboards preserve identity, honest freshness and explicit no-retry PLC actions. */
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { formatTelegramMessage } from '../shared/telegram-format.js';
 import type { CommandView, EngineSnapshot, SceneRun } from '../shared/types.js';
 import { TelegramMenu, type TelegramActions } from '../server/telegram/menu.js';
 import type { TelegramReply } from '../server/telegram/client.js';
@@ -143,13 +144,223 @@ async function sockets(menu: TelegramMenu, chat = '42') {
   );
 }
 
+test('menu formats Telegram headings and escapes configured device names', async () => {
+  const f = fixture();
+  f.snapshot.devices[0].name = '<b>Гараж & сад</b>';
+  const home = await f.menu.handle('42', '/start', () => true);
+  assert.equal(home.parse_mode, 'HTML');
+  assert.match(home.text, /^<b>🏡 FCPLCn · Умный дом<\/b>/);
+  assert.match(home.text, /<b>Устройства:<\/b>/);
+  assert.match(home.text, /&lt;b&gt;Гараж &amp; сад&lt;\/b&gt;/);
+
+  const deviceButton = buttons(home).find((label) => label.startsWith('🏡'))!;
+  assert.match(deviceButton, /<b>Гараж & сад<\/b>/);
+  const device = await f.menu.handle('42', deviceButton, () => true);
+  assert.match(device.text, /<b>🏡 &lt;b&gt;Гараж &amp; сад&lt;\/b&gt;<\/b>/);
+});
+
+test('Telegram details and notices format independently of escaped content', () => {
+  const result = formatTelegramMessage(
+    ['🌤 Метео', 'Порт: a<&>', '⚠️ Датчик <1> не отвечает.', 'Страница 1/2'],
+    '✅ Сохранено <b> &',
+  );
+  assert.equal(
+    result,
+    [
+      '<blockquote>✅ Сохранено &lt;b&gt; &amp;</blockquote>',
+      '<b>🌤 Метео</b>',
+      '<b>Порт:</b> <code>a&lt;&amp;&gt;</code>',
+      '<blockquote>⚠️ Датчик &lt;1&gt; не отвечает.</blockquote>',
+      '<i>Страница 1/2</i>',
+    ].join('\n'),
+  );
+});
+
+test('Telegram HTML limits visible content without breaking entities, tags or emoji', () => {
+  const longName = '&'.repeat(3998) + '🌡abc';
+  const result = formatTelegramMessage([longName, 'Следующая строка']);
+  assert.equal(result, `<b>${'&amp;'.repeat(3998)}…</b>`);
+});
+
+test('meteo history opens both periods for the selected sensor even with stale telemetry', async () => {
+  const f = fixture();
+  const plc = f.snapshot.devices[0];
+  plc.controllers.meteo = {
+    kind: 'meteo',
+    receivedAt: '',
+    fresh: false,
+    data: { enabled: true, items: [{ id: 'air', name: 'Воздух' }] },
+  };
+  const chart = { photo: Buffer.from([137, 80, 78, 71]), caption: 'Показания за 24 часа' };
+  const requests: string[][] = [];
+  let granted = true;
+  const permitted = () => granted;
+  f.actions.meteoChart = async (...args) => {
+    requests.push(args);
+    if (requests.length > 2) granted = false;
+    return args[2] === 'day' ? chart : null;
+  };
+
+  let reply = await f.menu.handle('42', '/start', permitted);
+  for (const label of ['🏡', 'Метео', 'Воздух']) {
+    reply = await f.menu.handle(
+      '42',
+      buttons(reply).find((button) => button.includes(label))!,
+      permitted,
+    );
+  }
+  const day = buttons(reply).find((button) => button.startsWith('📈 24 часа'))!;
+  const week = buttons(reply).find((button) => button.startsWith('📈 7 дней'))!;
+  assert.ok(day && week);
+  const unauthorized = await f.menu.handle('42', day, () => false);
+  assert.equal(unauthorized.chart, undefined);
+  assert.deepEqual(requests, []);
+
+  const dayResult = await f.menu.handle('42', day, permitted);
+  assert.deepEqual(dayResult.chart, chart);
+  assert.deepEqual(dayResult.reply_markup, reply.reply_markup);
+  const weekResult = await f.menu.handle('42', week, permitted);
+  assert.match(weekResult.text, /За этот период ещё нет показаний/);
+  assert.equal(weekResult.chart, undefined);
+  assert.deepEqual(requests, [
+    [plc.id, 'air', 'day'],
+    [plc.id, 'air', 'week'],
+  ]);
+  const revoked = await f.menu.handle('42', day, permitted);
+  assert.equal(revoked.chart, undefined);
+  assert.match(revoked.text, /доступ отозван/);
+});
+
+test('tank reply menu reports discrete level and toggles monitoring rather than either automatic output', async () => {
+  const f = fixture();
+  f.snapshot.devices[0].controllers.tanks = {
+    kind: 'tanks',
+    fresh: true,
+    receivedAt: '',
+    data: {
+      enabled: true,
+      items: [
+        {
+          id: 'water',
+          name: 'Бак с водой',
+          enabled: true,
+          available: true,
+          levelPct: 0,
+          levelsWet: [false, false],
+          fillLevel: 2,
+          pumpActual: false,
+          valveActual: true,
+        },
+        {
+          id: 'reserve',
+          name: 'Запасной бак',
+          enabled: false,
+          available: true,
+          levelPct: 100,
+          pumpActual: false,
+          valveActual: false,
+        },
+      ],
+    },
+  };
+  let reply = await f.menu.handle('42', '/start', () => true);
+  reply = await f.menu.handle(
+    '42',
+    buttons(reply).find((label) => label.startsWith('🏡'))!,
+    () => true,
+  );
+  reply = await f.menu.handle(
+    '42',
+    buttons(reply).find((label) => label.includes('Баки'))!,
+    () => true,
+  );
+  assert.ok(
+    reply.text.includes(
+      [
+        '<b>🛢 Бак с водой</b>',
+        '<b>Мониторинг:</b> включён',
+        '<b>Уровень:</b> 0 %',
+        '<b>Насос:</b> выключен',
+        '<b>Кран:</b> открыт',
+        '',
+        '<b>🛢 Запасной бак</b>',
+        '<b>Мониторинг:</b> выключен',
+        '<b>Уровень:</b> нет данных',
+      ].join('\n'),
+    ),
+  );
+  assert.doesNotMatch(reply.text, /100 %/);
+  reply = await f.menu.handle(
+    '42',
+    buttons(reply).find((label) => label.includes('Бак с водой'))!,
+    () => true,
+  );
+  const enable = buttons(reply).find((label) => label.startsWith('⚪ Выключить мониторинг'));
+  assert.ok(enable);
+  await f.menu.handle('42', enable, () => true);
+  assert.deepEqual(f.calls, [['fcplcn-one', 'tanks', 'water', false]]);
+  assert.equal(f.snapshot.devices[0].controllers.tanks.data.items instanceof Array, true);
+});
+
+test('irrigation reply buttons toggle tankless schedules even when a shared valve is already open', async () => {
+  const f = fixture();
+  f.snapshot.devices[0].controllers.irrigation = {
+    kind: 'irrigation',
+    fresh: true,
+    receivedAt: '',
+    data: {
+      enabled: true,
+      items: [
+        {
+          id: 'garden',
+          name: 'Газон',
+          enabled: true,
+          actual: false,
+          valveActual: true,
+          tankId: '',
+          waterAvailable: null,
+          days: [1, 5],
+          startTime: '06:30',
+          durationMinutes: 12,
+        },
+      ],
+    },
+  };
+  let reply = await f.menu.handle('42', '/start', () => true);
+  for (const label of ['🏡', 'Полив', 'Газон']) {
+    reply = await f.menu.handle(
+      '42',
+      buttons(reply).find((button) => button.includes(label))!,
+      () => true,
+    );
+  }
+  assert.match(reply.text, /Ожидает старта/);
+  assert.match(
+    reply.text,
+    /Дни полива:<\/b> Пн, Пт\n<b>Время старта:<\/b> 06:30\n<b>Длительность:<\/b> 12 мин/,
+  );
+  await f.menu.handle(
+    '42',
+    buttons(reply).find((label) => label.startsWith('⚪ Выключить правило'))!,
+    () => true,
+  );
+  assert.deepEqual(f.calls, [['fcplcn-one', 'irrigation', 'garden', false]]);
+});
+
 test('native reply keyboard starts with three hot scenes and navigates unique duplicate-name channels', async () => {
   const f = fixture();
   const root = await f.menu.handle('42', '/start', () => true);
-  assert.deepEqual(root.reply_markup.keyboard![0], ['🏠 Я дома', '🚪 Ушел', '🌅 Готовлюсь']);
+  assert.deepEqual(root.reply_markup.keyboard![0], ['🏠 Я дома', '🚪 Ушел', '🚗 Готовлюсь']);
   assert.equal('inline_keyboard' in root.reply_markup, false);
   assert.equal(root.reply_markup.is_persistent, true);
   const list = await sockets(f.menu);
+  const keyboard = list.reply_markup.keyboard!;
+  assert.deepEqual(keyboard.at(-3), ['ℹ️ Подробности каналов']);
+  assert.ok(keyboard.at(-4)?.some((label) => label.includes('Контактор')));
+  assert.ok(keyboard.at(-2)?.[0].startsWith('⬅️ Назад'));
+  const details = await f.menu.handle('42', 'ℹ️ Подробности каналов', () => true);
+  assert.deepEqual(details.reply_markup.keyboard!.at(-3), ['⚡ Быстрое управление']);
+  await f.menu.handle('42', '⚡ Быстрое управление', () => true);
   const candidates = buttons(list).filter((label) => label.includes('Розетка'));
   assert.equal(candidates.length, 2);
   assert.notEqual(candidates[0], candidates[1]);
@@ -222,8 +433,8 @@ test('unavailable security zones and stale thermostat temperatures never appear 
     buttons(device).find((value) => value.includes('Охрана'))!,
     () => true,
   );
-  assert.match(zones.text, /⚫ Дверь — недоступно/);
-  assert.doesNotMatch(zones.text, /Дверь — норма/);
+  assert.match(zones.text, /<b>⚫ Дверь<\/b>\n<b>Состояние:<\/b> недоступно/);
+  assert.doesNotMatch(zones.text, /Состояние:<\/b> норма/);
   root = await f.menu.handle('42', '/start', () => true);
   device = await f.menu.handle(
     '42',
@@ -264,7 +475,14 @@ test('keyboards are chat scoped and pagination keeps large fleets bounded', asyn
     name: 'Дом ' + index,
   }));
   const root = await f.menu.handle('42', '/start', () => true);
-  assert.equal(buttons(root).filter((label) => label.startsWith('🏡')).length, 12);
+  const deviceRows = root.reply_markup.keyboard!.filter((row) =>
+    row.some((label) => label.startsWith('🏡')),
+  );
+  assert.equal(deviceRows.length, 12);
+  deviceRows.forEach((row, index) => {
+    assert.equal(row.length, 1);
+    assert.match(row[0], new RegExp(`^🏡 Дом ${index} · `));
+  });
   assert.ok(root.text.length < 4096);
   const next = await f.menu.handle('42', 'Следующие ▶️', () => true);
   assert.match(next.text, /Страница 2/);

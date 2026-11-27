@@ -24,8 +24,8 @@
 #include "nvs.h"
 #include "config/settings_json.h"
 #include "config/model.h"
-#include "system/runtime_supervisor.h"
-#include "util/checksum.h"
+#include "platform/runtime_supervisor.h"
+#include "platform/checksum.h"
 
 /** @cond FCPLCN_CONTROLLER_INTERNALS */
 namespace fcplcn::controllers::detail {

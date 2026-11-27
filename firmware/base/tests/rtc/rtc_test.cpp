@@ -1,5 +1,5 @@
 #include "time/rtc_clock.h"
-#include "time/rtc_codec.h"
+#include "hardware/rtc_codec.h"
 #include "test_platform.h"
 
 #include <algorithm>

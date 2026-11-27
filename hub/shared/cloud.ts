@@ -7,6 +7,7 @@ export const CLOUD_MAX_PACKET = 2 * 1024 * 1024;
 export type CloudMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 export interface CloudActor {
   userId: string;
+  displayName?: string;
   role: 'owner' | 'operator' | 'viewer';
   securityControl?: boolean;
 }
@@ -86,7 +87,7 @@ export function cloudRoute(method: string, path: string): boolean {
     return (
       ['/overview', '/scenes', '/telegram', '/pult/settings'].includes(path) ||
       /^\/firmware\/jobs\/[a-zA-Z0-9_-]{1,96}$/.test(path) ||
-      /^\/devices\/fcplcn-[a-zA-Z0-9_-]{1,96}\/service\/(?:config(?:\/backup)?|status|board-profiles|hardware|controllers(?:\/(?:sockets|lights|meteo|thermostats|security))?|firmware)$/.test(
+      /^\/devices\/fcplcn-[a-zA-Z0-9_-]{1,96}\/service\/(?:config(?:\/backup)?|status|board-profiles|hardware|controllers(?:\/(?:sockets|lights|meteo|thermostats|security|tanks|irrigation))?|firmware)$/.test(
         path,
       )
     );
@@ -95,11 +96,15 @@ export function cloudRoute(method: string, path: string): boolean {
       ['/scenes', '/telegram', '/telegram/test'].includes(path) ||
       /^\/devices\/fcplcn-[a-zA-Z0-9_-]{1,96}\/security\/key$/.test(path) ||
       /^\/scenes\/[a-zA-Z0-9_-]{1,64}\/run$/.test(path) ||
-      /^\/devices\/fcplcn-[a-zA-Z0-9_-]{1,96}\/(?:commands|firmware\/install|service\/(?:login|logout|config(?:\/restore)?|hardware\/(?:scan|relay)|controllers\/(?:sockets|lights|meteo|thermostats|security)(?:\/(?:state|enabled|armed|scan))?|user|time|reboot|firmware\/(?:begin|chunk|finish|abort)))$/.test(
+      /^\/devices\/fcplcn-[a-zA-Z0-9_-]{1,96}\/(?:commands|firmware\/install|service\/(?:login|logout|config(?:\/restore)?|hardware\/(?:scan|relay)|controllers\/(?:(?:sockets|lights|meteo|thermostats|security|tanks)(?:\/(?:state|enabled|armed|scan))?|irrigation(?:\/enabled)?)|user|time|reboot|firmware\/(?:begin|chunk|finish|abort)))$/.test(
         path,
       )
     );
-  if (method === 'PUT' && path === '/pult/settings') return true;
+  if (
+    method === 'PUT' &&
+    (path === '/pult/settings' || /^\/scenes\/[a-zA-Z0-9_-]{1,64}\/schedule$/.test(path))
+  )
+    return true;
   return method === 'PATCH'
     ? /^\/devices\/fcplcn-[a-zA-Z0-9_-]{1,96}$/.test(path)
     : (method === 'PUT' || method === 'DELETE') && /^\/scenes\/[a-zA-Z0-9_-]{1,64}$/.test(path);

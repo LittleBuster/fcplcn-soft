@@ -4,7 +4,14 @@ import type { PultTemperatureSource } from '../../../../shared/pult.js';
 import type { IconName } from '../../icons';
 import { deviceName, number, rows, text, type Row } from '../../model';
 
-export const pultKinds = ['lights', 'sockets', 'thermostats', 'meteo'] as const;
+export const pultKinds = [
+  'lights',
+  'sockets',
+  'thermostats',
+  'meteo',
+  'tanks',
+  'irrigation',
+] as const;
 export type PultKind = (typeof pultKinds)[number];
 export type PultFilter = PultKind | 'all';
 
@@ -14,6 +21,8 @@ export const pultLabels: Record<PultFilter, string> = {
   sockets: 'Розетки',
   thermostats: 'Климат',
   meteo: 'Датчики',
+  tanks: 'Баки',
+  irrigation: 'Полив',
 };
 export const pultIcons: Record<PultFilter, IconName> = {
   all: 'home',
@@ -21,6 +30,8 @@ export const pultIcons: Record<PultFilter, IconName> = {
   sockets: 'socket',
   thermostats: 'thermometer',
   meteo: 'weather',
+  tanks: 'tank',
+  irrigation: 'irrigation',
 };
 
 export interface PultEntry {

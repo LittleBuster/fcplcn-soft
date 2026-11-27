@@ -24,8 +24,8 @@
 #include "nvs.h"
 #include "config/settings_json.h"
 #include "config/model.h"
-#include "system/runtime_supervisor.h"
-#include "util/checksum.h"
+#include "platform/runtime_supervisor.h"
+#include "platform/checksum.h"
 
 /** @cond FCPLCN_CONTROLLER_INTERNALS */
 namespace fcplcn::controllers::detail {
@@ -40,6 +40,10 @@ namespace fcplcn::controllers::detail {
  */
 cJSON* status_locked(ControllerKind kind)
 {
+    if (kind == ControllerKind::Irrigation)
+        return irrigation_status_locked();
+    if (kind == ControllerKind::Tanks)
+        return tanks_status_locked();
     if (kind == ControllerKind::Security)
         return security_status_locked();
     if (kind == ControllerKind::Meteo)
@@ -147,7 +151,12 @@ cJSON* resources_locked()
             for (const auto& item : configurations[module].items) {
                 if ((kind == ResourceKind::Relay && item.relayId == id)
                     || (kind == ResourceKind::Input && item.inputId == id)
-                    || (kind == ResourceKind::Sensor && item.portId == id)) {
+                    || (kind == ResourceKind::Sensor && item.portId == id)
+                    || (kind == ResourceKind::Relay
+                        && (item.pumpRelayId == id || item.valveRelayId == id))
+                    || (kind == ResourceKind::Input
+                        && std::find(item.levelInputs.begin(), item.levelInputs.end(), id)
+                               != item.levelInputs.end())) {
                     owner = &item;
                     owner_kind = static_cast<ControllerKind>(module);
                     break;

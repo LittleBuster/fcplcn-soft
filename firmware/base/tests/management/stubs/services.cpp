@@ -5,7 +5,7 @@
 #include "time/time_service.h"
 #include "system/system_metrics.h"
 #include "system/firmware_update.h"
-#include "util/operation_context.h"
+#include "platform/operation_context.h"
 #include "esp_app_desc.h"
 #include "esp_system.h"
 

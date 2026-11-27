@@ -88,7 +88,7 @@ async function checkControllers({ browser, createMock, artifacts }) {
     await page.locator('#app-view').waitFor({ state: 'visible' });
     await page.locator('#tab-controllers').click();
     await page.locator('#lights-tile-enabled').waitFor();
-    assert.equal(await page.locator('[data-controller-id]').count(), 5);
+    assert.equal(await page.locator('[data-controller-id]').count(), 7);
     const initial = await (await context.request.get(`${url}/api/v1/controllers`)).json();
     assert.equal(initial.resources.length, 40);
     assert.equal(

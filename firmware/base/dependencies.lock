@@ -82,6 +82,6 @@ direct_dependencies:
 - espressif/onewire_bus
 - espressif/w5500
 - idf
-manifest_hash: 502e644176180eec3db68d34774c33fa123ae5472281cc528286bebef0767bef
+manifest_hash: 76102c08b8f678dc3eddfcc3c990699fd6763d0e0c83592e6322276589a9aa72
 target: esp32s3
 version: 3.0.0

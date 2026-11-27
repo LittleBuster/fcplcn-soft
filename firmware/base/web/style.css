@@ -84,8 +84,11 @@ button {
   cursor: pointer;
 }
 button:disabled {
-  cursor: wait;
+  cursor: default;
   opacity: 0.6;
+}
+.button[aria-busy='true'] {
+  cursor: progress;
 }
 input:disabled,
 select:disabled {
@@ -1705,4 +1708,149 @@ footer {
 .firmware-actions {
   justify-content: flex-end;
   flex-wrap: wrap;
+}
+/* Tank monitoring uses the actual confirmed discrete level, including a distinct unknown state. */
+.tank-toolbar {
+  position: sticky;
+  top: 12px;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin: 20px 0;
+  padding: 16px 20px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow: 0 6px 18px #0003;
+}
+.tank-toolbar-heading {
+  display: grid;
+  grid-template-columns: auto auto;
+  align-items: baseline;
+  gap: 4px 12px;
+}
+.tank-toolbar-heading h3,
+.tank-toolbar-heading .hint {
+  margin: 0;
+}
+.tank-toolbar-heading .hint {
+  grid-column: 1 / -1;
+}
+.tank-toolbar .button-row {
+  margin: 0;
+}
+:is(#tanks-add, #irrigation-add) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 48px;
+}
+.tank-add-icon {
+  font-size: 1.5rem;
+  line-height: 1;
+}
+@media (max-width: 600px) {
+  .tank-toolbar {
+    top: 6px;
+    padding: 12px;
+    gap: 12px;
+  }
+  .tank-toolbar .button-row {
+    width: 100%;
+  }
+  :is(#tanks-add, #irrigation-add) {
+    flex: 1;
+  }
+}
+.tank-visual {
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 330px;
+}
+.tank-art {
+  display: block;
+  width: min(100%, 260px);
+  height: 260px;
+}
+.tank-art svg {
+  width: 100%;
+  height: 100%;
+}
+.tank-shell {
+  fill: #213744;
+}
+.tank-outline {
+  fill: none;
+  stroke: #8bafc1;
+  stroke-width: 3;
+}
+.tank-reflection {
+  fill: none;
+  stroke: #d5ecf5;
+  stroke-width: 4;
+  opacity: 0.2;
+}
+.tank-water rect {
+  fill: #42b9e5;
+}
+.tank-water ellipse {
+  fill: #8bdeee;
+}
+.tank-water {
+  transition: opacity 0.2s;
+}
+.tank-percentage {
+  color: #8bdcf6;
+  font-size: 38px;
+  line-height: 1.1;
+}
+.tank-caption {
+  color: #a1bfd0;
+  font-size: 15px;
+}
+.tank-visual[data-state='off'] .tank-art {
+  opacity: 0.5;
+}
+.tank-visual[data-state='error'] {
+  border-color: #bd6275;
+}
+.tank-level-fields {
+  display: grid;
+  gap: 16px;
+}
+.tank-level-field {
+  display: grid;
+  gap: 8px;
+}
+.tank-outputs {
+  color: #9ec8df;
+  line-height: 1.6;
+  margin: 16px 0;
+}
+
+.irrigation-weekdays {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding: 0;
+  border: 0;
+}
+.irrigation-weekdays legend {
+  margin-bottom: 0.45rem;
+}
+.irrigation-weekdays label {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  cursor: pointer;
+}
+.irrigation-weekdays input {
+  width: auto;
+  margin: 0;
 }

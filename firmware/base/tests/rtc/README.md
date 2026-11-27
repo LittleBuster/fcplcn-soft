@@ -10,7 +10,8 @@ The launcher builds with ASan/UBSan by default in `~/esp/build/fcplcn/base-rtc`.
 Use `FCPLCN_RTC_BUILD_DIR` to select another build directory, or pass CMake
 arguments such as `-DFCPLCN_RTC_SANITIZERS=OFF`.
 
-Tests compile the actual `main/time/rtc_codec.cpp`, `main/time/rtc_clock.cpp`, `main/hardware/board_profile.cpp`
+Tests compile the actual DS3231 driver and calendar codec in `main/hardware/`,
+`main/time/rtc_clock.cpp`, and `main/hardware/board_profile.cpp`
 and managed cJSON source. They cover every day of 2000–2099, BCD/calendar/AM/PM
 validation, OSF preservation, firmware date limits, freshness, missing hardware,
 write/readback ordering, transaction failures and concurrent access. Each CTest

@@ -6,7 +6,7 @@ import type { IconName } from '../../icons';
 export const scenes: { id: SceneId; name: string; icon: IconName; caption: string }[] = [
   { id: 'home', name: 'Я дома', icon: 'home', caption: 'Снять охрану и встретить вас дома' },
   { id: 'away', name: 'Ушел', icon: 'away', caption: 'Поставить дом под охрану' },
-  { id: 'prepare', name: 'Готовлюсь', icon: 'prepare', caption: 'Подготовить свет и комфорт' },
+  { id: 'prepare', name: 'Готовлюсь', icon: 'car', caption: 'Подготовить свет и комфорт' },
 ];
 export const runLabels: Record<SceneRun['status'], string> = {
   running: 'Выполняется',
@@ -39,6 +39,8 @@ export function readableError(error: string | null): string {
 
 /** Формирует подпись явного действия: режим охраны либо включение или выключение канала. */
 export function actionLabel(result: SceneActionResult): string {
+  if (result.controller === 'irrigation')
+    return `${result.itemName || result.itemId} · ${result.value ? 'включить' : 'выключить'} правило`;
   return result.controller === 'security'
     ? result.value
       ? 'Поставить на охрану'

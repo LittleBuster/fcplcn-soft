@@ -153,7 +153,7 @@ async function checkThermostats({ browser, createMock, artifacts }) {
   }
   try {
     await login();
-    assert.equal(await page.locator('[data-controller-id]').count(), 5);
+    assert.equal(await page.locator('[data-controller-id]').count(), 7);
     assert.deepEqual(settings(), { enabled: false, items: [] });
     assert.equal(
       (
@@ -743,6 +743,8 @@ async function checkThermostats({ browser, createMock, artifacts }) {
     const v6 = JSON.parse(beforeBoot);
     v6.version = 6;
     delete v6.controllers.security;
+    delete v6.controllers.irrigation;
+    delete v6.controllers.tanks;
     for (const item of v6.controllers.thermostats.items) {
       item.minOnSeconds = 2;
       item.minOffSeconds = 180;
@@ -770,6 +772,8 @@ async function checkThermostats({ browser, createMock, artifacts }) {
       v4 = JSON.parse(beforeBoot);
     v4.version = 4;
     delete v4.controllers.security;
+    delete v4.controllers.irrigation;
+    delete v4.controllers.tanks;
     for (const item of v4.controllers.thermostats.items) {
       delete item.enabled;
       delete item.inputId;
@@ -792,6 +796,8 @@ async function checkThermostats({ browser, createMock, artifacts }) {
       old = JSON.parse(beforeBoot);
     old.version = 3;
     delete old.controllers.security;
+    delete old.controllers.irrigation;
+    delete old.controllers.tanks;
     delete old.controllers.thermostats;
     old.controllers.sockets.enabled = true;
     old.controllers.sockets.items[0].state = true;

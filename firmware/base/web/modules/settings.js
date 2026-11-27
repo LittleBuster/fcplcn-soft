@@ -37,6 +37,8 @@ export function createSettingsUI(context) {
                 state.dirty.has('lights') ||
                 state.dirty.has('meteo') ||
                 state.dirty.has('thermostats') ||
+                state.dirty.has('tanks') ||
+                state.dirty.has('irrigation') ||
                 state.dirty.has('security')
               : state.dirty.has(key);
       element.hidden = !isMarked;
@@ -479,7 +481,10 @@ export function createSettingsUI(context) {
     byId('header-actions').hidden = false;
     byId('login-error').hidden = true;
     activateNetworkView('list');
-    activateTab('network');
+    const irrigationLink = /^#irrigation(?:\/([a-zA-Z0-9_-]{1,32}))?$/.exec(window.location.hash);
+    state.initialIrrigationRule = irrigationLink?.[1] || '';
+    if (irrigationLink) state.controllersView = 'irrigation';
+    activateTab(irrigationLink ? 'controllers' : 'network');
     fillConfig(config);
     notice('');
     fillHardwarePending();

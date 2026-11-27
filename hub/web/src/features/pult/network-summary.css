@@ -1,0 +1,76 @@
+.pult-page .pult-network-trigger {
+  width: 100%;
+  min-height: 48px;
+  text-align: start;
+}
+
+.pult-network-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.pult-network-action .icon {
+  flex-shrink: 0;
+  width: 15px;
+  height: 15px;
+}
+
+@media (hover: hover) {
+  .pult-page .pult-network-trigger:hover {
+    border-color: #5a7ca4;
+  }
+}
+
+.pult-network-dialog {
+  width: min(900px, calc(100% - 24px));
+  max-width: none;
+  max-height: calc(100% - 24px);
+  margin: auto;
+  padding: clamp(12px, 3vw, 24px);
+  overflow: auto;
+  overscroll-behavior: contain;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--panel);
+  color: var(--text);
+  box-shadow: 0 20px 64px #0007;
+}
+
+.pult-network-dialog::backdrop {
+  background: #070c15b8;
+}
+
+.pult-network-dialog-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.pult-network-dialog-header h2 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: clamp(18px, 4vw, 24px);
+}
+
+.pult-network-dialog-header .icon {
+  color: var(--accent);
+}
+
+.pult-network-dialog-header .button {
+  min-height: 44px;
+}
+
+.pult-network-dialog .connection-history {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}

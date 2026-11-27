@@ -5,11 +5,12 @@ import copy
 import os
 from pathlib import Path
 import re
+import shlex
 import sys
 
 from .backups import make_backup, restore_backup
 from .common import DeploymentError, atomic_json, docker_prefix, host_platform, point_release, read_json
-from .docker import Stack, installed_stack
+from .docker import HUB_DATABASE_VOLUME, Stack, installed_stack
 from .sources import prepare_source
 
 
@@ -68,6 +69,39 @@ def publish(stack, previous=None):
         point_release(stack.state, "previous", previous.release)
     atomic_json(stack.state / "metadata.json", stack.metadata)
     point_release(stack.state, "current", stack.release)
+    if stack.uses_hub_database:
+        stack.hub_database_fence.unlink(missing_ok=True)
+
+
+def prepare_service_update(old, candidate):
+    """Download a complete update while the old services are still available."""
+    previous = old.resolved_config()
+    proposed = candidate.resolved_config(override=False)
+    previous_volumes = set(old.volume_names(previous).values())
+    proposed_volumes = set(candidate.volume_names(proposed).values())
+    proposed_mounts = candidate.persistent_mounts(proposed)
+    introducing_hub_database = candidate.uses_hub_database and not old.uses_hub_database
+    if introducing_hub_database:
+        if candidate.hub_database_volume in previous_volumes or "db" in previous.get("services", {}):
+            raise DeploymentError("В прежнем хабе уже есть служба или том PostgreSQL. Нужен отдельный перенос.")
+        previous_volumes.add(candidate.hub_database_volume)
+    if (previous_volumes != proposed_volumes
+            or not old.persistent_mounts(previous) <= proposed_mounts
+            or (introducing_hub_database
+                and ("db", candidate.hub_database_volume, "/var/lib/postgresql") not in proposed_mounts)):
+        raise DeploymentError("Обновление меняет подключения постоянных данных. Нужен отдельный перенос.")
+    old_ids = old.current_service_ids(previous)
+    if old.record.get("serviceImages") != old_ids:
+        old.record["serviceImages"] = old_ids
+        old.write_override()
+        atomic_json(old.release / "release.json", old.record)
+    new_ids = candidate.pull_services(proposed)
+    if old.role == "cloud" or old.uses_hub_database:
+        if ("db" not in old_ids or "db" not in new_ids
+                or old.postgres_identity(previous, old_ids["db"])
+                != candidate.postgres_identity(proposed, new_ids["db"])):
+            raise DeploymentError("Меняется основная версия или каталог данных PostgreSQL. Нужен отдельный перенос базы.")
+    return old_ids, new_ids
 
 
 def deploy(args, runner, state, checkout):
@@ -77,16 +111,16 @@ def deploy(args, runner, state, checkout):
     if existing_metadata:
         validate_identity(args, existing_metadata)
     if args.action == "update" and not old:
-        raise DeploymentError("Сначала выполните install.")
+        raise DeploymentError(f"Сначала запустите ./install.sh {args.role}.")
     if args.action == "install" and old:
-        print("FCPLCn уже установлен. Настройки сохранены; новые изменения применяет команда update.")
+        print(f"FCPLCn уже установлен. Для обновления используйте ./update.sh {args.role}.")
         old.start()
         return
     metadata = copy.deepcopy(existing_metadata or initial_metadata(args, host_platform()))
     metadata["ports"] = selected_ports(args, metadata.get("ports"))
     if not existing_metadata:
         prefix = docker_prefix()
-        suffixes = (["hub-data", "broker-data"] if args.role == "hub" else
+        suffixes = (["hub-data", "broker-data", HUB_DATABASE_VOLUME] if args.role == "hub" else
                     ["private", "broker", "cloud", "database", "caddy-data", "caddy-config"])
         for suffix in suffixes:
             result = runner.run(prefix + ["volume", "inspect", metadata["project"] + "_" + suffix], check=False)
@@ -98,22 +132,30 @@ def deploy(args, runner, state, checkout):
     record = prepare_source(runner, state, checkout, role=args.role, repo=remote,
                             ref=args.ref or (old.record.get("ref", "main") if old else "main"),
                             fetch=args.action == "update" or bool(args.repo))
-    if (old and record["content"] == old.record["content"] and not args.image
-            and not args.source_build and metadata.get("ports") == old.metadata.get("ports")):
-        print("Уже установлена эта версия FCPLCn. Данные и службы не изменены.")
-        return
     candidate = Stack(runner, state, metadata, record)
+    if old:
+        candidate.prepare_hub_database()
     # All downloads/builds finish before interrupting a running installation.
     candidate.prepare_image(image=args.image, source_build=args.source_build)
+    if old:
+        old_ids, new_ids = prepare_service_update(old, candidate)
+        if (record["content"] == old.record["content"]
+                and record["imageId"] == old.record["imageId"] and old_ids == new_ids
+                and metadata.get("ports") == old.metadata.get("ports")):
+            print("Все образы FCPLCn уже актуальны. Данные и службы не изменены.")
+            return
+    elif candidate.uses_hub_database:
+        candidate.prepare_hub_environment()
+        candidate.pull_services(candidate.resolved_config(override=False))
+    candidate.pin_release()
     if not existing_metadata:
         # A failed first start can be retried without mistaking our volumes for foreign data.
         atomic_json(state / "metadata.json", metadata)
-    candidate.initialize() if not old else None
-    backup = make_backup(old, restart=False) if old else None
+    if old:
+        backup = make_backup(old, restart=False)
+    else:
+        candidate.initialize()
     try:
-        if old:
-            # Regenerate hub ACL safely / renew cloud leaf certificates after backup.
-            candidate.initialize()
         candidate.start()
     except BaseException:
         try:
@@ -121,12 +163,15 @@ def deploy(args, runner, state, checkout):
         except DeploymentError:
             print("Не все службы удалось остановить; проверьте status перед повторным запуском.")
         if old:
-            if record["schema"] == old.record["schema"]:
+            if (record["schema"] == old.record["schema"]
+                    and candidate.uses_hub_database == old.uses_hub_database):
                 old.start()
                 print("Новая версия не запустилась; прежняя версия кода снова работает.")
             else:
                 print("Миграция могла изменить БД. Службы остановлены; автоматического отката БД нет.")
-                print(f"Для полного восстановления используйте restore --backup '{backup}'.")
+                print("Для восстановления запустите команду ниже.")
+                print(f"  ./deploy/manage.sh {args.role} restore "
+                      f"--dir {shlex.quote(str(state))} --backup {shlex.quote(str(backup))}")
         raise
     publish(candidate, old)
     print(f"FCPLCn {args.role} запущен. Версия: {record['revision']}.")
@@ -144,10 +189,11 @@ def rollback(args, runner, state):
     if not previous.is_file():
         raise DeploymentError("Предыдущего успешно установленного релиза пока нет.")
     record = read_json(previous)
-    if record["schema"] != old.record["schema"]:
-        raise DeploymentError("Изменилась схема БД. Используйте restore --backup с согласованной копией.")
-    confirm("Вернуть предыдущую версию кода, сохранив текущие данные?", args.yes)
     target = Stack(runner, state, old.metadata, record)
+    if record["schema"] != old.record["schema"] or target.uses_hub_database != old.uses_hub_database:
+        raise DeploymentError(f"Изменилась схема БД. Используйте ./deploy/manage.sh {args.role} restore "
+                              "--backup с согласованной копией.")
+    confirm("Вернуть предыдущую версию кода, сохранив текущие данные?", args.yes)
     backup = make_backup(old, restart=False)
     try:
         target.start()

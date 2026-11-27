@@ -20,13 +20,16 @@
     "check": "npm run build && npm test && npm run test:browser"
   },
   "dependencies": {
+    "@resvg/resvg-wasm": "2.6.2",
     "mqtt": "5.16.1",
+    "pg": "8.23.1",
     "preact": "11.2.0"
   },
   "devDependencies": {
     "@playwright/test": "1.65.0",
     "@preact/preset-vite": "2.10.6",
     "@types/node": "24.19.2",
+    "@types/pg": "8.23.1",
     "typescript": "7.0.2",
     "vite": "8.3.8"
   }

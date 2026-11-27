@@ -154,10 +154,22 @@ export function EditorActions({
                     }
                   >
                     <option value="true">
-                      {action.controller === 'security' ? 'Поставить на охрану' : 'Включить'}
+                      {action.controller === 'security'
+                        ? 'Поставить на охрану'
+                        : action.controller === 'tanks'
+                          ? 'Включить мониторинг'
+                          : action.controller === 'irrigation'
+                            ? 'Включить правило'
+                            : 'Включить'}
                     </option>
                     <option value="false">
-                      {action.controller === 'security' ? 'Снять охрану' : 'Выключить'}
+                      {action.controller === 'security'
+                        ? 'Снять охрану'
+                        : action.controller === 'tanks'
+                          ? 'Выключить мониторинг'
+                          : action.controller === 'irrigation'
+                            ? 'Выключить правило'
+                            : 'Выключить'}
                     </option>
                   </select>
                 </label>

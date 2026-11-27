@@ -1,4 +1,5 @@
 /** @file Validate server and broker settings before opening a LAN listener. */
+import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { hostname } from 'node:os';
 import type { EngineOptions, Product } from '../shared/types.js';
@@ -10,6 +11,7 @@ export interface HubConfig {
   dataDir: string;
   mode: 'demo' | 'mqtt';
   brokerUrl: string;
+  databaseUrl?: string;
   mqttUsername?: string;
   mqttPassword?: string;
   clientId: string;
@@ -17,6 +19,37 @@ export interface HubConfig {
 
 export function isLoopback(host: string): boolean {
   return ['127.0.0.1', 'localhost', '::1'].includes(host);
+}
+
+function databaseUrl(env: NodeJS.ProcessEnv): string | undefined {
+  const explicit = env.FCPLCN_HUB_DATABASE_URL;
+  const file = env.FCPLCN_HUB_DATABASE_PASSWORD_FILE;
+  const password = env.FCPLCN_HUB_DATABASE_PASSWORD;
+  if ([explicit, file, password].filter(Boolean).length > 1)
+    throw new Error('Укажите один источник настроек PostgreSQL хаба');
+  if (explicit) {
+    try {
+      const url = new URL(explicit);
+      if (!['postgres:', 'postgresql:'].includes(url.protocol) || !url.hostname)
+        throw new Error('Некорректный протокол или адрес');
+      return explicit;
+    } catch {
+      throw new Error('Некорректный адрес PostgreSQL хаба');
+    }
+  }
+  if (!file && !password) return undefined;
+  let secret = password || '';
+  if (file) {
+    try {
+      secret = readFileSync(file, 'utf8').replace(/\r?\n$/, '');
+    } catch {
+      throw new Error('Не удалось прочитать пароль PostgreSQL хаба');
+    }
+  }
+  if (!secret) throw new Error('Пароль PostgreSQL хаба пуст');
+  const url = new URL('postgresql://fcplcn_hub@db:5432/fcplcn_hub');
+  url.password = secret;
+  return url.href;
 }
 
 /** Read secrets from the process environment; never return them through the web API. */
@@ -43,6 +76,7 @@ export function loadConfig(
     password,
     mode,
     brokerUrl,
+    databaseUrl: mode === 'mqtt' ? databaseUrl(env) : undefined,
     dataDir: resolve(env.FCPLCN_HUB_DATA_DIR || './data'),
     mqttUsername: env.FCPLCN_HUB_MQTT_USERNAME || undefined,
     mqttPassword: env.FCPLCN_HUB_MQTT_PASSWORD || undefined,
@@ -55,7 +89,7 @@ export function loadConfig(
 export function engineOptions(
   config: HubConfig,
   product: Product,
-  storage: Pick<EngineOptions, 'labels' | 'onLabelsChanged'>,
+  storage: Pick<EngineOptions, 'labels' | 'onLabelsChanged' | 'onMeteo' | 'activity'>,
 ): EngineOptions {
   return {
     product,

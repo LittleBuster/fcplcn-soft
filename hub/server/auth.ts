@@ -2,7 +2,7 @@
 import { createHash, randomBytes } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { dirname } from 'node:path';
-import { CredentialStore, validPassword, validUsername } from './credentials.js';
+import { type HubCredentials, validPassword, validUsername } from './credentials.js';
 import { maximumSessions, SessionStore } from './session-store.js';
 
 const cookieName = 'fcplcn_hub_session';
@@ -15,7 +15,7 @@ export class Sessions {
   private binding: string;
   private readonly renewAfter = new Map<string, number>();
   private readonly failures = new Map<string, { until: number; attempts: number }>();
-  constructor(private readonly credentials: CredentialStore) {
+  constructor(private readonly credentials: HubCredentials) {
     this.store = new SessionStore(dirname(credentials.path));
     this.binding = credentials.sessionBinding();
     this.sessions = this.store.load(this.binding);
@@ -36,6 +36,7 @@ export class Sessions {
   }
 
   authenticated(request: IncomingMessage, response?: ServerResponse): boolean {
+    if (!this.credentials.available) return false;
     this.syncCredentials();
     const token = this.token(request);
     if (!token) return false;
@@ -70,6 +71,7 @@ export class Sessions {
     username: unknown,
     password: unknown,
   ): number {
+    if (!this.credentials.available) return 503;
     const now = Date.now(),
       address = request.socket.remoteAddress || 'unknown';
     for (const [key, value] of this.failures) if (value.until <= now) this.failures.delete(key);
@@ -110,11 +112,12 @@ export class Sessions {
   }
 
   /** @brief Require the old password and revoke every existing web session after an atomic save. */
-  change(
+  async change(
     request: IncomingMessage,
     response: ServerResponse,
     data: Record<string, unknown>,
-  ): number {
+  ): Promise<number> {
+    if (!this.credentials.available) return 503;
     const now = Date.now(),
       address = request.socket.remoteAddress || 'unknown';
     for (const [key, value] of this.failures) if (value.until <= now) this.failures.delete(key);
@@ -147,9 +150,10 @@ export class Sessions {
         data.newPassword === undefined && data.username === this.credentials.snapshot().username
           ? data.currentPassword
           : (data.newPassword as string | undefined);
-      this.credentials.update(data.username, password);
+      await this.credentials.update(data.username, password);
     } finally {
-      if (this.credentials.revision !== revision) {
+      if (!this.credentials.available) this.clearCookie(response);
+      else if (this.credentials.revision !== revision) {
         try {
           this.syncCredentials();
         } finally {

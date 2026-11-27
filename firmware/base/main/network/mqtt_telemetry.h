@@ -9,14 +9,19 @@
 #include <string>
 #include "cJSON.h"
 
-/** @brief Stable independent cache slots for the five controller status topics. */
+/** @brief Stable independent cache slots for all controller status topics. */
 enum class MqttTelemetryChannel : std::size_t {
     Sockets = 0,  ///< Socket states and bindings.
     Lights = 1,  ///< Light states and bindings.
     Meteo = 2,  ///< Measurements, original sample timestamps and validity.
     Thermostats = 3,  ///< Autonomous demand, confirmed outputs and faults.
-    Security = 4  ///< Autonomous guard phase, zones and siren; credentials are redacted.
+    Security = 4,  ///< Autonomous guard phase, zones and siren; credentials are redacted.
+    Tanks = 5,  ///< Local water levels, monitoring permission and confirmed pump/valve outputs.
+    Irrigation = 6  ///< Local schedule permissions, water interlock and confirmed valve outputs.
 };
+
+/** @brief Number of independent status slots, preserving the historical first five indexes. */
+inline constexpr std::size_t kMqttTelemetryChannelCount = 7;
 
 /** @brief Maximum copied controller payload; oversized JSON is never queued or remembered. */
 inline constexpr std::size_t kMqttTelemetryMaxBytes = 32 * 1024;
@@ -42,7 +47,7 @@ bool mqtt_telemetry_key(const cJSON* snapshot, std::string& key);
 
 /**
  * @brief Manager-owned publication cache; transport acceptance is explicitly separate from a try.
- * @note Call only from the network manager. It stores at most five bounded comparison strings.
+ * @note Call only from the network manager. It stores one per-channel bounded comparison strings.
  */
 class MqttTelemetryCache {
 public:
@@ -75,5 +80,5 @@ private:
         std::int64_t acceptedAtMs = -1;
     };
 
-    std::array<Entry, 5> entries_;
+    std::array<Entry, kMqttTelemetryChannelCount> entries_;
 };

@@ -5,21 +5,16 @@
  * read failure does not prevent PLC startup and produces unknown JSON measurements.
  */
 #include "system/system_metrics.h"
-
-#include <cmath>
-#include <mutex>
-#include "driver/temperature_sensor.h"
+#include "hardware/chip_temperature.h"
 #include "esp_log.h"
 #ifdef ESP_PLATFORM
-#include "system/runtime_supervisor.h"
+#include "platform/runtime_supervisor.h"
 #include "esp_heap_caps.h"
 #include "esp_system.h"
 #endif
 
 namespace {
 constexpr char kTag[] = "FCPLCn.metrics";
-std::mutex sensor_mutex;
-temperature_sensor_handle_t sensor = nullptr;
 
 #ifdef ESP_PLATFORM
 /**
@@ -75,19 +70,7 @@ const char* reset_name(esp_reset_reason_t reason)
  */
 void system_metrics_init()
 {
-    std::lock_guard<std::mutex> lock(sensor_mutex);
-    if (sensor != nullptr)
-        return;
-    // One supported hardware range, covering normal operating chip temperatures.
-    const temperature_sensor_config_t settings = TEMPERATURE_SENSOR_CONFIG_DEFAULT(20, 100);
-    esp_err_t error = temperature_sensor_install(&settings, &sensor);
-    if (error == ESP_OK) {
-        error = temperature_sensor_enable(sensor);
-        if (error != ESP_OK) {
-            temperature_sensor_uninstall(sensor);
-            sensor = nullptr;
-        }
-    }
+    const auto error = chip_temperature_init();
     if (error != ESP_OK)
         ESP_LOGW(kTag, "Chip temperature unavailable: %s", esp_err_to_name(error));
 }
@@ -104,15 +87,10 @@ cJSON* system_metrics_json()
     auto* json = cJSON_CreateObject();
     if (json == nullptr)
         return nullptr;
-    {
-        std::lock_guard<std::mutex> lock(sensor_mutex);
-        float celsius = 0;
-        if (sensor != nullptr && temperature_sensor_get_celsius(sensor, &celsius) == ESP_OK
-            && std::isfinite(celsius)) {
-            cJSON_AddNumberToObject(json, "chipTemperatureC", celsius);
-        } else {
-            cJSON_AddNullToObject(json, "chipTemperatureC");
-        }
+    if (const auto celsius = chip_temperature_read()) {
+        cJSON_AddNumberToObject(json, "chipTemperatureC", *celsius);
+    } else {
+        cJSON_AddNullToObject(json, "chipTemperatureC");
     }
 #ifdef ESP_PLATFORM
     cJSON_AddNumberToObject(json, "minimumFreeHeapBytes", esp_get_minimum_free_heap_size());

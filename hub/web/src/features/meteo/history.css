@@ -1,0 +1,128 @@
+.meteo-history-trigger {
+  align-self: flex-start;
+  margin-top: 10px;
+}
+
+.pult-page .pult-tile-sensor .meteo-history-trigger {
+  min-height: 48px;
+}
+
+.meteo-history-dialog {
+  width: min(620px, calc(100% - 24px));
+  max-width: none;
+  max-height: calc(100% - 24px);
+  margin: auto;
+  padding: clamp(14px, 4vw, 24px);
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--panel);
+  color: var(--text);
+  box-shadow: 0 20px 64px #0007;
+}
+
+.meteo-history-dialog::backdrop {
+  background: #070c15b8;
+}
+
+.meteo-history-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.meteo-history-heading > div {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.meteo-history-heading h2 {
+  font-size: clamp(17px, 4.5vw, 24px);
+}
+
+.meteo-history-heading p,
+.meteo-history-caption {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.meteo-history-period {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 16px 0;
+}
+
+.meteo-history-status {
+  margin-top: 18px;
+  line-height: 1.5;
+}
+
+.meteo-history-series {
+  --meteo-history-color: var(--amber);
+  margin: 12px 0 0;
+  padding: 12px 10px 8px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #101723;
+}
+
+.meteo-history-series[data-history-series='humidityPct'] {
+  --meteo-history-color: var(--cyan);
+}
+
+.meteo-history-series figcaption {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px 12px;
+  margin: 0 2px 8px;
+}
+
+.meteo-history-series figcaption strong {
+  color: var(--meteo-history-color);
+  font-size: 14px;
+}
+
+.meteo-history-series figcaption span {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.meteo-history-series svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+.meteo-history-series svg line {
+  stroke: var(--line);
+  vector-effect: non-scaling-stroke;
+}
+
+.meteo-history-series svg text {
+  fill: #a4b4ca;
+  font-size: 15px;
+}
+
+.meteo-history-trace {
+  fill: none;
+  stroke: var(--meteo-history-color);
+  stroke-width: 1;
+  stroke-opacity: 0.68;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.meteo-history-series svg circle {
+  fill: var(--meteo-history-color);
+}
+
+@media (max-width: 520px) {
+  .meteo-history-series svg text {
+    font-size: 18px;
+  }
+}

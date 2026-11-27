@@ -160,6 +160,9 @@ function validSettings(config) {
 /** @brief Expand older backup versions with the same default module/mode migration as firmware. */
 function backupControllers(document) {
   return {
+    irrigation:
+      document.version >= 10 ? document.controllers.irrigation : { enabled: false, items: [] },
+    tanks: document.version >= 9 ? document.controllers.tanks : { enabled: false, items: [] },
     sockets: document.controllers.sockets,
     lights: document.version >= 2 ? document.controllers.lights : { enabled: false, items: [] },
     meteo: document.version >= 3 ? document.controllers.meteo : { enabled: false, items: [] },
@@ -188,7 +191,7 @@ function validateBackup(document, activeBoardId, controllers, profiles) {
       ['sourceDeviceId'],
     ) ||
     document.format !== 'fcplcn-config' ||
-    ![1, 2, 3, 4, 5, 6, 7, 8].includes(document.version) ||
+    ![1, 2, 3, 4, 5, 6, 7, 8, 9, 10].includes(document.version) ||
     document.product !== 'FCPLCn'
   ) {
     return { status: 400, error: 'Неподдерживаемый формат резервной копии' };
@@ -208,9 +211,13 @@ function validateBackup(document, activeBoardId, controllers, profiles) {
           ? ['sockets', 'lights']
           : document.version === 3
             ? ['sockets', 'lights', 'meteo']
-            : document.version >= 8
-              ? ['sockets', 'lights', 'meteo', 'thermostats', 'security']
-              : ['sockets', 'lights', 'meteo', 'thermostats'],
+            : document.version >= 10
+              ? ['sockets', 'lights', 'meteo', 'thermostats', 'security', 'tanks', 'irrigation']
+              : document.version >= 9
+                ? ['sockets', 'lights', 'meteo', 'thermostats', 'security', 'tanks']
+                : document.version >= 8
+                  ? ['sockets', 'lights', 'meteo', 'thermostats', 'security']
+                  : ['sockets', 'lights', 'meteo', 'thermostats'],
     ) ||
     (document.version === 4 &&
       (!object(document.controllers.thermostats, ['enabled', 'items']) ||

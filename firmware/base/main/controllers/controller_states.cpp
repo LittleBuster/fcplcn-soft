@@ -2,7 +2,8 @@
  * @file controller_states.cpp
  * @brief state-memory operative states bound to the exact durable controller configuration.
  * @details Flash holds configuration and a unique identity. Only user switch states and
- * thermostat permissions enter this journal; physical thermostat demand is always RAM-only.
+ * thermostat, tank and irrigation permissions enter this journal; derived relay demand is always
+ * RAM-only.
  */
 #include "controllers/controller_internal.h"
 #include "hardware/state_memory.h"
@@ -12,14 +13,15 @@ namespace fcplcn::controllers::detail {
 namespace {
 StateJournalKey active_key{};
 bool active_key_valid = false;
-bool active_legacy = false;
+std::uint8_t active_version = 0;
 std::string storage_error;
 bool storage_available = false;
 esp_err_t storage_result = ESP_ERR_INVALID_STATE;
 }  // namespace
 
 /**
- * @brief Extract the nonzero state identity from a CRC-checked version-8 configuration.
+ * @brief Extract the nonzero state identity from a CRC-checked configuration with an
+ * operative-state identity.
  * @param[in] record Complete durable configuration bytes.
  * @param[out] key Replaced on success; unchanged for older or invalid records.
  * @return True only for a complete current-format record with a nonzero identity.
@@ -30,6 +32,8 @@ bool state_record_key(const SettingsBytes& record, StateJournalKey& key)
     if (record.size() < offset + key.size() + 5
         || !((std::equal(kControllerMagic.begin(), kControllerMagic.end(), record.begin())
               && record[8] == kControllerStorageVersion)
+             || (std::equal(kV10Magic.begin(), kV10Magic.end(), record.begin()) && record[8] == 10)
+             || (std::equal(kV9Magic.begin(), kV9Magic.end(), record.begin()) && record[8] == 9)
              || (std::equal(kV8Magic.begin(), kV8Magic.end(), record.begin()) && record[8] == 8))
         || record[9] != 0)
         return false;
@@ -56,7 +60,7 @@ bool state_record_key(const SettingsBytes& record, StateJournalKey& key)
  */
 StateJournalPayload encode_states(const Configurations& configs)
 {
-    StateJournalPayload payload{2};
+    StateJournalPayload payload{4};
     for (std::size_t module = 0; module < kControllerCount; ++module) {
         if (module == index(ControllerKind::Security)) {
             payload.push_back(2);
@@ -68,8 +72,11 @@ StateJournalPayload encode_states(const Configurations& configs)
         payload.push_back(static_cast<std::uint8_t>(operative ? configs[module].items.size() : 0));
         if (operative)
             for (const auto& item : configs[module].items)
-                payload.push_back(module == index(ControllerKind::Thermostats) ? item.enabled
-                                                                               : item.state);
+                payload.push_back((module == index(ControllerKind::Thermostats)
+                                   || module == index(ControllerKind::Irrigation)
+                                   || module == index(ControllerKind::Tanks))
+                                      ? item.enabled
+                                      : item.state);
     }
     return payload;
 }
@@ -78,17 +85,22 @@ StateJournalPayload encode_states(const Configurations& configs)
  * @brief Validate a whole state payload before replacing any operative flag.
  * @param[in] payload Complete journal payload with version and module row counts.
  * @param[in,out] configs Same-key configuration; unchanged on validation failure.
- * @param allowLegacy Accept the historical four-module payload only during version-8 migration.
+ * @param recordVersion Version of the CRC-checked record owning this journal.
  * @return ESP_OK or INVALID_RESPONSE for a schema/count/value mismatch.
  */
-esp_err_t
-apply_states(const StateJournalPayload& payload, Configurations& configs, bool allowLegacy)
+esp_err_t apply_states(const StateJournalPayload& payload,
+                       Configurations& configs,
+                       std::uint8_t recordVersion)
 {
-    if (payload.empty() || (payload[0] != 2 && !(allowLegacy && payload[0] == 1)))
+    // FCCTRL08 introduced the four-module journal. Each subsequent version
+    // appends one module and increments both versions together.
+    if (payload.empty() || recordVersion < 8 || recordVersion > kControllerStorageVersion
+        || payload[0] != recordVersion - 7)
         return ESP_ERR_INVALID_RESPONSE;
     auto next = configs;
     std::size_t position = 1;
-    for (std::size_t module = 0; module < (payload[0] == 1 ? 4U : kControllerCount); ++module) {
+    const auto moduleCount = static_cast<std::size_t>(recordVersion - 4);
+    for (std::size_t module = 0; module < moduleCount; ++module) {
         if (module == index(ControllerKind::Security)) {
             if (payload.size() - position < 3 || payload[position++] != 2 || payload[position] > 1
                 || payload[position + 1] > 1)
@@ -106,8 +118,11 @@ apply_states(const StateJournalPayload& payload, Configurations& configs, bool a
             if (position >= payload.size() || payload[position] > 1)
                 return ESP_ERR_INVALID_RESPONSE;
             auto& item = next[module].items[row];
-            (module == index(ControllerKind::Thermostats) ? item.enabled : item.state) =
-                payload[position++] != 0;
+            ((module == index(ControllerKind::Thermostats)
+              || module == index(ControllerKind::Irrigation)
+              || module == index(ControllerKind::Tanks))
+                 ? item.enabled
+                 : item.state) = payload[position++] != 0;
         }
     }
     if (position != payload.size())
@@ -117,7 +132,7 @@ apply_states(const StateJournalPayload& payload, Configurations& configs, bool a
 }
 
 /**
- * @brief Revoke all stored ON states and thermostat permissions after an unreadable journal.
+ * @brief Revoke all stored ON states and autonomous-loop permissions after an unreadable journal.
  * @param[in,out] configs Configured rows whose bindings and module settings remain intact.
  */
 void clear_states(Configurations& configs)
@@ -130,6 +145,13 @@ void clear_states(Configurations& configs)
             item.enabled = false;
         }
     }
+    // An unreadable alarm state must not silently disarm configured zones,
+    // including during migration of a previous state-memory journal.
+    auto& security = configs[index(ControllerKind::Security)];
+    if (security.enabled && !security.items.empty()) {
+        security.armed = true;
+        security.triggered = true;
+    }
 }
 
 /**
@@ -140,7 +162,7 @@ void clear_states(Configurations& configs)
 void activate_state_record(const SettingsBytes& record)
 {
     active_key_valid = state_record_key(record, active_key);
-    active_legacy = active_key_valid && record[8] == 8;
+    active_version = active_key_valid ? record[8] : 0;
     storage_available = active_key_valid;
     storage_result = active_key_valid ? ESP_OK : ESP_ERR_INVALID_STATE;
     if (active_key_valid)
@@ -159,7 +181,7 @@ esp_err_t load_states(Configurations& configs)
     auto result =
         active_key_valid ? state_journal_load(active_key, payload) : ESP_ERR_INVALID_STATE;
     if (result == ESP_OK)
-        result = apply_states(payload, configs, active_legacy);
+        result = apply_states(payload, configs, active_version);
     storage_error = result == ESP_OK ? "" : "Состояния памяти недоступны или повреждены";
     storage_available = result == ESP_OK;
     storage_result = result;
@@ -173,7 +195,7 @@ esp_err_t load_states(Configurations& configs)
  */
 bool state_storage_healthy()
 {
-    return active_key_valid && !active_legacy && storage_error.empty();
+    return active_key_valid && active_version == kControllerStorageVersion && storage_error.empty();
 }
 
 /**
@@ -186,7 +208,7 @@ bool state_storage_healthy()
  */
 esp_err_t save_states(const Configurations& configs)
 {
-    if (!active_key_valid || active_legacy) {
+    if (!active_key_valid || active_version != kControllerStorageVersion) {
         storage_error = "Состояния памяти не привязаны к сохранённой конфигурации";
         storage_result = ESP_ERR_INVALID_STATE;
         return ESP_ERR_INVALID_STATE;
@@ -260,7 +282,7 @@ void reset_state_storage()
 {
     active_key = {};
     active_key_valid = false;
-    active_legacy = false;
+    active_version = 0;
     storage_error.clear();
     storage_available = false;
     storage_result = ESP_ERR_INVALID_STATE;
@@ -304,8 +326,9 @@ cJSON* controllers_probe_state_storage_json()
         result = state_journal_load(active_key, payload);
         auto checked = configurations;
         if (result == ESP_OK)
-            result = apply_states(payload, checked, active_legacy);
-        if (result == ESP_OK && !active_legacy && payload != encode_states(configurations))
+            result = apply_states(payload, checked, active_version);
+        if (result == ESP_OK && active_version == kControllerStorageVersion
+            && payload != encode_states(configurations))
             result = ESP_ERR_INVALID_RESPONSE;
     } else if (available)
         result = ESP_ERR_INVALID_STATE;
@@ -374,8 +397,8 @@ cJSON* controllers_backup_snapshot(SettingsSnapshot& snapshot, std::string& erro
     if (state_record_key(record, key)) {
         StateJournalPayload payload;
         if (state_journal_load(key, payload) != ESP_OK
-            || apply_states(payload, parsed, record[8] == 8) != ESP_OK) {
-            error = "Не удалось прочитать актуальные состояния из FRAM";
+            || apply_states(payload, parsed, record[8]) != ESP_OK) {
+            error = "Не удалось прочитать актуальные состояния из памяти";
             storage_error = error;
             storage_result = ESP_ERR_INVALID_RESPONSE;
             return nullptr;

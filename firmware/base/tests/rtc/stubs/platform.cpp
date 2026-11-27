@@ -1,6 +1,6 @@
 #include "test_platform.h"
 #include "hardware/hardware_io.h"
-#include "time/rtc_codec.h"
+#include "hardware/rtc_codec.h"
 #include "freertos/task.h"
 
 #include <algorithm>

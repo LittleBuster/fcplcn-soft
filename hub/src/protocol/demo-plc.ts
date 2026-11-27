@@ -37,6 +37,11 @@ interface Fixture {
   controllers: {
     snapshot(): Record<ControllerKind, ModuleData>;
     exportSettings(): Record<ControllerKind, Data>;
+    irrigationWaterSource(): { id: string; name: string; water: boolean | null }[];
+    setRemoteIrrigationTanks(
+      rows: { id: string; name: string; deviceName: string; waterAvailable: boolean | null }[],
+      ttlMs: number,
+    ): void;
     modules: Record<
       ControllerKind,
       {
@@ -47,6 +52,7 @@ interface Fixture {
     >;
     advanceSecurityTime(milliseconds: number): void;
     simulateIbutton(body: Data): Promise<unknown>;
+    simulateTankLevel(body: Data): Promise<unknown>;
     setSecurityTouchHandlers(handlers: {
       decide(key: Data): { value: boolean; busy: boolean } | undefined;
       observed(event: {
@@ -77,12 +83,19 @@ export const { demoKeys } = require(
 const clone = <T>(value: T): T => structuredClone(value);
 const methods = new Set(['GET', 'POST']);
 const route =
-  /^\/(?:status|config(?:\/(?:backup|restore))?|controllers(?:\/(?:sockets|lights|meteo|thermostats|security)(?:\/(?:state|enabled|armed|scan))?)?|hardware(?:\/(?:scan|relay))?|firmware(?:\/(?:begin|chunk|finish|abort))?|board-profiles|user|time|reboot)$/;
+  /^\/(?:status|config(?:\/(?:backup|restore))?|controllers(?:\/(?:sockets|lights|meteo|thermostats|security|tanks|irrigation)(?:\/(?:state|enabled|armed|scan))?)?|hardware(?:\/(?:scan|relay))?|firmware(?:\/(?:begin|chunk|finish|abort))?|board-profiles|user|time|reboot)$/;
 
 /** @brief Own a single virtual PLC; management, automation and telemetry share these exact models. */
 export class DemoPLC {
   readonly fixture: Fixture;
-  readonly sequences = { sockets: 0, lights: 0, thermostats: 0, security: 0 };
+  readonly sequences = {
+    sockets: 0,
+    lights: 0,
+    thermostats: 0,
+    security: 0,
+    tanks: 0,
+    irrigation: 0,
+  };
   managementSequence = 0;
   heartbeatSequence = 0;
   bootId: string;
@@ -125,13 +138,17 @@ export class DemoPLC {
     if (seeded) {
       const settings = stored?.backup.controllers as Record<ControllerKind, Data> | undefined;
       const controllers = settings
-        ? Object.fromEntries(
-            Object.entries(settings).map(([kind, data]) => [kind, { revision: 1, ...data }]),
-          )
+        ? {
+            irrigation: { revision: 1, enabled: false, items: [] },
+            tanks: { revision: 1, enabled: false, items: [] },
+            ...Object.fromEntries(
+              Object.entries(settings).map(([kind, data]) => [kind, { revision: 1, ...data }]),
+            ),
+          }
         : preset.controllers;
       writeFileSync(
         controllerFile,
-        JSON.stringify({ version: 8, boardId: 'fcplcn-161608-1v0', controllers }),
+        JSON.stringify({ version: 10, boardId: 'fcplcn-161608-1v0', controllers }),
         { mode: 0o600, flag: 'wx' },
       );
     }
@@ -182,6 +199,9 @@ export class DemoPLC {
     else this.fixture.config.device.name = preset.name;
     for (const [id, temperature] of Object.entries(preset.temperatures))
       this.fixture.setMeteoTemperature(id, temperature);
+    if (seeded && preset.controllers.tanks?.enabled) {
+      void this.fixture.controllers.simulateTankLevel({ id: 'tank-water', wet: [true, false] });
+    }
     if (seeded && preset.alarm) {
       this.fixture.hardware.setInputLevel('in-0/1', true);
       for (let i = 0; i < 3; i++) this.fixture.controllers.advanceSecurityTime(25);
@@ -256,13 +276,14 @@ export class DemoPLC {
     return operation;
   }
 
-  /** Preserve absent unused modules until configured, while keeping a disabled known module visible. */
+  /** Advertise irrigation support before the first rule so the dashboard can open its editor. */
   snapshots(): Partial<Record<ControllerKind, ModuleData>> {
     const snapshot = this.fixture.controllers.snapshot();
     const result: Partial<Record<ControllerKind, ModuleData>> = {};
     for (const kind of controllerKinds) {
       const data = snapshot[kind];
-      if (data.enabled || data.items.length || this.exposed.has(kind)) {
+      if (!data) continue;
+      if (kind === 'irrigation' || data.enabled || data.items.length || this.exposed.has(kind)) {
         this.exposed.add(kind);
         const clean = clone(data);
         if (kind === 'security') {
@@ -305,7 +326,7 @@ export class DemoPLC {
     const result =
       kind === 'security'
         ? await module.armed!({ value: packet.value })
-        : kind === 'thermostats'
+        : kind === 'thermostats' || kind === 'tanks' || kind === 'irrigation'
           ? await module.enabled!({ id: packet.id, value: packet.value })
           : await module.state!({ id: packet.id, value: packet.value });
     if (result.status === 200) {
@@ -404,7 +425,14 @@ export class DemoPLC {
       this.securityLease = null;
       this.retiredSecurityEpochs.clear();
       this.securityEventSequence = 0;
-      for (const kind of ['sockets', 'lights', 'thermostats', 'security'] as const)
+      for (const kind of [
+        'sockets',
+        'lights',
+        'thermostats',
+        'security',
+        'tanks',
+        'irrigation',
+      ] as const)
         this.sequences[kind] = 0;
       void this.persist()
         .then(() => {

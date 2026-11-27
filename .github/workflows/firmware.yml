@@ -1,0 +1,25 @@
+name: FCPLCn firmware
+
+on:
+  push:
+    paths:
+      - '.github/workflows/firmware.yml'
+      - 'firmware/base/main/**'
+      - 'tools/firmware/check-hardware-layer'
+  pull_request:
+    paths:
+      - '.github/workflows/firmware.yml'
+      - 'firmware/base/main/**'
+      - 'tools/firmware/check-hardware-layer'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  hardware-layer:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Check physical driver boundaries
+        run: python3 tools/firmware/check-hardware-layer

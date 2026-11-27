@@ -87,7 +87,7 @@ async function checkSecurity({ browser, createMock, artifacts }) {
     await page.locator('#login-form button').click();
     await page.locator('#app-view').waitFor({ state: 'visible' });
     await page.locator('#tab-controllers').click();
-    assert.equal(await page.locator('[data-controller-id]').count(), 5);
+    assert.equal(await page.locator('[data-controller-id]').count(), 7);
     await toggleModule('#security-tile-enabled');
     assert.equal(alarm().phase, 'disarmed');
     assert.equal(alarm().readyToArm, false);
@@ -389,7 +389,7 @@ async function checkSecurity({ browser, createMock, artifacts }) {
       );
     }
     const exported = await (await context.request.get(url + '/api/v1/config/backup')).json();
-    assert.equal(exported.version, 8);
+    assert.equal(exported.version, 10);
     const invalidRestore = JSON.parse(JSON.stringify(exported.controllers));
     invalidRestore.security = {
       ...invalidRestore.security,
@@ -404,7 +404,7 @@ async function checkSecurity({ browser, createMock, artifacts }) {
     assert.equal(exported.controllers.security.keys[0].address, demoKeys[0]);
     assert.equal(exported.controllers.security.items.length, 2);
     const disk = JSON.parse(fs.readFileSync(statePath, 'utf8'));
-    assert.equal(disk.version, 8);
+    assert.equal(disk.version, 10);
     assert.equal(disk.controllers.security.keys.length, 1);
     assert.deepEqual(errors, []);
   } finally {

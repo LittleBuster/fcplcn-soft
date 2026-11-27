@@ -95,9 +95,11 @@ test('Remote role allowlist does not expose private services or maintenance to a
   const owner = { userId: 'owner', role: 'owner' as const };
   assert.equal(cloudPermitted(owner, 'GET', '/pult/settings'), true);
   assert.equal(cloudPermitted(owner, 'PUT', '/pult/settings'), true);
+  assert.equal(cloudPermitted(owner, 'PUT', '/scenes/scene-test/schedule'), true);
   for (const actor of [viewer, operator]) {
     assert.equal(cloudPermitted(actor, 'GET', '/pult/settings'), false);
     assert.equal(cloudPermitted(actor, 'PUT', '/pult/settings'), false);
+    assert.equal(cloudPermitted(actor, 'PUT', '/scenes/scene-test/schedule'), false);
   }
   for (const path of [
     '/telegram',

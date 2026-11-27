@@ -15,7 +15,7 @@
 #include "system/firmware_update.h"
 #include "time/rtc_clock.h"
 #include "time/time_service.h"
-#include "util/operation_context.h"
+#include "platform/operation_context.h"
 #include "product_identity.h"
 #include "esp_app_desc.h"
 #include "esp_mac.h"
@@ -103,6 +103,10 @@ bool controller_path(std::string_view path, ControllerKind& kind, std::string_vi
         kind = ControllerKind::Meteo;
     else if (name == "thermostats")
         kind = ControllerKind::Thermostats;
+    else if (name == "irrigation")
+        kind = ControllerKind::Irrigation;
+    else if (name == "tanks")
+        kind = ControllerKind::Tanks;
     else if (name == "security")
         kind = ControllerKind::Security;
     else
@@ -135,7 +139,7 @@ ManagementRouteResult controller_failure(ControllerResult result, const std::str
  */
 ManagementRouteResult controller_response(ControllerKind kind)
 {
-    auto* data = controller_status_json(kind);
+    auto* data = controller_status_json(kind, false);
     if (!data || !cJSON_AddBoolToObject(data, "ok", true)) {
         cJSON_Delete(data);
         return failure(500, "Не удалось прочитать состояния контроллера");
@@ -234,11 +238,19 @@ controller_route(const ManagementRequest& request, ControllerKind kind, std::str
         result = controller_update(kind, body, message);
     } else if ((suffix == "/state"
                 && (kind == ControllerKind::Sockets || kind == ControllerKind::Lights))
-               || (suffix == "/enabled" && kind == ControllerKind::Thermostats)) {
+               || (suffix == "/enabled"
+                   && (kind == ControllerKind::Thermostats || kind == ControllerKind::Tanks
+                       || kind == ControllerKind::Irrigation))) {
         if (!settings_json_fields(body, {"id", "value"})
             || !string_field(body, "id", id, kSocketMaxIdBytes) || !cJSON_IsBool(value))
             return failure(400, "Укажите ID элемента и состояние true/false");
-        result = kind == ControllerKind::Thermostats
+        result = kind == ControllerKind::Irrigation
+                     ? controller_irrigation_set_enabled_until(
+                           id, cJSON_IsTrue(value), request.expiresAtUptimeMs, message)
+                 : kind == ControllerKind::Tanks
+                     ? controller_tank_set_enabled_until(
+                           id, cJSON_IsTrue(value), request.expiresAtUptimeMs, message)
+                 : kind == ControllerKind::Thermostats
                      ? controller_thermostat_set_enabled_until(
                            id, cJSON_IsTrue(value), request.expiresAtUptimeMs, message)
                      : controller_set_state_until(

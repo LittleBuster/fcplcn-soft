@@ -249,6 +249,50 @@ test(
     });
     assert.equal(command.status, 200);
     assert.equal(((await command.json()) as { status: string }).status, 'applied');
+    const tankService = hub + '/devices/fcplcn-demo-utility/service/controllers/tanks';
+    for (const enabled of [false, true]) {
+      const permission = await owner.call(hub + '/devices/fcplcn-demo-utility/commands', {
+        controller: 'tanks',
+        itemId: 'tank-water',
+        value: enabled,
+      });
+      assert.equal(permission.status, 200);
+      assert.equal(((await permission.json()) as { status: string }).status, 'applied');
+      const response = await owner.call(tankService);
+      assert.equal(response.status, 200);
+      const row = ((await response.json()) as { items: Data[] }).items[0];
+      assert.equal(row.enabled, enabled);
+      if (!enabled) {
+        assert.equal(row.pumpActual, false);
+        assert.equal(row.valveActual, false);
+        assert.equal(row.levelPct, null);
+      }
+    }
+    await until(() => {
+      const module = engine!.snapshot().devices.find((d) => d.id === 'fcplcn-demo-utility')!
+        .controllers.tanks!;
+      const row = (module.data.items as Data[])[0];
+      return row.levelPct === 50 && row.pumpActual === true && row.valveActual === true;
+    }, 'Tank outputs did not resume their independent local decisions');
+    t.diagnostic(
+      'Tank monitoring SET crossed HTTP/TLS/hub with confirmed OFF and independent local drain/fill recovery',
+    );
+    const irrigation = hub + '/devices/fcplcn-demo-utility/service/controllers/irrigation';
+    for (const enabled of [true, false]) {
+      const command = await owner.call(hub + '/devices/fcplcn-demo-utility/commands', {
+        controller: 'irrigation',
+        itemId: 'irrigation-garden',
+        value: enabled,
+      });
+      assert.equal(command.status, 200, await command.text());
+      const settings = await owner.call(irrigation);
+      assert.equal(settings.status, 200);
+      const rule = ((await settings.json()) as { items: Data[] }).items[0];
+      assert.equal(rule.enabled, enabled);
+      assert.equal(rule.tankId, 'tank-water');
+      assert.deepEqual(rule.days, [1, 3, 5]);
+      if (!enabled) assert.equal(rule.actual, false);
+    }
     const service = hub + '/devices/' + living + '/service';
     const socketResponse = await owner.call(service + '/controllers/sockets');
     assert.equal(socketResponse.status, 200);
@@ -293,6 +337,7 @@ test(
     const sceneResponse = await owner.call(hub + '/scenes', {
       name: 'Вечер из облака',
       description: 'Испытательное действие',
+      schedule: { enabled: true, time: '18:30', days: [1, 3, 5], timeZone: 'UTC' },
       actions: [
         {
           id: 'evening',
@@ -312,6 +357,19 @@ test(
     });
     assert.equal(sceneResponse.status, 201);
     const scene = (await sceneResponse.json()) as SceneDefinition;
+    const schedulePath = hub + '/scenes/' + scene.id + '/schedule';
+    const paused = await owner.call(
+      schedulePath,
+      { baseRevision: scene.revision, enabled: false },
+      'PUT',
+    );
+    assert.equal(paused.status, 200);
+    await until(async () => {
+      const snapshot = (await (await owner.call(hub + '/overview')).json()) as HubSnapshot;
+      return (
+        snapshot.scenes.definitions.find((item) => item.id === scene.id)?.schedule?.paused === true
+      );
+    }, 'Schedule pause did not reach the cloud overview');
     assert.equal((await owner.call(hub + '/scenes/' + scene.id + '/run', {})).status, 202);
     await until(async () => {
       const response = await owner.call(hub + '/scenes');
@@ -351,6 +409,11 @@ test(
       403,
     );
     assert.equal((await viewer.call(hub + '/scenes/' + scene.id + '/run', {})).status, 403);
+    assert.equal(
+      (await viewer.call(schedulePath, { baseRevision: scene.revision + 1, enabled: true }, 'PUT'))
+        .status,
+      403,
+    );
     const other = (await owner
       .call('/homes', { name: 'Другой дом' })
       .then((response) => response.json())) as HomeView;

@@ -1,6 +1,6 @@
 #include "config/state_journal.h"
 #include "hardware/state_memory.h"
-#include "util/checksum.h"
+#include "platform/checksum.h"
 
 #include <algorithm>
 #include <array>

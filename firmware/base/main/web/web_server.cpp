@@ -21,7 +21,7 @@
 #include "config/settings_json.h"
 #include "system/system_metrics.h"
 #include "system/firmware_update.h"
-#include "system/runtime_supervisor.h"
+#include "platform/runtime_supervisor.h"
 #include "time/time_service.h"
 #include "web_assets.h"
 
@@ -458,6 +458,13 @@ esp_err_t socket_error(httpd_req_t* req, SocketResult result, const std::string&
  */
 ControllerKind request_controller(httpd_req_t* req)
 {
+    if (std::strncmp(req->uri,
+                     "/api/v1/controllers/irrigation",
+                     sizeof("/api/v1/controllers/irrigation") - 1)
+        == 0)
+        return ControllerKind::Irrigation;
+    if (std::strncmp(req->uri, "/api/v1/controllers/tanks", 25) == 0)
+        return ControllerKind::Tanks;
     if (std::strncmp(req->uri, "/api/v1/controllers/security", 28) == 0)
         return ControllerKind::Security;
     if (std::strncmp(req->uri, "/api/v1/controllers/thermostats", 31) == 0)
@@ -476,7 +483,7 @@ ControllerKind request_controller(httpd_req_t* req)
  */
 esp_err_t controller_response(httpd_req_t* req, ControllerKind kind)
 {
-    Json response(controller_status_json(kind), cJSON_Delete);
+    Json response(controller_status_json(kind, false), cJSON_Delete);
     if (!response || !cJSON_AddBoolToObject(response.get(), "ok", true))
         return error(
             req, "500 Internal Server Error", "Не удалось прочитать состояния контроллера");
@@ -558,12 +565,12 @@ esp_err_t set_controller_state(httpd_req_t* req)
 }
 
 /**
- * @brief Change and persist the individual permission for autonomous thermostat operation.
+ * @brief Change and persist the individual permission for autonomous controller operation.
  * @param[in] req Borrowed ESP-IDF request handled by the HTTP server task.
  * @return SDK response-send result, or ESP_OK when a guard/parser has already answered.
- * @note Changes the enabled flag rather than directly commanding the thermal relay.
+ * @note Changes the enabled flag without directly commanding a physical relay.
  */
-esp_err_t set_thermostat_enabled(httpd_req_t* req)
+esp_err_t set_item_enabled(httpd_req_t* req)
 {
     if (!require(req))
         return ESP_OK;
@@ -573,12 +580,17 @@ esp_err_t set_thermostat_enabled(httpd_req_t* req)
     std::string id;
     const auto* desired = cJSON_GetObjectItemCaseSensitive(body.get(), "value");
     if (!get_string(body.get(), "id", id, kSocketMaxIdBytes) || !cJSON_IsBool(desired))
-        return error(req, "400 Bad Request", "Укажите ID термостата и режим true/false");
+        return error(req, "400 Bad Request", "Укажите ID элемента и режим true/false");
     std::string message;
-    const auto result = controller_thermostat_set_enabled(id, cJSON_IsTrue(desired), message);
+    const auto kind = request_controller(req);
+    const auto result = kind == ControllerKind::Irrigation
+                            ? controller_irrigation_set_enabled(id, cJSON_IsTrue(desired), message)
+                        : kind == ControllerKind::Tanks
+                            ? controller_tank_set_enabled(id, cJSON_IsTrue(desired), message)
+                            : controller_thermostat_set_enabled(id, cJSON_IsTrue(desired), message);
     if (result != ControllerResult::Ok)
         return socket_error(req, result, message);
-    return controller_response(req, ControllerKind::Thermostats);
+    return controller_response(req, kind);
 }
 
 /**
@@ -1081,19 +1093,6 @@ esp_err_t asset(httpd_req_t* req)
  */
 esp_err_t web_server_start()
 {
-    httpd_config_t config = HTTPD_DEFAULT_CONFIG();
-    config.server_port = 80;
-    config.max_uri_handlers = 48;
-    config.uri_match_fn = httpd_uri_match_wildcard;
-    config.max_open_sockets = 7;
-    config.lru_purge_enable = true;
-    config.stack_size = 12288;
-    config.recv_wait_timeout = 5;
-    config.send_wait_timeout = 5;
-    esp_err_t result = httpd_start(&server, &config);
-    if (result != ESP_OK)
-        return result;
-
     const struct Route {
         const char* path;
         httpd_method_t method;
@@ -1125,9 +1124,15 @@ esp_err_t web_server_start()
         {"/api/v1/controllers/meteo", HTTP_GET, get_controller},
         {"/api/v1/controllers/meteo", HTTP_POST, configure_controller},
         {"/api/v1/controllers/meteo/scan", HTTP_POST, scan_meteo},
+        {"/api/v1/controllers/irrigation", HTTP_GET, get_controller},
+        {"/api/v1/controllers/irrigation", HTTP_POST, configure_controller},
+        {"/api/v1/controllers/irrigation/enabled", HTTP_POST, set_item_enabled},
+        {"/api/v1/controllers/tanks", HTTP_GET, get_controller},
+        {"/api/v1/controllers/tanks", HTTP_POST, configure_controller},
+        {"/api/v1/controllers/tanks/enabled", HTTP_POST, set_item_enabled},
         {"/api/v1/controllers/thermostats", HTTP_GET, get_controller},
         {"/api/v1/controllers/thermostats", HTTP_POST, configure_controller},
-        {"/api/v1/controllers/thermostats/enabled", HTTP_POST, set_thermostat_enabled},
+        {"/api/v1/controllers/thermostats/enabled", HTTP_POST, set_item_enabled},
         {"/api/v1/controllers/security", HTTP_GET, get_controller},
         {"/api/v1/controllers/security", HTTP_POST, configure_controller},
         {"/api/v1/controllers/security/armed", HTTP_POST, set_security_armed},
@@ -1141,6 +1146,19 @@ esp_err_t web_server_start()
         {"/api/v1/firmware/finish", HTTP_POST, firmware_update},
         {"/api/v1/firmware/abort", HTTP_POST, firmware_update},
     };
+
+    httpd_config_t config = HTTPD_DEFAULT_CONFIG();
+    config.server_port = 80;
+    config.max_uri_handlers = sizeof(routes) / sizeof(routes[0]);
+    config.uri_match_fn = httpd_uri_match_wildcard;
+    config.max_open_sockets = 7;
+    config.lru_purge_enable = true;
+    config.stack_size = 12288;
+    config.recv_wait_timeout = 5;
+    config.send_wait_timeout = 5;
+    esp_err_t result = httpd_start(&server, &config);
+    if (result != ESP_OK)
+        return result;
 
     for (const auto& route : routes) {
         httpd_uri_t uri{};

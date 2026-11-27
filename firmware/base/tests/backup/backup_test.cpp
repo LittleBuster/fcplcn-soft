@@ -168,9 +168,13 @@ AuthResult login(const std::string& username, const std::string& password)
 
 void set_legacy_version(cJSON* doc, unsigned version)
 {
-    REQUIRE(version >= 1 && version <= 7);
+    REQUIRE(version >= 1 && version <= 9);
     cJSON_ReplaceItemInObject(doc, "version", cJSON_CreateNumber(version));
-    cJSON_DeleteItemFromObject(mutable_field(doc, "controllers"), "security");
+    cJSON_DeleteItemFromObject(mutable_field(doc, "controllers"), "irrigation");
+    if (version < 9)
+        cJSON_DeleteItemFromObject(mutable_field(doc, "controllers"), "tanks");
+    if (version < 8)
+        cJSON_DeleteItemFromObject(mutable_field(doc, "controllers"), "security");
 }
 
 void defaults()
@@ -179,7 +183,7 @@ void defaults()
     auto d = document();
     REQUIRE(text(d.get(), "format") == "fcplcn-config");
     REQUIRE(text(d.get(), "product") == "FCPLCn");
-    REQUIRE(field(d.get(), "version")->valueint == 8);
+    REQUIRE(field(d.get(), "version")->valueint == 10);
     REQUIRE(text(field(field(d.get(), "config"), "device"), "name") == "FCPLCn");
     REQUIRE(text(field(d.get(), "user"), "algorithm") == "PBKDF2-HMAC-SHA256");
     REQUIRE(cJSON_GetArraySize(field(field(field(d.get(), "controllers"), "sockets"), "items"))
@@ -553,7 +557,7 @@ void require_controller_migration(const SettingsSnapshot& before, unsigned flash
             && migrated.sections[1] == before.sections[1]);
     REQUIRE(migrated.sections[2] != before.sections[2]);
     const auto& record = migrated.sections[2];
-    REQUIRE(record.size() > 26 && std::string(record.begin(), record.begin() + 8) == "FCCTRL09");
+    REQUIRE(record.size() > 26 && std::string(record.begin(), record.begin() + 8) == "FCCTRL11");
     REQUIRE(backup_test::nvs_commits() == flash_writes + 1);
     boot();
     REQUIRE(snapshot().sections == migrated.sections);
@@ -563,7 +567,7 @@ void require_controller_migration(const SettingsSnapshot& before, unsigned flash
 SettingsBytes legacy_socket_record(const SettingsBytes& combined, bool duplicateInput = false)
 {
     // Independently encode the historical FCSOCK01/v1 layout. New production
-    // encoders emit FCCTRL09; using one would not test real migration.
+    // encoders emit FCCTRL11; using one would not test real migration.
     std::string error;
     auto combined_json = legacy_controller_json(combined);
     auto sockets_json = copy(field(combined_json.get(), "sockets"));
@@ -678,7 +682,7 @@ void lights_clone()
     source();
     configure_lights();
     auto d = document();
-    REQUIRE(field(d.get(), "version")->valueint == 8);
+    REQUIRE(field(d.get(), "version")->valueint == 10);
     const auto expected = copy(field(d.get(), "controllers"));
     boot(true, 0x445566);
     configure_lights("rly-0/16", "");
@@ -732,7 +736,7 @@ void legacy_v1()
     boot(false, 0x445566);
     REQUIRE(backup_test::relay(0) && !backup_test::relay(15));
     auto updated = document();
-    REQUIRE(field(updated.get(), "version")->valueint == 8);
+    REQUIRE(field(updated.get(), "version")->valueint == 10);
     const auto* lights = field(field(updated.get(), "controllers"), "lights");
     REQUIRE(cJSON_IsFalse(field(lights, "enabled")));
     REQUIRE(cJSON_GetArraySize(field(lights, "items")) == 0);
@@ -827,7 +831,7 @@ void meteo_clone()
     configure_lights();
     configure_meteo();
     auto d = document();
-    REQUIRE(field(d.get(), "version")->valueint == 8);
+    REQUIRE(field(d.get(), "version")->valueint == 10);
     const auto expected = copy(field(d.get(), "controllers"));
     const auto* row =
         cJSON_GetArrayItem(field(field(field(d.get(), "controllers"), "meteo"), "items"), 0);
@@ -950,7 +954,7 @@ void legacy_v2_storage()
             && cJSON_GetArraySize(field(meteo, "items")) == 0);
     configure_meteo();
     const auto upgraded = snapshot().sections[2];
-    REQUIRE(std::string(upgraded.begin(), upgraded.begin() + 8) == "FCCTRL09");
+    REQUIRE(std::string(upgraded.begin(), upgraded.begin() + 8) == "FCCTRL11");
     boot();
     REQUIRE(backup_test::relay(0) && backup_test::relay(2) && meteo_fake::enabled());
 }
@@ -970,7 +974,7 @@ void legacy_v2_backup()
     boot(false, 0x445566);
     REQUIRE(backup_test::relay(0) && backup_test::relay(2) && !meteo_fake::enabled());
     auto out = document();
-    REQUIRE(field(out.get(), "version")->valueint == 8);
+    REQUIRE(field(out.get(), "version")->valueint == 10);
     const auto* meteo = field(field(out.get(), "controllers"), "meteo");
     REQUIRE(cJSON_IsFalse(field(meteo, "enabled"))
             && cJSON_GetArraySize(field(meteo, "items")) == 0);
@@ -1117,7 +1121,7 @@ void thermostat_clone()
     room_temperature(20);
     REQUIRE(backup_test::relay(3) && backup_test::relay(4));
     auto d = document();
-    REQUIRE(field(d.get(), "version")->valueint == 8);
+    REQUIRE(field(d.get(), "version")->valueint == 10);
     const auto* saved = field(field(d.get(), "controllers"), "thermostats");
     const auto* row = cJSON_GetArrayItem(field(saved, "items"), 0);
     REQUIRE(!field(row, "state") && !field(row, "actual") && !field(row, "temperatureC"));
@@ -1297,7 +1301,7 @@ void legacy_v3_backup()
     REQUIRE(backup_test::relay(0) && backup_test::relay(2) && !backup_test::relay(3)
             && !backup_test::relay(4));
     auto out = document();
-    REQUIRE(field(out.get(), "version")->valueint == 8);
+    REQUIRE(field(out.get(), "version")->valueint == 10);
     const auto* thermostats = field(field(out.get(), "controllers"), "thermostats");
     REQUIRE(cJSON_IsFalse(field(thermostats, "enabled"))
             && cJSON_GetArraySize(field(thermostats, "items")) == 0);
@@ -1485,7 +1489,7 @@ void legacy_v4_backup()
     raw_room_temperature(20);
     REQUIRE(backup_test::relay(3) && backup_test::relay(4));
     auto out = document();
-    REQUIRE(field(out.get(), "version")->valueint == 8);
+    REQUIRE(field(out.get(), "version")->valueint == 10);
     const auto* restoredRows =
         field(field(field(out.get(), "controllers"), "thermostats"), "items");
     for (const auto* row = restoredRows->child; row; row = row->next) {
@@ -1536,7 +1540,7 @@ void legacy_v5_backup()
     REQUIRE(restore(d.get()) == BackupResult::Ok);
     boot(false, 0x445566);
     auto out = document();
-    REQUIRE(field(out.get(), "version")->valueint == 8);
+    REQUIRE(field(out.get(), "version")->valueint == 10);
     const auto* restored = field(field(field(out.get(), "controllers"), "thermostats"), "items");
     REQUIRE(!field(cJSON_GetArrayItem(restored, 0), "minOnSeconds"));
     REQUIRE(!field(cJSON_GetArrayItem(restored, 0), "minOffSeconds"));
@@ -1560,7 +1564,7 @@ void legacy_v6_storage()
     boot();
     require_controller_migration(before, commits);
     auto output = document();
-    REQUIRE(field(output.get(), "version")->valueint == 8);
+    REQUIRE(field(output.get(), "version")->valueint == 10);
     const auto* rows = field(field(field(output.get(), "controllers"), "thermostats"), "items");
     for (const auto* row = rows->child; row; row = row->next) {
         REQUIRE(!field(row, "minOnSeconds") && !field(row, "minOffSeconds"));
@@ -1611,7 +1615,7 @@ void legacy_v6_backup()
     REQUIRE(restore(old.get()) == BackupResult::Ok);
     boot(false, 0x445566);
     auto output = document();
-    REQUIRE(field(output.get(), "version")->valueint == 8);
+    REQUIRE(field(output.get(), "version")->valueint == 10);
     const auto* restored = field(field(field(output.get(), "controllers"), "thermostats"), "items");
     REQUIRE(!field(cJSON_GetArrayItem(restored, 0), "minOnSeconds"));
     REQUIRE(!field(cJSON_GetArrayItem(restored, 0), "minOffSeconds"));
@@ -1802,7 +1806,7 @@ void legacy_v8_storage()
     std::copy_n(new_record.begin() + 10, new_key.size(), new_key.begin());
     REQUIRE(new_key != key);
     StateJournalPayload migrated;
-    REQUIRE(state_journal_load(new_key, migrated) == ESP_OK && migrated[0] == 2);
+    REQUIRE(state_journal_load(new_key, migrated) == ESP_OK && migrated[0] == 4);
 }
 
 void legacy_v8_missing_fram()
@@ -1861,7 +1865,7 @@ void legacy_v7_backup()
     boot(false, 0x445566);
     REQUIRE(backup_test::relay(0));
     auto updated = document();
-    REQUIRE(field(updated.get(), "version")->valueint == 8);
+    REQUIRE(field(updated.get(), "version")->valueint == 10);
     const auto* security = field(field(updated.get(), "controllers"), "security");
     REQUIRE(cJSON_IsFalse(field(security, "enabled")) && cJSON_IsFalse(field(security, "armed")));
     REQUIRE(cJSON_GetArraySize(field(security, "keys")) == 0
@@ -1956,7 +1960,7 @@ void security_clone()
     trigger_security();
     auto alarm = document();
     REQUIRE(backup_test::nvs_commits() == flash_writes);
-    REQUIRE(field(alarm.get(), "version")->valueint == 8);
+    REQUIRE(field(alarm.get(), "version")->valueint == 10);
     auto expected = copy(field(alarm.get(), "controllers"));
     boot(true, 0x445566);
     REQUIRE(restore(alarm.get()) == BackupResult::Ok);
@@ -2153,11 +2157,207 @@ void fram_restore_failure()
     REQUIRE(backup_test::relay(0));
 }
 
+void legacy_v9_storage()
+{
+    source();
+    configure_lights();
+    configure_meteo();
+    configure_thermostats(thermostat_items());
+    configure_security();
+    arm_security(true);
+    trigger_security();
+    auto exported = document();
+    auto old = snapshot().sections[2];
+    // Reconstruct the five-module V9 fixture without tanks or irrigation.
+    REQUIRE(old.size() > 40 && old[8] == 11);
+    old.resize(old.size() - 16);
+    old[6] = '0';
+    old[7] = '9';
+    old[8] = 9;
+    append_record_crc(old);
+    StateJournalKey key{};
+    std::copy_n(old.begin() + 10, key.size(), key.begin());
+    StateJournalPayload payload;
+    REQUIRE(state_journal_load(key, payload) == ESP_OK && payload[0] == 4 && payload.back() == 0);
+    payload[0] = 2;
+    payload.pop_back();  // irrigation count
+    REQUIRE(payload.back() == 0);
+    payload.pop_back();  // tank count
+    REQUIRE(state_journal_save(key, payload) == ESP_OK);
+    REQUIRE(settings_store_set(SettingsSection::Controllers, old) == ESP_OK);
+    const auto before = snapshot();
+    const auto flash_writes = backup_test::nvs_commits();
+    boot();
+    require_controller_migration(before, flash_writes);
+    REQUIRE(backup_test::relay(0) && backup_test::relay(15));
+    auto restored = document();
+    REQUIRE(print(field(restored.get(), "controllers"))
+            == print(field(exported.get(), "controllers")));
+    const auto* modules = field(restored.get(), "controllers");
+    REQUIRE(cJSON_IsTrue(field(field(modules, "security"), "armed")));
+    REQUIRE(cJSON_IsTrue(field(field(modules, "security"), "triggered")));
+    const auto* thermostats = field(field(modules, "thermostats"), "items");
+    REQUIRE(cJSON_IsTrue(field(cJSON_GetArrayItem(thermostats, 0), "enabled")));
+    REQUIRE(cJSON_IsFalse(field(field(modules, "tanks"), "enabled")));
+    const auto current = snapshot().sections[2];
+    StateJournalKey migrated_key{};
+    std::copy_n(current.begin() + 10, migrated_key.size(), migrated_key.begin());
+    REQUIRE(migrated_key != key);
+    REQUIRE(state_journal_load(migrated_key, payload) == ESP_OK && payload[0] == 4);
+}
+
+void legacy_v8_backup()
+{
+    source();
+    configure_security();
+    arm_security(true);
+    auto old = document();
+    set_legacy_version(old.get(), 8);
+    boot(true, 0x445566);
+    REQUIRE(restore(old.get()) == BackupResult::Ok);
+    boot(false, 0x445566);
+    auto restored = document();
+    REQUIRE(field(restored.get(), "version")->valueint == 10);
+    const auto* modules = field(restored.get(), "controllers");
+    REQUIRE(cJSON_IsTrue(field(field(modules, "security"), "armed")));
+    REQUIRE(cJSON_IsFalse(field(field(modules, "tanks"), "enabled")));
+    REQUIRE(cJSON_GetArraySize(field(field(modules, "tanks"), "items")) == 0);
+}
+
+void configure_tank()
+{
+    Json current(controller_status_json(ControllerKind::Tanks), cJSON_Delete);
+    REQUIRE(current);
+    auto request = parse(
+        "{\"baseRevision\":" + std::to_string(field(current.get(), "revision")->valueint)
+        + R"(,"enabled":true,"items":[{"id":"tank","name":"Запас воды","pumpRelayId":"rly-0/6","valveRelayId":"rly-0/7","levelInputs":["in-0/6","in-0/7","in-0/8"],"fillLevel":3}]})");
+    std::string error;
+    REQUIRE(controller_update(ControllerKind::Tanks, request.get(), error) == ControllerResult::Ok);
+    REQUIRE(controller_tank_set_enabled("tank", true, error) == ControllerResult::Ok);
+    backup_test::input(5, false);
+    for (unsigned n = 0; n < 4; ++n)
+        step();
+    REQUIRE(backup_test::relay(5) && backup_test::relay(6));
+}
+
+void tank_clone()
+{
+    source();
+    configure_tank();
+    auto saved = document();
+    const auto* tank = field(field(field(saved.get(), "controllers"), "tanks"), "items")->child;
+    REQUIRE(cJSON_IsTrue(field(tank, "enabled")));
+    REQUIRE(!field(tank, "levelPct") && !field(tank, "pumpActual") && !field(tank, "levelsWet"));
+    boot(true, 0x445566);
+    REQUIRE(restore(saved.get()) == BackupResult::Ok);
+    const auto staged = snapshot();
+    boot(false, 0x445566);
+    REQUIRE(!backup_test::relay(5) && !backup_test::relay(6));  // No imported ON demand.
+    REQUIRE(snapshot().sections == staged.sections);
+    REQUIRE(backup_test::recovery_policy(5) == HardwareRelayRecovery::Controller);
+    REQUIRE(backup_test::recovery_policy(6) == HardwareRelayRecovery::Controller);
+    auto restored = document();
+    REQUIRE(print(field(restored.get(), "controllers"))
+            == print(field(saved.get(), "controllers")));
+    backup_test::input(5, false);
+    for (unsigned n = 0; n < 4; ++n)
+        step();
+    REQUIRE(backup_test::relay(5) && backup_test::relay(6));
+    auto invalid = copy(saved.get());
+    auto* row =
+        mutable_field(mutable_field(mutable_field(invalid.get(), "controllers"), "tanks"), "items")
+            ->child;
+    cJSON_ReplaceItemInObject(row, "valveRelayId", cJSON_CreateString("rly-0/1"));
+    unchanged_after(invalid.get(), BackupResult::Conflict);
+}
+
+void legacy_v10_tank_storage()
+{
+    source();
+    configure_tank();
+    const auto saved = document();
+    auto record = snapshot().sections[2];
+    REQUIRE(record.size() > 40 && record[8] == 11);
+    record.resize(record.size() - 10);  // Empty irrigation config (6 bytes) and CRC.
+    record[7] = '0';
+    record[8] = 10;
+    append_record_crc(record);
+    StateJournalKey key{};
+    std::copy_n(record.begin() + 10, key.size(), key.begin());
+    StateJournalPayload payload;
+    REQUIRE(state_journal_load(key, payload) == ESP_OK && payload[0] == 4 && payload.back() == 0);
+    payload.pop_back();
+    payload[0] = 3;
+    REQUIRE(state_journal_save(key, payload) == ESP_OK);
+    REQUIRE(settings_store_set(SettingsSection::Controllers, record) == ESP_OK);
+    const auto before = snapshot();
+    const auto writes = backup_test::nvs_commits();
+    boot();
+    require_controller_migration(before, writes);
+    auto migrated = document();
+    REQUIRE(print(field(saved.get(), "controllers"))
+            == print(field(migrated.get(), "controllers")));
+
+    set_legacy_version(migrated.get(), 9);
+    boot(true, 0x445566);
+    REQUIRE(restore(migrated.get()) == BackupResult::Ok);
+    boot(false, 0x445566);
+    auto restored = document();
+    REQUIRE(print(field(saved.get(), "controllers"))
+            == print(field(restored.get(), "controllers")));
+}
+
+void irrigation_clone()
+{
+    source();
+    configure_tank();
+    Json current(controller_status_json(ControllerKind::Irrigation), cJSON_Delete);
+    auto request = parse(
+        "{\"baseRevision\":" + std::to_string(field(current.get(), "revision")->valueint)
+        + R"(,"enabled":true,"items":[{"id":"garden","name":"Сад","relayId":"rly-0/8","tankId":"tank","days":[1,3,7],"startTime":"07:30","durationMinutes":12},{"id":"lawn","name":"Газон","relayId":"rly-0/9","days":[2,6],"startTime":"07:45","durationMinutes":10}]})");
+    std::string error;
+    REQUIRE(controller_update(ControllerKind::Irrigation, request.get(), error)
+            == ControllerResult::Ok);
+    REQUIRE(controller_irrigation_set_enabled("garden", true, error) == ControllerResult::Ok);
+    REQUIRE(controller_irrigation_set_enabled("lawn", true, error) == ControllerResult::Ok);
+    const auto saved = document();
+    const auto* modules = field(saved.get(), "controllers");
+    const auto* rule = field(field(modules, "irrigation"), "items")->child;
+    REQUIRE(cJSON_IsTrue(field(rule, "enabled")));
+    REQUIRE(!field(rule, "actual") && !field(rule, "waterAvailable")
+            && !field(rule, "remainingSeconds"));
+    const auto* unbound = rule->next;
+    REQUIRE(text(unbound, "tankId").empty() && cJSON_IsTrue(field(unbound, "enabled")));
+    auto portable = copy(saved.get());
+    auto* entries = mutable_field(
+        mutable_field(mutable_field(portable.get(), "controllers"), "irrigation"), "items");
+    cJSON_DeleteItemFromObject(cJSON_GetArrayItem(entries, 1), "tankId");
+    boot(true, 0x445566);
+    REQUIRE(restore(portable.get()) == BackupResult::Ok);
+    boot(false, 0x445566);
+    auto restored = document();
+    REQUIRE(print(modules) == print(field(restored.get(), "controllers")));
+    REQUIRE(!backup_test::relay(7) && !backup_test::relay(8));
+    auto invalid = copy(saved.get());
+    auto* row =
+        mutable_field(mutable_field(mutable_field(invalid.get(), "controllers"), "irrigation"),
+                      "items")
+            ->child;
+    cJSON_ReplaceItemInObject(row, "tankId", cJSON_CreateString("unknown"));
+    REQUIRE(restore(invalid.get()) != BackupResult::Ok);
+    REQUIRE(!settings_restore_pending());
+}
+
 }  // namespace
 
 int main(int argc, char** argv)
 {
     const std::vector<std::pair<std::string, std::function<void()>>> cases = {
+        {"legacy_v9_storage", legacy_v9_storage},
+        {"legacy_v8_backup", legacy_v8_backup},
+        {"tank_clone", tank_clone},
+        {"legacy_v10_tank_storage", legacy_v10_tank_storage},
+        {"irrigation_clone", irrigation_clone},
         {"defaults", defaults},
         {"clone", clone},
         {"rejection", rejection},

@@ -145,7 +145,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       # Publish only after every platform succeeds. A sha tag always represents
-      # one source revision, allowing install.sh to update and roll back exactly.
+      # one source revision, allowing update.sh to deploy the matching application image.
       - name: Assemble the multi-platform image
         shell: bash
         env:

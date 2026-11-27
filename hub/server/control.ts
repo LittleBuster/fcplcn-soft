@@ -10,6 +10,7 @@ import { isDeviceIllustrationId } from '../shared/device-art.js';
 import { HouseSecurity } from './house-security.js';
 import type { TelegramView } from '../shared/telegram.js';
 import { PultSettings } from './pult-settings.js';
+import { cloudActivityEntry, cloudSceneActivity } from './activity-context.js';
 
 export interface TelegramAPI {
   snapshot(): TelegramView;
@@ -64,7 +65,7 @@ export class HubControl {
         ? new HouseSecurity(options.engine, options.scenes, {
             directory: options.dataDir,
             isBusy: () => Boolean(this.manual || this.writing || this.uploads.size),
-            runScene: (id) => this.runScene(id),
+            runScene: (id, signal) => this.startScene(id, undefined, signal),
           })
         : undefined);
     this.houseSecurity?.start();
@@ -159,6 +160,14 @@ export class HubControl {
     }
   }
   runScene(id: string, actor?: CloudActor) {
+    this.requireSceneReady(id, actor);
+    return this.options.scenes.run(id);
+  }
+  startScene(id: string, actor?: CloudActor, signal?: AbortSignal) {
+    this.requireSceneReady(id, actor);
+    return this.options.scenes.startRun(id, 'manual', signal);
+  }
+  private requireSceneReady(id: string, actor?: CloudActor): void {
     this.refresh();
     if (this.manual || this.writing || this.uploads.size)
       throw fail('Дождитесь подтверждения текущей команды PLC');
@@ -175,7 +184,6 @@ export class HubControl {
       )
         throw fail('Нет разрешения управлять охраной', 403);
     }
-    return this.options.scenes.run(id);
   }
   private lease(deviceId: string): void {
     const device = this.snapshot().devices.find((entry) => entry.id === deviceId);
@@ -281,12 +289,22 @@ export class HubControl {
       throw fail('Нет разрешения на эту операцию', 403);
     if (options.signal?.aborted || (options.remainingMs !== undefined && options.remainingMs < 250))
       throw fail('Срок запроса истёк до отправки', 408);
-    if (method === 'GET' && path === '/overview') return { status: 200, data: this.overview() };
+    if (method === 'GET' && path === '/overview') {
+      const data = this.overview();
+      if (options.actor) {
+        data.commands = data.commands.map(cloudActivityEntry);
+        data.scenes = cloudSceneActivity(data.scenes);
+      }
+      return { status: 200, data };
+    }
     if (method === 'GET' && path === '/pult/settings')
       return { status: 200, data: this.pult.snapshot() };
     if (method === 'PUT' && path === '/pult/settings')
       return { status: 200, data: this.pult.update(body, this.snapshot().devices) };
-    if (method === 'GET' && path === '/scenes') return { status: 200, data: this.scenes() };
+    if (method === 'GET' && path === '/scenes') {
+      const data = this.scenes();
+      return { status: 200, data: options.actor ? cloudSceneActivity(data) : data };
+    }
     const key = /^\/devices\/(fcplcn-[a-zA-Z0-9_-]{1,96})\/security\/key$/.exec(path);
     if (key && method === 'POST') {
       if (this.options.mode !== 'demo' || !this.options.engine.demoSecurityTouch)
@@ -347,11 +365,23 @@ export class HubControl {
         ),
       };
     }
-    const scene = /^\/scenes\/([a-zA-Z0-9_-]{1,64})(\/run)?$/.exec(path);
-    if (scene && method === 'POST' && scene[2]) {
+    const scene = /^\/scenes\/([a-zA-Z0-9_-]{1,64})(\/run|\/schedule)?$/.exec(path);
+    if (scene && method === 'PUT' && scene[2] === '/schedule') {
+      if (!only(body, ['baseRevision', 'enabled']) || typeof body.enabled !== 'boolean')
+        throw fail('Укажите версию сценария и состояние расписания', 400);
+      return {
+        status: 200,
+        data: this.options.scenes.setScheduleEnabled(
+          scene[1],
+          body.baseRevision as number,
+          body.enabled,
+        ),
+      };
+    }
+    if (scene && method === 'POST' && scene[2] === '/run') {
       if (Object.keys(body).length)
         throw fail('Запуск сценария не принимает дополнительные параметры', 400);
-      return { status: 202, data: this.runScene(scene[1], options.actor) };
+      return { status: 202, data: await this.startScene(scene[1], options.actor, options.signal) };
     }
     if (scene && method === 'PUT' && !scene[2]) {
       if (!only(body, ['baseRevision', 'actions', 'name', 'description', 'schedule']))
@@ -390,7 +420,9 @@ export class HubControl {
     if (device && method === 'POST' && device[2]) {
       if (
         !only(body, ['controller', 'itemId', 'value']) ||
-        !['sockets', 'lights', 'thermostats', 'security'].includes(String(body.controller)) ||
+        !['sockets', 'lights', 'thermostats', 'security', 'tanks', 'irrigation'].includes(
+          String(body.controller),
+        ) ||
         typeof body.itemId !== 'string' ||
         !/^[a-zA-Z0-9_-]{1,32}$/.test(body.itemId) ||
         typeof body.value !== 'boolean'

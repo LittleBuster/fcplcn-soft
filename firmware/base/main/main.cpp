@@ -8,6 +8,7 @@
  * the account and unrelated local control settings.
  */
 #include "security/auth.h"
+#include "hardware/board_gpio.h"
 #include "hardware/board_profile.h"
 #include "config/config.h"
 #include "hardware/hardware_io.h"
@@ -19,12 +20,11 @@
 #include "config/settings_store.h"
 #include "system/system_metrics.h"
 #include "system/firmware_update.h"
-#include "system/runtime_supervisor.h"
+#include "platform/runtime_supervisor.h"
 #include "system/recovery_mode.h"
 #include "time/time_service.h"
 #include "web/web_server.h"
 
-#include "driver/gpio.h"
 #include "esp_event.h"
 #include "esp_log.h"
 #include "esp_netif.h"
@@ -49,41 +49,6 @@ void rollback_failed_trial()
     if (running && esp_ota_get_state_partition(running, &state) == ESP_OK
         && state == ESP_OTA_IMG_PENDING_VERIFY)
         esp_ota_mark_app_invalid_rollback_and_reboot();
-}
-
-/**
- * @brief Assert safe physical outputs after validating the persisted active profile.
- * @param[in] board Immutable activated wiring, resolved before profile-bound GPIO initialization.
- * @return First GPIO error, or ESP_OK; every safe pin is attempted even after an earlier error.
- * @details The shared expander reset is asserted first, then output latches are preloaded before
- * directions change. Only validated settings/authentication permit hardware_io_init to release it.
- */
-esp_err_t safe_gpio_first(const BoardProfile& board)
-{
-    boot_state.safeGpiosAttempted = true;
-    esp_err_t first = ESP_OK;
-    if (board.expanderResetGpio >= 0) {
-        first = gpio_set_level(static_cast<gpio_num_t>(board.expanderResetGpio), 0);
-        const auto direction =
-            gpio_set_direction(static_cast<gpio_num_t>(board.expanderResetGpio), GPIO_MODE_OUTPUT);
-        if (first == ESP_OK)
-            first = direction;
-        boot_state.expanderResetRequested = first == ESP_OK;
-    }
-    for (std::size_t i = 0; i < board.safeBootGpioCount; ++i) {
-        const auto& pin = board.safeBootGpios[i];
-        if (pin.gpio == board.expanderResetGpio)
-            continue;  // Keep reset asserted until validated hardware initialization releases it.
-        const auto gpio = static_cast<gpio_num_t>(pin.gpio);
-        const auto level = gpio_set_level(gpio, pin.levelHigh);
-        if (first == ESP_OK)
-            first = level;
-        const auto mode = gpio_set_direction(gpio, GPIO_MODE_OUTPUT);
-        if (first == ESP_OK)
-            first = mode;
-    }
-    boot_state.safeGpiosConfigured = first == ESP_OK;
-    return first;
 }
 
 /**
@@ -137,7 +102,11 @@ extern "C" void app_main()
                                                                        : ESP_ERR_INVALID_ARG);
     const auto& board = board_profile_active();
     boot_state.boardId = board.id;
-    require_boot("safe_gpio", safe_gpio_first(board));
+    boot_state.safeGpiosAttempted = true;
+    const auto safe_gpio =
+        board_gpio_prepare_safe_outputs(board, boot_state.expanderResetRequested);
+    boot_state.safeGpiosConfigured = safe_gpio == ESP_OK;
+    require_boot("safe_gpio", safe_gpio);
     ESP_LOGI(FCPLCN_PRODUCT_NAME, "Board: %s (%s)", board.name, board.id);
     require_boot("authentication", auth_init());
     hardware_io_init();
@@ -161,12 +130,9 @@ extern "C" void app_main()
     bool pending_ota = esp_ota_get_state_partition(running, &state) == ESP_OK
                        && state == ESP_OTA_IMG_PENDING_VERIFY;
     const auto& recovery = board.recoveryButton;
-    const auto recovery_gpio = static_cast<gpio_num_t>(recovery.gpio);
-    const auto button_direction = gpio_set_direction(recovery_gpio, GPIO_MODE_INPUT);
-    service_result("recovery_button", button_direction);
-    const auto button_pull =
-        gpio_set_pull_mode(recovery_gpio, recovery.pullUp ? GPIO_PULLUP_ONLY : GPIO_FLOATING);
-    service_result("recovery_button_pull", button_pull);
+    const auto recovery_button = board_gpio_setup_recovery_button(recovery);
+    service_result("recovery_button", recovery_button.direction);
+    service_result("recovery_button_pull", recovery_button.pull);
     unsigned held_ms = 0;
     bool recovered = false;
     const auto trial_started_us = esp_timer_get_time();
@@ -196,9 +162,9 @@ extern "C" void app_main()
             // Continue supervising the existing outputs and retry while this trial is unconfirmed.
         }
         vTaskDelay(pdMS_TO_TICKS(100));
-        if (button_direction != ESP_OK || button_pull != ESP_OK)
+        if (recovery_button.direction != ESP_OK || recovery_button.pull != ESP_OK)
             continue;
-        const bool pressed = gpio_get_level(recovery_gpio) == (recovery.activeLow ? 0 : 1);
+        const bool pressed = board_gpio_recovery_button_pressed(recovery);
         if (!pressed) {
             held_ms = 0;
             recovered = false;

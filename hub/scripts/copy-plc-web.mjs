@@ -45,36 +45,11 @@ for (const asset of assets) {
   await writeFile(target, text);
 }
 
-// This adapter belongs only to the hub build; standalone PLC authentication stays unchanged.
-await writeFile(
-  new URL('hub-embedded.js', destination),
-  `/** @file Hub-only service panel presentation and connection retry. */
-const marker = document.querySelector('meta[name="fcplcn-hub-embedded"]');
-if (marker?.content === 'true') {
-  document.documentElement.dataset.fcplcnHubEmbedded = 'true';
-  document.getElementById('logout').hidden = true;
-  const login = document.getElementById('login-view');
-  login.querySelector('h2').textContent = 'Подключение к PLC';
-  login.querySelector('.muted').textContent = 'Настройка через локальный хаб. Отдельный вход в PLC не требуется.';
-  const form = document.getElementById('login-form');
-  form.querySelector('button').textContent = 'Повторить подключение';
-  form.addEventListener('submit', (event) => {
-    event.preventDefault();
-    event.stopImmediatePropagation();
-    window.location.reload();
-  }, true);
+// Keep the hub-only adapter as normal source files; PLC firmware does not package it.
+for (const filename of ['hub-embedded.js', 'hub-embedded.css', 'notice-bridge.js']) {
+  await writeFile(
+    new URL(filename, destination),
+    await readFile(new URL(`../web/plc-embedded/${filename}`, import.meta.url)),
+  );
 }
-`,
-);
-await writeFile(
-  new URL('hub-embedded.css', destination),
-  `/* Only the hub-hosted copy hides independent PLC authentication. */
-html[data-fcplcn-hub-embedded='true'] #logout,
-html[data-fcplcn-hub-embedded='true'] #login-form label,
-html[data-fcplcn-hub-embedded='true'] #login-form input { display: none !important; }
-html[data-fcplcn-hub-embedded='true'] .shell { max-width: 1300px; margin: 0 auto; padding: 20px; }
-html[data-fcplcn-hub-embedded='true'] .header { margin-bottom: 20px; }
-@media (max-width: 600px) { html[data-fcplcn-hub-embedded='true'] .shell { padding: 14px; } }
-`,
-);
 console.log(`FCPLCn: packaged ${assets.length} PLC service assets and embedded adapter`);

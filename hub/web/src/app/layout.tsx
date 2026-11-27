@@ -92,7 +92,7 @@ export function HubLayout({
             data-nav="activity"
           >
             <Icon name="activity" />
-            Журнал команд
+            Журнал событий
           </button>
           <button
             class={view === 'telegram' ? 'nav-item active' : 'nav-item'}

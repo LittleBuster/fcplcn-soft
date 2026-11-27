@@ -24,17 +24,18 @@ const MAX_CHATS = 64;
 const MAX_BYTES = 64 * 1024;
 const MAX_CHAT_ID = 2 ** 52 - 1;
 const MAX_REVISION = 0xffff_ffff;
-const STORAGE_ERROR = 'Не удалось прочитать или сохранить настройки Telegram. Бот отключён.';
+export const telegramStorageError =
+  'Не удалось прочитать или сохранить настройки Telegram. Бот отключён.';
 const UNKNOWN_PERSON = 'Имя появится после первого сообщения';
 
-interface StoredChat {
+export interface StoredChat {
   chatId: string;
   label: string;
   name: string;
   username: string;
   lastSeenAt: string | null;
 }
-interface StoredTelegram {
+export interface StoredTelegram {
   version: 1;
   config: { revision: number; enabled: boolean; token: string | null; chats: StoredChat[] };
   lastContact: TelegramContact | null;
@@ -46,6 +47,18 @@ export interface TelegramPrivateConfig {
   enabled: boolean;
   token: string | null;
   chats: TelegramAllowedChat[];
+}
+
+export interface HubTelegramStore {
+  readonly error: string | null;
+  snapshot(): TelegramStoreView;
+  config(): TelegramPrivateConfig;
+  allowed(chatId: string): boolean;
+  cursor(): number;
+  update(input: unknown): TelegramStoreView | Promise<TelegramStoreView>;
+  observeContact(value: TelegramContact, current?: () => boolean): void | Promise<void>;
+  bootstrapCheckpoint(updateId: number, current?: () => boolean): void | Promise<void>;
+  checkpoint(updateId: number, current?: () => boolean): boolean | Promise<boolean>;
 }
 
 /** A bounded public validation/concurrency/storage refusal without secret-bearing exception text. */
@@ -91,7 +104,7 @@ export function telegramChatId(value: unknown): value is string {
 export function validTelegramToken(value: unknown): value is string {
   return typeof value === 'string' && /^[1-9]\d{0,19}:[A-Za-z0-9_-]{20,256}$/.test(value);
 }
-function defaultState(): StoredTelegram {
+export function defaultTelegramState(): StoredTelegram {
   return {
     version: 1,
     config: { revision: 1, enabled: false, token: null, chats: [] },
@@ -130,7 +143,7 @@ function observedName(value: unknown): string {
 }
 
 /** Decode only our known format. Broken files are retained and disable the bot. */
-function decode(value: unknown): StoredTelegram {
+export function decodeTelegramState(value: unknown): StoredTelegram {
   if (
     !object(value) ||
     !only(value, ['version', 'config', 'lastContact', 'cursor']) ||
@@ -150,7 +163,7 @@ function decode(value: unknown): StoredTelegram {
     !Number.isSafeInteger(value.cursor.updateId) ||
     (value.cursor.updateId as number) < 0
   )
-    throw new TelegramStoreError(STORAGE_ERROR, 503);
+    throw new TelegramStoreError(telegramStorageError, 503);
   const seen = new Set<string>();
   for (const row of value.config.chats) {
     if (
@@ -164,37 +177,29 @@ function decode(value: unknown): StoredTelegram {
       !/^[A-Za-z0-9_]{0,64}$/.test(row.username) ||
       !(row.lastSeenAt === null || timestamp(row.lastSeenAt))
     )
-      throw new TelegramStoreError(STORAGE_ERROR, 503);
+      throw new TelegramStoreError(telegramStorageError, 503);
     seen.add(row.chatId);
   }
   return structuredClone(value) as unknown as StoredTelegram;
 }
 
-export class TelegramStore {
-  readonly path: string;
-  private state = defaultState();
-  private storageError: string | null = null;
-
-  constructor(private readonly directory: string) {
-    this.path = join(directory, 'telegram.json');
-    try {
-      mkdirSync(directory, { recursive: true, mode: 0o700 });
-      chmodSync(directory, 0o700);
-      let stat;
-      try {
-        stat = lstatSync(this.path);
-      } catch (error) {
-        if ((error as NodeJS.ErrnoException).code === 'ENOENT') return;
-        throw error;
-      }
-      if (!stat.isFile() || stat.isSymbolicLink() || stat.size > MAX_BYTES)
-        throw new Error('format');
-      this.state = decode(JSON.parse(readFileSync(this.path, 'utf8')) as unknown);
-      chmodSync(this.path, 0o600);
-    } catch {
-      this.storageError = STORAGE_ERROR;
-    }
+/** Validate a legacy file without rewriting it, including during production migration. */
+export function readTelegramFile(path: string): StoredTelegram | undefined {
+  try {
+    const stat = lstatSync(path, { throwIfNoEntry: false });
+    if (!stat) return undefined;
+    if (!stat.isFile() || stat.isSymbolicLink() || stat.size > MAX_BYTES) throw new Error('format');
+    return decodeTelegramState(JSON.parse(readFileSync(path, 'utf8')) as unknown);
+  } catch {
+    throw new TelegramStoreError(telegramStorageError, 503);
   }
+}
+
+/** Both stores keep the same validation and only publish committed views. */
+export abstract class TelegramState {
+  protected storageError: string | null = null;
+
+  protected constructor(protected state = defaultTelegramState()) {}
 
   get error(): string | null {
     return this.storageError;
@@ -232,7 +237,7 @@ export class TelegramStore {
   }
 
   /** Save one explicit administrator revision. Empty token fields are never interpreted as a reset. */
-  update(input: unknown): TelegramStoreView {
+  protected nextUpdate(input: unknown): StoredTelegram {
     this.requireHealthy();
     if (
       !object(input) ||
@@ -278,19 +283,17 @@ export class TelegramStore {
         lastSeenAt: replaced ? null : previous?.lastSeenAt || observed?.receivedAt || null,
       };
     });
-    const next: StoredTelegram = {
+    return {
       ...structuredClone(this.state),
       config: { revision: input.baseRevision + 1, enabled: input.enabled, token, chats },
       ...(replaced
         ? { lastContact: null, cursor: { tokenHash: tokenHash(token), updateId: 0 } }
         : {}),
     };
-    this.commit(next);
-    return this.snapshot();
   }
 
   /** Remember the last human who wrote privately, without granting access or changing form revision. */
-  observeContact(value: TelegramContact): void {
+  protected nextContact(value: TelegramContact): StoredTelegram {
     this.requireHealthy();
     const clean: TelegramContact = {
       chatId: value.chatId,
@@ -310,7 +313,7 @@ export class TelegramStore {
       row.username = clean.username;
       row.lastSeenAt = clean.receivedAt;
     }
-    this.commit(next);
+    return next;
   }
 
   cursor(): number {
@@ -322,37 +325,85 @@ export class TelegramStore {
    * Telegram may choose a lower random update ID after a week without traffic. An empty drain
    * therefore resets the local cursor to zero; ordinary delivery still uses strict checkpoint().
    */
-  bootstrapCheckpoint(updateId: number): void {
+  protected nextBootstrapCheckpoint(updateId: number): StoredTelegram | undefined {
     this.requireHealthy();
     if (!Number.isSafeInteger(updateId) || updateId < 0)
       throw new TelegramStoreError('Некорректный номер начального сообщения Telegram');
     if (updateId === this.state.cursor.updateId) return;
     const next = structuredClone(this.state);
     next.cursor.updateId = updateId;
-    this.commit(next);
+    return next;
   }
 
   /** Persist acknowledgement before executing any command, ensuring retries cannot actuate twice. */
-  checkpoint(updateId: number): boolean {
+  protected nextCheckpoint(updateId: number): StoredTelegram | undefined {
     this.requireHealthy();
     if (!Number.isSafeInteger(updateId) || updateId < 1)
       throw new TelegramStoreError('Некорректный номер сообщения Telegram');
-    if (updateId <= this.state.cursor.updateId) return false;
+    if (updateId <= this.state.cursor.updateId) return;
     const next = structuredClone(this.state);
     next.cursor.updateId = updateId;
-    this.commit(next);
-    return true;
+    return next;
   }
 
   private requireHealthy(): void {
     if (this.storageError) throw new TelegramStoreError(this.storageError, 503);
   }
 
-  /** Atomically commit bounded secrets and fsync both the file and its containing directory. */
-  private commit(next: StoredTelegram): void {
+  protected serialized(next: StoredTelegram): string {
     const bytes = JSON.stringify(next, null, 2) + '\n';
     if (Buffer.byteLength(bytes) > MAX_BYTES)
       throw new TelegramStoreError('Слишком большой файл настроек Telegram', 413);
+    return bytes;
+  }
+}
+
+/** Local Telegram storage for standalone demo and test instances. */
+export class TelegramStore extends TelegramState implements HubTelegramStore {
+  readonly path: string;
+
+  constructor(private readonly directory: string) {
+    super();
+    this.path = join(directory, 'telegram.json');
+    try {
+      mkdirSync(directory, { recursive: true, mode: 0o700 });
+      chmodSync(directory, 0o700);
+      const saved = readTelegramFile(this.path);
+      if (saved) {
+        this.state = saved;
+        chmodSync(this.path, 0o600);
+      }
+    } catch {
+      this.storageError = telegramStorageError;
+    }
+  }
+
+  update(input: unknown): TelegramStoreView {
+    this.commit(this.nextUpdate(input));
+    return this.snapshot();
+  }
+
+  observeContact(value: TelegramContact, current?: () => boolean): void {
+    if (current?.() !== false) this.commit(this.nextContact(value));
+  }
+
+  bootstrapCheckpoint(updateId: number, current?: () => boolean): void {
+    if (current?.() === false) return;
+    const next = this.nextBootstrapCheckpoint(updateId);
+    if (next) this.commit(next);
+  }
+
+  checkpoint(updateId: number, current?: () => boolean): boolean {
+    if (current?.() === false) return false;
+    const next = this.nextCheckpoint(updateId);
+    if (!next) return false;
+    this.commit(next);
+    return true;
+  }
+
+  /** Atomically commit bounded secrets and fsync both the file and its containing directory. */
+  private commit(next: StoredTelegram): void {
+    const bytes = this.serialized(next);
     const temporary = `${this.path}.${randomUUID()}.tmp`;
     let descriptor: number | undefined;
     try {
@@ -380,8 +431,8 @@ export class TelegramStore {
       } catch {
         /* A successful rename leaves no temporary file. */
       }
-      this.storageError = STORAGE_ERROR;
-      throw new TelegramStoreError(STORAGE_ERROR, 503);
+      this.storageError = telegramStorageError;
+      throw new TelegramStoreError(telegramStorageError, 503);
     }
   }
 }

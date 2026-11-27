@@ -23,6 +23,21 @@
       xmlns="http://www.w3.org/2000/svg"
     >
       <defs>
+        <symbol id="icon-irrigation" viewBox="0 0 24 24">
+          <path
+            d="M2 21h20m-14-3h8m-6-1v-4h4v4m-2-7V4m-3 7C8 6 6 5 3 6m12 5c1-5 3-6 6-5M2 9v1m20-1v1"
+          />
+        </symbol>
+        <symbol id="visual-irrigation" viewBox="0 0 128 128">
+          <path class="visual-soft" d="M32 96h64l9 12H23z" />
+          <path d="M54 94V78h20v16M48 77h32M25 108h78" />
+          <path d="M58 66C49 35 31 31 16 42m54 24c9-31 27-35 42-24M64 57V29" />
+          <path d="M14 49l-3 7m103-7 3 7M64 16v5M35 25l-3-4m61 4 3-4" />
+        </symbol>
+        <symbol id="icon-tank" viewBox="0 0 24 24">
+          <ellipse cx="12" cy="5" rx="8" ry="3" />
+          <path d="M4 5v14c0 4 16 4 16 0V5M4 12c0 4 16 4 16 0" />
+        </symbol>
         <symbol id="icon-wifi" viewBox="0 0 24 24">
           <path d="M3 8a15 15 0 0 1 18 0M6 12a10 10 0 0 1 12 0M9 16a5 5 0 0 1 6 0" />
           <circle cx="12" cy="20" r="1" />
@@ -846,6 +861,10 @@
             <p id="meteo-notice" class="notice" role="status" hidden></p>
             <p id="thermostats-error" class="notice error" role="alert" hidden></p>
             <p id="thermostats-notice" class="notice" role="status" hidden></p>
+            <p id="irrigation-error" class="notice error" role="alert" hidden></p>
+            <p id="irrigation-notice" class="notice" role="status" hidden></p>
+            <p id="tanks-error" class="notice error" role="alert" hidden></p
+            ><p id="tanks-notice" class="notice" role="status" hidden></p>
             <p id="security-error" class="notice error" role="alert" hidden></p
             ><p id="security-notice" class="notice" role="status" hidden></p>
             <div id="controllers-list-view">
@@ -999,6 +1018,79 @@
                       class="module-toggle"
                       type="button"
                       aria-label="Включить модуль Термостат"
+                      aria-pressed="mixed"
+                      disabled
+                      ><span class="module-switch-track" aria-hidden="true"
+                        ><span class="module-switch-thumb"></span></span></button
+                  ></div>
+                </article>
+                <article class="controller-tile" data-controller-id="tanks">
+                  <button
+                    id="tanks-open"
+                    class="controller-open"
+                    type="button"
+                    aria-label="Открыть контроллер Баки"
+                  >
+                    <svg
+                      class="ui-icon tile-icon"
+                      viewBox="0 0 24 24"
+                      aria-hidden="true"
+                      focusable="false"
+                    >
+                      <use href="#icon-tank"></use>
+                    </svg>
+                    <span class="controller-title">Баки</span>
+                    <span class="controller-description"
+                      >Уровень воды, автоматическая откачка и кран наполнения по цифровым
+                      датчикам.</span
+                    >
+                    <span class="controller-open-link"
+                      >Настроить <span aria-hidden="true">→</span></span
+                    >
+                  </button>
+                  <div class="controller-tile-footer"
+                    ><span id="tanks-tile-status" class="badge state-unknown">Загрузка…</span
+                    ><button
+                      id="tanks-tile-enabled"
+                      class="module-toggle"
+                      type="button"
+                      aria-label="Включить модуль Баки"
+                      aria-pressed="mixed"
+                      disabled
+                      ><span class="module-switch-track" aria-hidden="true"
+                        ><span class="module-switch-thumb"></span></span></button
+                  ></div>
+                </article>
+                <article class="controller-tile" data-controller-id="irrigation">
+                  <button
+                    id="irrigation-open"
+                    class="controller-open"
+                    type="button"
+                    aria-label="Открыть контроллер Полив"
+                  >
+                    <svg
+                      class="ui-icon tile-icon"
+                      viewBox="0 0 24 24"
+                      aria-hidden="true"
+                      focusable="false"
+                    >
+                      <use href="#icon-irrigation"></use>
+                    </svg>
+                    <span class="controller-title">Полив</span>
+                    <span class="controller-description"
+                      >Полив по дням недели с автоматическим закрытием крана.</span
+                    >
+                    <span class="controller-open-link"
+                      >Настроить <span aria-hidden="true">→</span></span
+                    >
+                  </button>
+                  <div class="controller-tile-footer"
+                    ><span id="irrigation-tile-status" class="badge state-unknown">Загрузка…</span
+                    ><button
+                      id="irrigation-tile-enabled"
+                      class="module-toggle"
+                      type="button"
+                      aria-label="Включить модуль Полив"
                       aria-pressed="mixed"
                       disabled
                       ><span class="module-switch-track" aria-hidden="true"
@@ -1299,6 +1391,130 @@
                 реле отключается без ожидания минимального ON. После запуска или восстановления
                 включение происходит при достижении порога температуры и после выдержки минимального
                 OFF.</p
+              >
+            </div>
+
+            <div id="tanks-view" hidden>
+              <div class="socket-page-heading"
+                ><div
+                  ><button id="tanks-back" class="text-button" type="button"
+                    >← Назад к контроллерам</button
+                  ><h2 id="tanks-page-title" tabindex="-1" data-card-icon="tank">Баки</h2
+                  ><p class="muted"
+                    >Уровень воды, откачивающий насос и кран наполнения работают автономно на
+                    PLC.</p
+                  ></div
+                ><div class="module-control"
+                  ><span id="tanks-module-status" class="muted">Загрузка…</span
+                  ><button
+                    id="tanks-enabled"
+                    class="module-toggle"
+                    type="button"
+                    aria-label="Включить модуль Баки"
+                    aria-pressed="mixed"
+                    disabled
+                    ><span class="module-switch-track" aria-hidden="true"
+                      ><span class="module-switch-thumb"></span></span></button></div
+              ></div>
+              <p id="tanks-conflict" class="notice warning" role="status" hidden
+                >Настройки изменены на другом устройстве. Загрузите актуальные настройки перед
+                сохранением.</p
+              >
+              <p id="tanks-resource-warning" class="notice warning" role="status" hidden></p>
+              <form id="tanks-form"
+                ><div class="tank-toolbar"
+                  ><div class="tank-toolbar-heading"
+                    ><h3>Настроенные баки</h3><span id="tanks-count" class="muted">0 из 16</span
+                    ><p class="hint">Для каждого бака — свои датчики и реле.</p></div
+                  ><div class="button-row"
+                    ><button id="tanks-reload" class="text-button" type="button"
+                      >Загрузить настройки</button
+                    ><button id="tanks-add" class="button primary" type="button" disabled
+                      ><span class="tank-add-icon" aria-hidden="true">+</span> Добавить бак</button
+                    ></div
+                  ></div
+                ><div id="tanks-empty" class="card sockets-empty"
+                  ><h3>Баки ещё не добавлены</h3
+                  ><p
+                    >Добавьте бак и назначьте цифровые входы снизу вверх. По умолчанию используются
+                    два датчика.</p
+                  ></div
+                ><div id="tanks-items" class="socket-grid"></div
+                ><div class="form-footer"
+                  ><div
+                    ><span class="save-state" data-save-state="tanks"></span
+                    ><p id="tanks-revision" class="hint"></p></div
+                  ><button id="tanks-save" class="button primary" type="submit" disabled
+                    >Сохранить настройки</button
+                  ></div
+                ></form
+              >
+              <p class="hint"
+                >Контакт датчика замкнут, когда он в воде. Насос откачки включается при наличии воды
+                на нижнем датчике и отключается ниже него. Кран открыт ниже выбранного уровня. При
+                выключении мониторинга или недостоверных входах оба выхода отключаются.</p
+              >
+            </div>
+
+            <div id="irrigation-view" hidden>
+              <div class="socket-page-heading"
+                ><div
+                  ><button id="irrigation-back" class="text-button" type="button"
+                    >← Назад к контроллерам</button
+                  ><h2 id="irrigation-page-title" tabindex="-1" data-card-icon="irrigation"
+                    >Правила полива</h2
+                  ><p class="muted"
+                    >Каждое правило открывает свой кран по местному времени PLC.</p
+                  ></div
+                ><div class="module-control"
+                  ><span id="irrigation-module-status" class="muted">Загрузка…</span
+                  ><button
+                    id="irrigation-enabled"
+                    class="module-toggle"
+                    type="button"
+                    aria-label="Включить модуль Правила полива"
+                    aria-pressed="mixed"
+                    disabled
+                    ><span class="module-switch-track" aria-hidden="true"
+                      ><span class="module-switch-thumb"></span></span></button></div
+              ></div>
+              <p id="irrigation-conflict" class="notice warning" role="status" hidden
+                >Настройки изменены на другом устройстве. Загрузите актуальные настройки перед
+                сохранением.</p
+              >
+              <p id="irrigation-resource-warning" class="notice warning" role="status" hidden></p>
+              <form id="irrigation-form"
+                ><div class="tank-toolbar"
+                  ><div class="tank-toolbar-heading"
+                    ><h3>Правила</h3><span id="irrigation-count" class="muted">0 из 16</span
+                    ><p class="hint"
+                      >Выберите кран и расписание. Привяжите бак, если нужно останавливать полив при
+                      нехватке воды.</p
+                    ></div
+                  ><div class="button-row"
+                    ><button id="irrigation-reload" class="text-button" type="button"
+                      >Загрузить настройки</button
+                    ><button id="irrigation-add" class="button primary" type="button" disabled
+                      ><span class="tank-add-icon" aria-hidden="true">+</span> Добавить
+                      правило</button
+                    ></div
+                  ></div
+                ><div id="irrigation-empty" class="card sockets-empty"
+                  ><h3>Правила полива ещё не добавлены</h3
+                  ><p>Добавьте правило, чтобы выбрать кран, дни и время полива.</p></div
+                ><div id="irrigation-items" class="socket-grid"></div
+                ><div class="form-footer"
+                  ><div
+                    ><span class="save-state" data-save-state="irrigation"></span
+                    ><p id="irrigation-revision" class="hint"></p></div
+                  ><button id="irrigation-save" class="button primary" type="submit" disabled
+                    >Сохранить настройки</button
+                  ></div
+                ></form
+              >
+              <p class="hint"
+                >Полив прекращается, если нижний датчик бака высох или данные об уровне недоступны.
+                Следующий запуск возможен по расписанию.</p
               >
             </div>
 
@@ -1644,6 +1860,8 @@
                       <div><dt>Датчиков «Метео»</dt><dd id="config-backup-meteo">—</dd></div>
                       <div><dt>Термостатов</dt><dd id="config-backup-thermostats">—</dd></div
                       ><div><dt>Охрана</dt><dd id="config-backup-security">—</dd></div>
+                      <div><dt>Правил полива</dt><dd id="config-backup-irrigation">—</dd></div>
+                      <div><dt>Баков</dt><dd id="config-backup-tanks">—</dd></div>
                     </dl>
                     <p
                       id="config-backup-profile-warning"

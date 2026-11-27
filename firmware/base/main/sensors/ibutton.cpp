@@ -8,13 +8,11 @@
 #include <limits>
 #include <mutex>
 
-#include "driver/gpio.h"
 #include "esp_timer.h"
 #include "hardware/board_profile.h"
-#include "onewire_bus.h"
-#include "onewire_device.h"
-#include "sensors/meteo_sensors.h"
-#include "util/checksum.h"
+#include "hardware/meteo_codec.h"
+#include "hardware/sensor_ports.h"
+#include "sensors/sensor_worker.h"
 
 namespace {
 constexpr std::int64_t kPollMs = 100;
@@ -22,13 +20,11 @@ constexpr std::int64_t kFreshMs = 1500;
 constexpr std::int64_t kScanRefreshMs = 2000;
 constexpr unsigned kReleaseSamples = 2;
 constexpr unsigned kPressSamples = 2;
-constexpr unsigned kVisitedLimit = 32;
-constexpr std::size_t kDeviceLimit = 16;
 
 /** @brief Discovery cache and pending work for one board sensor pin. */
 struct ScanState {
     std::string portId;
-    gpio_num_t gpio{};
+    int gpio{};
     bool requested = false;
     std::uint64_t generation = 0;
     IbuttonScanSnapshot snapshot;
@@ -37,17 +33,9 @@ struct ScanState {
 /** @brief One immutable reader/discovery job reserved before releasing the cache mutex. */
 struct Job {
     std::string portId;
-    gpio_num_t gpio{};
+    int gpio{};
     bool discovery = false;
     std::uint64_t generation = 0;
-};
-
-/** @brief One complete bus observation, including unsupported-device presence. */
-struct Observation {
-    bool available = false;
-    bool present = false;
-    std::vector<std::string> addresses;
-    std::string error;
 };
 
 std::mutex mutex;
@@ -98,140 +86,6 @@ const BoardSensorPort* find_port(std::string_view id)
 }
 
 /**
- * @brief Release a sensor GPIO without driving the isolated OneWire line HIGH.
- * @param[in] gpio Profile sensor GPIO.
- */
-void release_pin(gpio_num_t gpio)
-{
-    gpio_set_level(gpio, 1);
-    gpio_set_direction(gpio, GPIO_MODE_INPUT_OUTPUT_OD);
-    gpio_set_pull_mode(gpio, GPIO_FLOATING);
-}
-
-/** @brief Scoped ownership of one transient iButton RMT bus. */
-struct Bus {
-    onewire_bus_handle_t handle = nullptr;
-    gpio_num_t gpio;
-
-    /** @brief Retain the profile pin for unconditional release.
-     * @param[in] pin Profile sensor GPIO.
-     */
-    explicit Bus(gpio_num_t pin) : gpio(pin)
-    {
-    }
-
-    /** @brief Delete the transient bus and restore released open-drain HIGH. */
-    ~Bus()
-    {
-        if (handle)
-            onewire_bus_del(handle);
-        release_pin(gpio);
-    }
-
-    /** @brief Allocate one RMT pair using the board's external pull-up.
-     * @return ESP_OK or the bounded OneWire/RMT initialization error.
-     */
-    esp_err_t open()
-    {
-        onewire_bus_config_t config{};
-        config.bus_gpio_num = gpio;
-        config.flags.en_pull_up = false;
-        onewire_bus_rmt_config_t rmt{};
-        rmt.max_rx_bytes = 10;
-        return onewire_new_bus_rmt(&config, &rmt, &handle);
-    }
-};
-
-/**
- * @brief Format a ROM in family-first wire order.
- * @param[in] address Driver ROM with the family in the least-significant byte.
- * @return Sixteen lowercase hex characters; validation is separate.
- */
-std::string format_address(std::uint64_t address)
-{
-    constexpr char digits[] = "0123456789abcdef";
-    std::string result(16, '0');
-    for (unsigned i = 0; i < 8; ++i) {
-        const auto byte = static_cast<std::uint8_t>(address >> (i * 8));
-        result[i * 2] = digits[byte >> 4];
-        result[i * 2 + 1] = digits[byte & 15];
-    }
-    return result;
-}
-
-/**
- * @brief Read one bounded complete search while distinguishing empty from damaged traffic.
- * @param[in] job Immutable authorized sensor pin snapshot.
- * @return Owned presence/ROM result or a diagnostic without authorizing a touch.
- */
-Observation observe(const Job& job)
-{
-    Observation result;
-    Bus bus(job.gpio);
-    auto error = bus.open();
-    if (error == ESP_OK)
-        error = onewire_bus_reset(bus.handle);
-    if (error == ESP_ERR_NOT_FOUND && bus.handle && gpio_get_level(job.gpio) == 1) {
-        result.available = true;
-        return result;
-    }
-    if (error != ESP_OK) {
-        result.error = std::string("Считыватель iButton: ") + esp_err_to_name(error);
-        return result;
-    }
-    result.present = true;
-    onewire_device_iter_handle_t iterator = nullptr;
-    error = onewire_new_device_iter(bus.handle, &iterator);
-    if (error != ESP_OK) {
-        result.error = std::string("Поиск iButton: ") + esp_err_to_name(error);
-        return result;
-    }
-    bool complete = false;
-    for (unsigned visited = 0; visited < kVisitedLimit; ++visited) {
-        onewire_device_t device{};
-        error = onewire_device_iter_get_next(iterator, &device);
-        if (error == ESP_ERR_NOT_FOUND) {
-            // A presence pulse followed by an empty search is not a confirmed release.
-            complete = visited > 0;
-            if (!complete)
-                result.error = "iButton исчез во время чтения";
-            break;
-        }
-        if (error != ESP_OK) {
-            result.error = std::string("Чтение ROM iButton: ") + esp_err_to_name(error);
-            break;
-        }
-        const auto address = format_address(device.address);
-        std::array<std::uint8_t, 8> bytes{};
-        for (unsigned i = 0; i < bytes.size(); ++i)
-            bytes[i] = static_cast<std::uint8_t>(device.address >> (i * 8));
-        if (fcplcn::util::crc8_dallas(bytes.data(), bytes.size()) != 0) {
-            result.error = "Неверная CRC серийного номера iButton";
-            break;
-        }
-        if (!ibutton_parse_address(address, bytes))
-            continue;
-        if (result.addresses.size() == kDeviceLimit) {
-            result.error = "На шине больше 16 iButton";
-            break;
-        }
-        result.addresses.push_back(address);
-    }
-    onewire_del_device_iter(iterator);
-    if (!complete) {
-        if (result.error.empty())
-            result.error = "Поиск iButton превысил лимит устройств";
-        result.addresses.clear();
-        return result;
-    }
-    std::sort(result.addresses.begin(), result.addresses.end());
-    result.addresses.erase(std::unique(result.addresses.begin(), result.addresses.end()),
-                           result.addresses.end());
-    result.available = true;
-    return result;
-}
-
-/**
  * @brief Reserve a due physical reader poll or one queued discovery.
  * @param[out] job Complete GPIO/configuration snapshot when work exists.
  * @return True when a bounded job was reserved.
@@ -252,7 +106,7 @@ bool reserve(Job& job)
     if (!reader_port.empty() && now >= next_poll_ms) {
         const auto* port = find_port(reader_port);
         if (port) {
-            job = {reader_port, static_cast<gpio_num_t>(port->gpio), false, reading.generation};
+            job = {reader_port, port->gpio, false, reading.generation};
             next_poll_ms = now + kPollMs;
             discovery_turn = true;
             return true;
@@ -272,7 +126,7 @@ bool reserve(Job& job)
  * @param[in] observed Complete bus result for the current reader binding.
  * @pre Hold mutex and reject observations from previous binding generations first.
  */
-void publish(const Observation& observed)
+void publish(const IbuttonObservation& observed)
 {
     reading.available = observed.available;
     reading.present = observed.available && observed.present;
@@ -334,7 +188,7 @@ void publish(const Observation& observed)
  */
 esp_err_t ibutton_init()
 {
-    return meteo_sensors_init();
+    return sensor_worker_init();
 }
 
 /**
@@ -415,7 +269,7 @@ esp_err_t ibutton_request_scan(std::string_view portId, bool refresh, IbuttonSca
         return entry.portId == portId;
     });
     if (scan == scans.end()) {
-        scans.push_back({std::string(portId), static_cast<gpio_num_t>(port->gpio), false, 0, {}});
+        scans.push_back({std::string(portId), port->gpio, false, 0, {}});
         scan = scans.end() - 1;
     }
     if (!scan->snapshot.busy
@@ -442,23 +296,7 @@ esp_err_t ibutton_request_scan(std::string_view portId, bool refresh, IbuttonSca
  */
 bool ibutton_parse_address(std::string_view text, std::array<std::uint8_t, 8>& bytes)
 {
-    if (text.size() != 16)
-        return false;
-    std::array<std::uint8_t, 8> parsed{};
-    for (std::size_t i = 0; i < text.size(); ++i) {
-        const auto character = text[i];
-        const int digit = character >= '0' && character <= '9'   ? character - '0'
-                          : character >= 'a' && character <= 'f' ? character - 'a' + 10
-                          : character >= 'A' && character <= 'F' ? character - 'A' + 10
-                                                                 : -1;
-        if (digit < 0)
-            return false;
-        parsed[i / 2] = static_cast<std::uint8_t>((parsed[i / 2] << 4) | digit);
-    }
-    if (parsed[0] != 1 || fcplcn::util::crc8_dallas(parsed.data(), parsed.size()) != 0)
-        return false;
-    bytes = parsed;
-    return true;
+    return onewire_parse_address(text, 0x01, bytes);
 }
 
 /**
@@ -475,7 +313,7 @@ bool ibutton_worker_step()
         if (!reserve(job))
             return false;
     }
-    const auto observed = observe(job);
+    const auto observed = sensor_port_observe_ibutton(job.gpio);
     std::lock_guard<std::mutex> lock(mutex);
     if (job.discovery) {
         const auto scan = std::find_if(scans.begin(), scans.end(), [&](const auto& entry) {

@@ -11,7 +11,8 @@ import { createHubServer } from '../server/http.js';
 import { Scenes } from '../server/scenes.js';
 import { TelegramStore } from '../server/telegram/store.js';
 import { TelegramAPIError } from '../server/telegram/client.js';
-import type { TelegramActions } from '../server/telegram/menu.js';
+import type { HubControl } from '../server/control.js';
+import { TelegramMenu } from '../server/telegram/menu.js';
 import type { TelegramRuntimeStatus, TelegramView } from '../shared/telegram.js';
 
 const product = { name: 'FCPLCn', fullName: 'Future City PLC Next', id: 'fcplcn' };
@@ -43,7 +44,7 @@ async function fixture(t: TestContext) {
     lastPollAt: null,
     error: null,
   };
-  let actions!: TelegramActions;
+  let actions!: HubControl;
   let checks = 0;
   let checkError: TelegramAPIError | null = null;
   let schedulerBusy = false;
@@ -201,4 +202,168 @@ test('Trusted bot actions share OTA, scene and manual-command locks with the web
   while (f.actions.scenes().activeRun && Date.now() < deadline)
     await new Promise((resolve) => setTimeout(resolve, 20));
   assert.equal(f.actions.scenes().activeRun, null);
+});
+
+test('Telegram edits a PLC schedule and controls a hub schedule through their normal service paths', async (t) => {
+  const f = await fixture(t);
+  const controls = f.actions;
+  const sourceId = 'fcplcn-demo-utility';
+  const targetId = 'fcplcn-demo-living';
+  const path = '/controllers/irrigation';
+  const local = await controls.service(targetId, 'GET', path);
+  const module = local.data as {
+    revision: number;
+    enabled: boolean;
+    items: Record<string, unknown>[];
+  };
+  assert.equal(
+    (
+      await controls.service(targetId, 'POST', path, {
+        baseRevision: module.revision,
+        enabled: true,
+        items: [
+          {
+            id: 'garden',
+            name: 'Полив участка',
+            relayId: 'rly-0/12',
+            tankId: '',
+            days: [1, 3],
+            startTime: '06:30',
+            durationMinutes: 12,
+          },
+        ],
+      })
+    ).status,
+    200,
+  );
+  const deadline = Date.now() + 6500;
+  while (Date.now() < deadline) {
+    const status = await controls.service(targetId, 'GET', path);
+    const data = status.data as { remoteTanks: { id: string }[] };
+    if (data.remoteTanks?.some(({ id }) => id === sourceId + '/tank-water')) break;
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  await controls.dispatch('POST', '/scenes', {
+    name: 'Полив вечером',
+    description: '',
+    schedule: { enabled: true, days: [1, 3], time: '21:00', timeZone: 'Asia/Novosibirsk' },
+    actions: [
+      {
+        id: 'allow-irrigation',
+        deviceId: targetId,
+        controller: 'irrigation',
+        itemId: 'garden',
+        value: true,
+      },
+    ],
+  });
+  const menu = new TelegramMenu(
+    {
+      snapshot: () => controls.snapshot(),
+      scenes: () => controls.scenes(),
+      command: (...args) => controls.command(...args),
+      runScene: (id) => controls.runScene(id),
+      service: (...args) => controls.service(...args),
+      async setSceneSchedule(id, revision, enabled) {
+        await controls.dispatch('PUT', '/scenes/' + id + '/schedule', {
+          baseRevision: revision,
+          enabled,
+        });
+      },
+    },
+    0,
+  );
+  let reply = await menu.handle('42', '/start', () => true);
+  const press = async (prefix: string, permitted: () => boolean = () => true) => {
+    const button = reply.reply_markup.keyboard!.flat().find((label) => label.startsWith(prefix));
+    assert.ok(button, `Expected "${prefix}" in ${JSON.stringify(reply.reply_markup.keyboard)}`);
+    reply = await menu.handle('42', button, permitted);
+    return button;
+  };
+  await press('🏡 Гостиная');
+  await press('💧 Полив');
+  assert.match(reply.reply_markup.keyboard!.at(-4)![0], /^💧 Полив участка/);
+  assert.deepEqual(reply.reply_markup.keyboard!.at(-3), ['⚙️ Настройки']);
+  assert.equal(
+    reply.reply_markup.keyboard!.flat().some((key) => key.includes('Выключить модуль')),
+    false,
+  );
+  await press('⚙️ Настройки');
+  assert.match(reply.text, /Настройки модуля/);
+  assert.equal(
+    reply.reply_markup.keyboard!.flat().some((key) => key.startsWith('💧 Полив участка')),
+    false,
+  );
+  const disable = await press('⚙️ Выключить модуль');
+  assert.match(reply.text, /✅ Модуль выключен/);
+  assert.equal(
+    ((await controls.service(targetId, 'GET', path)).data as typeof module).enabled,
+    false,
+  );
+  await press('⬅️ Назад');
+  reply = await menu.handle('42', disable, () => true);
+  assert.match(reply.text, /актуальные кнопки/);
+  await press('⚙️ Настройки');
+  await press('⚙️ Включить модуль');
+  assert.match(reply.text, /✅ Модуль включён/);
+  assert.equal(
+    ((await controls.service(targetId, 'GET', path)).data as typeof module).enabled,
+    true,
+  );
+  await press('⬅️ Назад');
+  await press('💧 Полив участка');
+  await press('⚙️ Настроить');
+  await press('🛢 Бак');
+  await press('🛢 Бак с водой · Котельная');
+  assert.match(reply.text, /Сохранить новое значение/);
+  const before = (await controls.service(targetId, 'GET', path)).data as typeof module;
+  assert.equal(before.items[0].tankId, '', 'A draft selection does not change the PLC');
+  const save = await press('💾 Сохранить');
+  assert.match(reply.text, /PLC подтвердил сохранение/);
+  const saved = (await controls.service(targetId, 'GET', path)).data as typeof module;
+  assert.equal(saved.items[0].tankId, sourceId + '/tank-water');
+  assert.deepEqual(saved.items[0].days, [1, 3]);
+  assert.equal(saved.items[0].startTime, '06:30');
+  reply = await menu.handle('42', save, () => true);
+  assert.match(reply.text, /актуальные кнопки/);
+
+  reply = await menu.handle('42', '/start', () => true);
+  await press('🏡 Гостиная');
+  await press('🌡 Термостаты');
+  await press('🌡 Тёплый пол');
+  await press('⚙️ Настроить');
+  await press('🌡️ Уставка');
+  reply = await menu.handle('42', '130', () => true);
+  assert.match(reply.text, /Проверьте формат/);
+  assert.equal(
+    reply.reply_markup.keyboard!.flat().some((key) => key.startsWith('💾')),
+    false,
+  );
+  reply = await menu.handle('42', '26,5', () => true);
+  assert.match(reply.text, /Сохранить новое значение «26,5 °C»/);
+  await press('💾 Сохранить');
+  assert.match(reply.text, /PLC подтвердил сохранение/);
+  const thermostats = (await controls.service(targetId, 'GET', '/controllers/thermostats'))
+    .data as typeof module;
+  assert.equal(thermostats.items[0].setpointC, 26.5);
+  assert.equal(thermostats.items[0].meteoId, 'temp-floor');
+
+  reply = await menu.handle('42', '/start', () => true);
+  await press('🗓 По расписанию');
+  await press('🗓 Полив вечером');
+  const old = await press('⏸ Приостановить расписание');
+  assert.match(reply.text, /Расписание приостановлено/);
+  assert.equal(
+    controls.scenes().definitions.find((scene) => scene.name === 'Полив вечером')?.schedule?.paused,
+    true,
+  );
+  assert.equal(controls.scenes().runs.length, 0);
+  reply = await menu.handle('42', old, () => true);
+  assert.match(reply.text, /актуальные кнопки/);
+  await press('▶️ Включить расписание');
+  assert.equal(
+    controls.scenes().definitions.find((scene) => scene.name === 'Полив вечером')?.schedule?.paused,
+    false,
+  );
+  assert.equal(controls.scenes().runs.length, 0);
 });

@@ -24,8 +24,8 @@
 #include "nvs.h"
 #include "config/settings_json.h"
 #include "config/model.h"
-#include "system/runtime_supervisor.h"
-#include "util/checksum.h"
+#include "platform/runtime_supervisor.h"
+#include "platform/checksum.h"
 
 /** @cond FCPLCN_CONTROLLER_INTERNALS */
 namespace fcplcn::controllers::detail {
@@ -89,17 +89,16 @@ bool valid_kind(ControllerKind kind)
 
 /**
  * @brief Select the stable JSON/MQTT identifier for a supported module.
- * @param[in] kind Valid module enum; the final branch represents thermostats.
+ * @param[in] kind Valid module enum matching the durable module order.
  * @return Borrowed static lowercase identifier.
  * @pre The caller has rejected unsupported enum values.
  */
 const char* controller_id(ControllerKind kind)
 {
-    return kind == ControllerKind::Sockets       ? "sockets"
-           : kind == ControllerKind::Lights      ? "lights"
-           : kind == ControllerKind::Meteo       ? "meteo"
-           : kind == ControllerKind::Thermostats ? "thermostats"
-                                                 : "security";
+    static constexpr const char* ids[] = {
+        "sockets", "lights", "meteo", "thermostats", "security", "tanks", "irrigation"};
+    static_assert(std::size(ids) == kControllerCount);
+    return ids[index(kind)];
 }
 
 /**
@@ -280,6 +279,34 @@ bool valid_configuration(const Configuration& config, bool check_ports, Controll
                     && (!known_port(item.relayId, true)
                         || (!item.inputId.empty() && !known_port(item.inputId, false)))))
                 return false;
+        } else if (kind == ControllerKind::Irrigation) {
+            if ((!item.tankId.empty() && !valid_id(item.tankId) && !remote_tank_id(item.tankId))
+                || item.relayId.empty() || item.relayId.size() > 32 || !item.daysMask
+                || item.daysMask > 127 || item.startMinute >= 1440 || !item.durationMinutes
+                || item.durationMinutes > 1440 || (check_ports && !known_port(item.relayId, true)))
+                return false;
+            for (std::size_t j = 0; j < i; ++j)
+                if (config.items[j].relayId == item.relayId
+                    && config.items[j].tankId != item.tankId)
+                    return false;
+        } else if (kind == ControllerKind::Tanks) {
+            if (!item.relayId.empty() || !item.inputId.empty() || !item.portId.empty() || item.state
+                || item.levelInputs.empty() || item.levelInputs.size() > 3 || item.fillLevel < 1
+                || item.fillLevel > item.levelInputs.size() || item.pumpRelayId.size() > 32
+                || item.valveRelayId.size() > 32
+                || (!item.pumpRelayId.empty() && item.pumpRelayId == item.valveRelayId)
+                || (check_ports
+                    && ((!item.pumpRelayId.empty() && !known_port(item.pumpRelayId, true))
+                        || (!item.valveRelayId.empty() && !known_port(item.valveRelayId, true)))))
+                return false;
+            for (std::size_t n = 0; n < item.levelInputs.size(); ++n) {
+                if (item.levelInputs[n].empty() || item.levelInputs[n].size() > 32
+                    || (check_ports && !known_port(item.levelInputs[n], false)))
+                    return false;
+                for (std::size_t j = 0; j < n; ++j)
+                    if (item.levelInputs[j] == item.levelInputs[n])
+                        return false;
+            }
         } else if (kind == ControllerKind::Security) {
             if (!item.relayId.empty() || !item.portId.empty() || !item.meteoId.empty()
                 || item.inputId.empty() || item.inputId.size() > 32 || item.state || item.enabled
@@ -322,14 +349,23 @@ unsigned claim_count(const Configurations& configs, ResourceKind kind, std::stri
     if ((kind == ResourceKind::Relay && security.sirenRelayId == id)
         || (kind == ResourceKind::Sensor && security.readerPortId == id))
         ++count;
+    bool irrigation_owner = false;
     for (const auto& config : configs)
         for (const auto& item : config.items) {
+            if (&config == &configs[index(ControllerKind::Irrigation)]) {
+                irrigation_owner |= kind == ResourceKind::Relay && item.relayId == id;
+                continue;
+            }
             if ((kind == ResourceKind::Relay && item.relayId == id)
                 || (kind == ResourceKind::Input && item.inputId == id)
                 || (kind == ResourceKind::Sensor && item.portId == id))
                 ++count;
+            if (kind == ResourceKind::Relay)
+                count += (item.pumpRelayId == id) + (item.valveRelayId == id);
+            if (kind == ResourceKind::Input)
+                count += std::count(item.levelInputs.begin(), item.levelInputs.end(), id);
         }
-    return count;
+    return count + irrigation_owner;
 }
 
 /**
@@ -373,12 +409,26 @@ bool resource_conflict(const Configurations& configs, bool include_inputs)
     if (claim_count(configs, ResourceKind::Relay, security.sirenRelayId) > 1
         || sensor_conflict(configs, security.readerPortId))
         return true;
+    const auto& tanks = configs[index(ControllerKind::Tanks)].items;
+    for (const auto& rule : configs[index(ControllerKind::Irrigation)].items)
+        if (!rule.tankId.empty() && !remote_tank_id(rule.tankId)
+            && std::none_of(tanks.begin(), tanks.end(), [&](const auto& tank) {
+                   return rule.tankId == tank.id;
+               }))
+            return true;
     for (const auto& config : configs)
         for (const auto& item : config.items) {
             if (claim_count(configs, ResourceKind::Relay, item.relayId) > 1
                 || (include_inputs && claim_count(configs, ResourceKind::Input, item.inputId) > 1)
                 || sensor_conflict(configs, item.portId))
                 return true;
+            for (const auto& relay : {item.pumpRelayId, item.valveRelayId})
+                if (claim_count(configs, ResourceKind::Relay, relay) > 1)
+                    return true;
+            if (include_inputs)
+                for (const auto& input : item.levelInputs)
+                    if (claim_count(configs, ResourceKind::Input, input) > 1)
+                        return true;
         }
     return false;
 }
@@ -386,7 +436,7 @@ bool resource_conflict(const Configurations& configs, bool include_inputs)
 /**
  * @brief Count relay-consuming rows for the common controller capacity limit.
  * @param[in] configs Coherent configuration set.
- * @return Combined socket, light and thermostat row count; Meteo has its own independent limit.
+ * @return Number of configured switch, thermostat, siren and tank outputs; Meteo has its own limit.
  */
 std::size_t item_count(const Configurations& configs)
 {
@@ -395,6 +445,14 @@ std::size_t item_count(const Configurations& configs)
         result += configs[module].items.size();
     result += configs[index(ControllerKind::Thermostats)].items.size();
     result += !configs[index(ControllerKind::Security)].security.sirenRelayId.empty();
+    for (const auto& item : configs[index(ControllerKind::Tanks)].items)
+        result += !item.pumpRelayId.empty() + !item.valveRelayId.empty();
+    const auto& rules = configs[index(ControllerKind::Irrigation)].items;
+    for (auto it = rules.begin(); it != rules.end(); ++it)
+        if (std::none_of(rules.begin(), it, [&](const auto& previous) {
+                return previous.relayId == it->relayId;
+            }))
+            ++result;
     return result;
 }
 
@@ -423,7 +481,11 @@ bool same_binding(const Item& a, const Item& b)
 {
     return a.id == b.id && a.relayId == b.relayId && a.inputId == b.inputId && a.portId == b.portId
            && a.sensorType == b.sensorType && a.address == b.address && a.meteoId == b.meteoId
-           && a.securityType == b.securityType && a.entryDelay == b.entryDelay;
+           && a.securityType == b.securityType && a.entryDelay == b.entryDelay
+           && a.pumpRelayId == b.pumpRelayId && a.valveRelayId == b.valveRelayId
+           && a.tankId == b.tankId && a.startMinute == b.startMinute && a.daysMask == b.daysMask
+           && a.durationMinutes == b.durationMinutes && a.levelInputs == b.levelInputs
+           && a.fillLevel == b.fillLevel;
 }
 
 /**

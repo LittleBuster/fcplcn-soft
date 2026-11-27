@@ -2,8 +2,8 @@
  * @file runtime_supervisor.cpp
  * @brief Independent bounded-progress supervision and task stack observations.
  */
-#include "system/runtime_supervisor.h"
-#include "system/runtime_policy.h"
+#include "runtime_supervisor.h"
+#include "runtime_policy.h"
 #include "product_identity.h"
 
 #include <array>

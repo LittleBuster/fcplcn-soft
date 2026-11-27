@@ -17,6 +17,7 @@ add_executable(fcplcn_metrics_tests
     metrics_test.cpp
     stubs/driver.cpp
     "${FCPLCN_BASE_DIR}/main/system/system_metrics.cpp"
+    "${FCPLCN_BASE_DIR}/main/hardware/chip_temperature.cpp"
 )
 target_include_directories(fcplcn_metrics_tests PRIVATE stubs "${FCPLCN_BASE_DIR}/main")
 target_link_libraries(fcplcn_metrics_tests PRIVATE fcplcn_metrics_cjson Threads::Threads)

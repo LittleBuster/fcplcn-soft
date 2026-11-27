@@ -2,21 +2,49 @@
 import { useEffect, useState } from 'preact/hooks';
 import type { ControllerKind } from '../../../shared/types.js';
 import type { View } from '../app/types';
+import type { SceneGroup } from '../features/scenes/types';
+
+const sceneHashes: Record<SceneGroup, string> = {
+  instant: '#pult/scenes',
+  scheduled: '#pult/scenes/scheduled',
+};
+
+function sceneGroupFromHash(): SceneGroup | null {
+  if (window.location.hash === sceneHashes.instant) return 'instant';
+  if (window.location.hash === sceneHashes.scheduled) return 'scheduled';
+  return null;
+}
+
+const isPult = () => window.location.hash === '#pult' || sceneGroupFromHash() !== null;
 
 /** Держит выбор PLC и фильтры отдельно от серверных данных. */
 export function useHubNavigation(clearNotice: () => void) {
-  const [view, setView] = useState<View>(window.location.hash === '#pult' ? 'pult' : 'overview');
+  const [view, setView] = useState<View>(isPult() ? 'pult' : 'overview');
+  const [pultSceneGroup, setPultSceneGroup] = useState(sceneGroupFromHash);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [filter, setFilter] = useState<ControllerKind | 'all'>('all');
   const [query, setQuery] = useState('');
   const [room, setRoom] = useState('all');
-  const [configuringId, setConfiguringId] = useState<string | null>(null);
+  const [configuration, setConfiguration] = useState<{
+    id: string;
+    irrigationRule?: string;
+  } | null>(null);
+  function setConfiguringId(id: string | null) {
+    setConfiguration(id ? { id } : null);
+  }
+
+  function configureIrrigation(id: string, ruleId = '') {
+    openDevice(id);
+    setFilter('irrigation');
+    setConfiguration({ id, irrigationRule: ruleId });
+  }
 
   useEffect(() => {
     const followLink = () => {
       setConfiguringId(null);
       setSelectedId(null);
-      setView(window.location.hash === '#pult' ? 'pult' : 'overview');
+      setPultSceneGroup(sceneGroupFromHash());
+      setView(isPult() ? 'pult' : 'overview');
       window.scrollTo({ top: 0, behavior: 'instant' });
     };
     window.addEventListener('hashchange', followLink);
@@ -27,6 +55,7 @@ export function useHubNavigation(clearNotice: () => void) {
   function navigate(next: View) {
     setConfiguringId(null);
     setView(next);
+    setPultSceneGroup(null);
     setSelectedId(null);
     window.history.replaceState(
       null,
@@ -34,6 +63,12 @@ export function useHubNavigation(clearNotice: () => void) {
       next === 'pult' ? '#pult' : window.location.pathname + window.location.search,
     );
     window.scrollTo({ top: 0, behavior: 'instant' });
+    clearNotice();
+  }
+
+  function selectPultSceneGroup(group: SceneGroup | null) {
+    setPultSceneGroup(group);
+    window.history.replaceState(null, '', group ? sceneHashes[group] : '#pult');
     clearNotice();
   }
 
@@ -58,9 +93,13 @@ export function useHubNavigation(clearNotice: () => void) {
     setQuery,
     room,
     setRoom,
-    configuringId,
+    configuringId: configuration?.id,
+    irrigationRule: configuration?.irrigationRule,
+    configureIrrigation,
     setConfiguringId,
     navigate,
+    pultSceneGroup,
+    selectPultSceneGroup,
     openDevice,
   };
 }

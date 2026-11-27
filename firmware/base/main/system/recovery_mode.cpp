@@ -10,7 +10,7 @@
 #include <cstring>
 #include <string_view>
 #include "product_identity.h"
-#include "system/runtime_supervisor.h"
+#include "platform/runtime_supervisor.h"
 #include "system/system_metrics.h"
 #include "cJSON.h"
 #include "esp_event.h"

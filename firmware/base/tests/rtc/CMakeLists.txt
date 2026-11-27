@@ -11,8 +11,9 @@ add_library(fcplcn_rtc_cjson STATIC "${FCPLCN_CJSON_DIR}/cJSON.c")
 target_include_directories(fcplcn_rtc_cjson PUBLIC "${FCPLCN_CJSON_DIR}")
 add_executable(fcplcn_rtc_tests
     rtc_test.cpp stubs/platform.cpp
-    "${FCPLCN_BASE_DIR}/main/time/rtc_codec.cpp"
     "${FCPLCN_BASE_DIR}/main/time/rtc_clock.cpp"
+    "${FCPLCN_BASE_DIR}/main/hardware/rtc_codec.cpp"
+    "${FCPLCN_BASE_DIR}/main/hardware/ds3231.cpp"
     "${FCPLCN_BASE_DIR}/main/hardware/board_profile.cpp")
 target_compile_features(fcplcn_rtc_tests PRIVATE cxx_std_17)
 target_include_directories(fcplcn_rtc_tests PRIVATE stubs "${FCPLCN_BASE_DIR}/main")

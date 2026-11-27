@@ -109,6 +109,26 @@ export function createCoreUI(context) {
       isThermostat: true,
     },
     {
+      id: 'irrigation',
+      data: 'irrigation',
+      title: 'Полив',
+      singular: 'Правило',
+      object: 'правило',
+      empty: 'Правила полива ещё не добавлены',
+      dirtyKey: 'irrigation',
+      isIrrigation: true,
+    },
+    {
+      id: 'tanks',
+      data: 'tank',
+      title: 'Баки',
+      singular: 'Бак',
+      object: 'бак',
+      empty: 'Баки ещё не добавлены',
+      dirtyKey: 'tanks',
+      isTank: true,
+    },
+    {
       id: 'security',
       data: 'security',
       title: 'Охрана',
@@ -279,6 +299,8 @@ export function createCoreUI(context) {
         name: item?.sensorType ? (item.sensorType === 'onewire' ? 'onewire' : 'dht22') : 'weather',
         tone: '',
       };
+    if (model.isIrrigation) return { name: 'irrigation', tone: 'sensor' };
+    if (model.isTank) return { name: 'tank', tone: 'sensor' };
     if (model.isThermostat) return { name: item?.mode || 'probe', tone: item?.mode || '' };
     return { name: model.id === 'lights' ? 'light' : 'plug', tone: '' };
   }
@@ -337,6 +359,7 @@ export function createCoreUI(context) {
       'cooling',
       'security',
       'security-alarm',
+      'irrigation',
       'door',
       'motion',
     ];

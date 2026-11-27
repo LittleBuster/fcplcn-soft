@@ -120,12 +120,46 @@ test('HTTP persists editable actions and schedules, protects builtins and serial
       schedule: { ...schedule, time: '25:99' },
     });
     assert.equal(invalid.status, 400);
+    const schedulePath = '/scenes/' + custom.id + '/schedule';
+    const setSchedule = (baseRevision: number, enabled: boolean) =>
+      request(schedulePath, 'PUT', { baseRevision, enabled });
+    assert.equal(
+      (
+        await request('/scenes/home/schedule', 'PUT', {
+          baseRevision: changedHome.revision,
+          enabled: true,
+        })
+      ).status,
+      400,
+    );
+    const pausedResponse = await setSchedule(custom.revision, false);
+    assert.equal(pausedResponse.status, 200);
+    const paused = (await pausedResponse.json()) as SceneDefinition;
+    assert.deepEqual(paused, {
+      ...custom,
+      revision: custom.revision + 1,
+      schedule: { ...schedule, paused: true },
+    });
+    assert.equal((await setSchedule(custom.revision, true)).status, 409);
+    const editedResponse = await request('/scenes/' + custom.id, 'PUT', {
+      baseRevision: paused.revision,
+      actions: custom.actions,
+      schedule,
+    });
+    assert.equal(editedResponse.status, 200);
+    const edited = (await editedResponse.json()) as SceneDefinition;
+    assert.deepEqual(edited.schedule, paused.schedule, 'Editing a schedule preserves a pause');
     const reconstructed = new Scenes(engine, { directory });
     assert.deepEqual(
       reconstructed.snapshot().definitions.find((scene) => scene.id === custom.id)?.schedule,
-      schedule,
+      paused.schedule,
     );
     await reconstructed.stop();
+    const resumedResponse = await setSchedule(edited.revision, true);
+    assert.equal(resumedResponse.status, 200);
+    const resumed = (await resumedResponse.json()) as SceneDefinition;
+    assert.deepEqual(resumed.schedule, { ...schedule, paused: false });
+    assert.equal((await snapshot()).runs.length, 0, 'Toggling schedules never runs their actions');
     const started = await request('/scenes/home/run', 'POST', {});
     assert.equal(started.status, 202);
     assert.equal(
@@ -182,7 +216,7 @@ test('HTTP persists editable actions and schedules, protects builtins and serial
     assert.equal((await request('/scenes/prepare/run', 'POST', {})).status, 409);
     assert.equal((await manual).status, 200);
     const deletion = await request('/scenes/' + custom.id, 'DELETE', {
-      baseRevision: custom.revision,
+      baseRevision: resumed.revision,
     });
     assert.equal(deletion.status, 200);
     assert.equal(

@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises';
 import { extname, resolve, sep } from 'node:path';
 import type { HubEngine, Product } from '../shared/types.js';
 import { Sessions } from './auth.js';
-import { CredentialStore } from './credentials.js';
+import { CredentialStore, type HubCredentials } from './credentials.js';
 import { isLoopback, type HubConfig } from './config.js';
 import { Scenes } from './scenes.js';
 import type { SceneScheduler } from './scheduler.js';
@@ -13,6 +13,14 @@ import { HubControl, type TelegramAPI } from './control.js';
 export type { TelegramAPI } from './control.js';
 import type { CloudMethod, HubCloudView } from '../shared/cloud.js';
 import { TelegramAPIError } from './telegram/client.js';
+import type { ReadMeteoHistory } from './meteo-history.js';
+import { withActivity } from './activity-context.js';
+import {
+  connectionFleetHistory,
+  connectionHistory,
+  connectionHistoryRange,
+  type ReadConnectionOutages,
+} from './connection-history.js';
 
 const mime: Record<string, string> = {
   '.html': 'text/html; charset=utf-8',
@@ -95,7 +103,9 @@ export interface ServerOptions {
   onControlReady?: (actions: HubControl) => void;
   control?: HubControl;
   cloud?: HubCloudAPI;
-  credentials?: CredentialStore;
+  credentials?: HubCredentials;
+  meteoHistory?: ReadMeteoHistory;
+  connectionOutages?: ReadConnectionOutages;
 }
 
 export function createHubServer({
@@ -112,6 +122,8 @@ export function createHubServer({
   control: suppliedControl,
   cloud,
   credentials,
+  meteoHistory,
+  connectionOutages,
 }: ServerOptions) {
   const sessions = new Sessions(
     credentials || new CredentialStore(config.dataDir, config.password),
@@ -176,9 +188,11 @@ export function createHubServer({
             ? session(requestAfterLogin(request, response), response)
             : {
                 error:
-                  status === 429
-                    ? 'Слишком много попыток. Повторите через минуту'
-                    : 'Проверьте логин и пароль',
+                  status === 503
+                    ? 'Хранилище учётной записи хаба недоступно'
+                    : status === 429
+                      ? 'Слишком много попыток. Повторите через минуту'
+                      : 'Проверьте логин и пароль',
               },
         );
         return;
@@ -250,7 +264,7 @@ export function createHubServer({
           return;
         }
         if (method === 'POST' && path === '/api/v1/account') {
-          const status = sessions.change(request, response, await body(request));
+          const status = await sessions.change(request, response, await body(request));
           reply(
             response,
             status,
@@ -258,11 +272,13 @@ export function createHubServer({
               ? { ok: true, requiresLogin: true }
               : {
                   error:
-                    status === 403
-                      ? 'Текущий пароль неверен'
-                      : status === 429
-                        ? 'Слишком много попыток. Повторите через минуту'
-                        : 'Укажите логин и пароль от 8 символов либо оставьте новый пароль пустым',
+                    status === 503
+                      ? 'Хранилище учётной записи хаба недоступно'
+                      : status === 403
+                        ? 'Текущий пароль неверен'
+                        : status === 429
+                          ? 'Слишком много попыток. Повторите через минуту'
+                          : 'Укажите логин и пароль от 8 символов либо оставьте новый пароль пустым',
                 },
           );
           return;
@@ -296,6 +312,51 @@ export function createHubServer({
           return;
         }
         const relative = path.slice('/api/v1'.length);
+        const history =
+          /^\/devices\/(fcplcn-[a-zA-Z0-9_-]{1,96})\/meteo\/([a-zA-Z0-9_-]{1,32})\/history$/.exec(
+            relative,
+          );
+        if (method === 'GET' && history) {
+          const period = url.searchParams.get('period') ?? 'day';
+          if (period !== 'day' && period !== 'week') {
+            reply(response, 400, { error: 'Выберите график за сутки или за неделю' });
+          } else if (!meteoHistory) {
+            reply(response, 503, { error: 'История метеодатчиков недоступна' });
+          } else {
+            reply(response, 200, await meteoHistory(history[1], history[2], period));
+          }
+          return;
+        }
+        const connection = /^\/devices\/(fcplcn-[a-zA-Z0-9_-]{1,96})\/connection-history$/.exec(
+          relative,
+        );
+        if (method === 'GET' && (connection || relative === '/devices/connection-history')) {
+          const period = url.searchParams.get('period') ?? 'day';
+          if (period !== 'day' && period !== 'week') {
+            reply(response, 400, { error: 'Выберите график за сутки или за неделю' });
+            return;
+          }
+          const deviceId = connection?.[1] ?? null;
+          const range = connectionHistoryRange(period);
+          try {
+            const stored = (await connectionOutages?.(deviceId, range.from, range.to)) ?? [];
+            const snapshot = engine.snapshot();
+            const current = snapshot.outages ?? [];
+            const history = connectionHistory(deviceId, range, [...stored, ...current]);
+            if (deviceId === null) {
+              reply(response, 200, connectionFleetHistory(history, snapshot.devices));
+            } else if (
+              !history.outages.length &&
+              !snapshot.devices.some(({ id }) => id === deviceId) &&
+              !current.some((outage) => outage.deviceId === deviceId)
+            ) {
+              reply(response, 404, { error: 'PLC не найден' });
+            } else reply(response, 200, history);
+          } catch {
+            reply(response, 503, { error: 'История связи с PLC недоступна' });
+          }
+          return;
+        }
         const mutating = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method);
         const maximum = relative.includes('/service/')
           ? 40 * 1024
@@ -311,9 +372,11 @@ export function createHubServer({
         };
         response.once('close', cancel);
         try {
-          const result = await controls.dispatch(method as CloudMethod, relative, payload, {
-            signal: abort.signal,
-          });
+          const result = await withActivity(
+            { actor: { source: 'web', name: sessions.account().username } },
+            () =>
+              controls.dispatch(method as CloudMethod, relative, payload, { signal: abort.signal }),
+          );
           if (!response.destroyed) reply(response, result.status, result.data);
         } finally {
           response.off('close', cancel);

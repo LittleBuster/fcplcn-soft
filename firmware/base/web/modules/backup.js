@@ -73,7 +73,6 @@ export function createBackupUI(context) {
       const thermostats = document.version < 4 ? null : document.controllers.thermostats;
       text(
         'config-backup-thermostats',
-        'config-backup-security',
         thermostats
           ? `${thermostats.items.length} · модуль ${thermostats.enabled ? 'включён' : 'выключен'}`
           : `0 · модуль выключен (файл версии ${document.version})`,
@@ -83,6 +82,20 @@ export function createBackupUI(context) {
         document.version <= 6 && thermostats?.items.length
           ? `${document.version === 4 ? 'В файле версии 4 нет индивидуальных выключателей: термостаты будут включены без входов кнопок. Общий выключатель модуля сохранится. ' : ''}Минимальные интервалы ON/OFF термостатов фиксированы: 60 секунд. Прежние настройки времени из файла не применяются.`
           : '',
+      );
+      const irrigation = document.version >= 10 ? document.controllers.irrigation : null;
+      text(
+        'config-backup-irrigation',
+        irrigation
+          ? `${irrigation.items.length} · модуль ${irrigation.enabled ? 'включён' : 'выключен'}`
+          : '0 · полив выключен (старая версия)',
+      );
+      const tanks = document.version >= 9 ? document.controllers.tanks : null;
+      text(
+        'config-backup-tanks',
+        tanks
+          ? `${tanks.items.length} · модуль ${tanks.enabled ? 'включён' : 'выключен'}`
+          : '0 · баки выключены (старая версия)',
       );
       const security = document.version >= 8 ? document.controllers.security : null;
       text(
@@ -113,6 +126,7 @@ export function createBackupUI(context) {
     backupMessage('config-backup-error', '');
     backupMessage('config-backup-notice', '');
     for (const id of [
+      'config-backup-irrigation',
       'config-backup-filename',
       'config-backup-device',
       'config-backup-profile',
@@ -121,6 +135,7 @@ export function createBackupUI(context) {
       'config-backup-meteo',
       'config-backup-thermostats',
       'config-backup-security',
+      'config-backup-tanks',
     ])
       text(id, '');
     backupMessage('config-backup-profile-warning', '');
@@ -137,10 +152,10 @@ export function createBackupUI(context) {
     if (
       !object(document) ||
       document.format !== 'fcplcn-config' ||
-      ![1, 2, 3, 4, 5, 6, 7, 8].includes(document.version) ||
+      ![1, 2, 3, 4, 5, 6, 7, 8, 9, 10].includes(document.version) ||
       document.product !== productName
     ) {
-      throw new Error(`Нужен файл конфигурации ${productName} формата fcplcn-config, версия 1–8.`);
+      throw new Error(`Нужен файл конфигурации ${productName} формата fcplcn-config, версия 1–10.`);
     }
     const config = document.config;
     if (
@@ -183,7 +198,9 @@ export function createBackupUI(context) {
         (model.id === 'lights' && document.version === 1) ||
         (model.isMeteo && document.version < 3) ||
         (model.isThermostat && document.version < 4) ||
-        (model.isSecurity && document.version < 8)
+        (model.isSecurity && document.version < 8) ||
+        (model.isTank && document.version < 9) ||
+        (model.isIrrigation && document.version < 10)
       )
         continue;
       const module = document.controllers?.[model.id];
@@ -213,29 +230,46 @@ export function createBackupUI(context) {
                 ) ||
                 !['reed', 'motion'].includes(item.sensorType) ||
                 typeof item.entryDelay !== 'boolean'
-              : model.isMeteo
-                ? !['id', 'name', 'portId', 'sensorType', 'address'].every(
-                    (key) => typeof item[key] === 'string',
-                  ) ||
-                  !['dht22', 'onewire'].includes(item.sensorType) ||
-                  (item.sensorType === 'dht22'
-                    ? item.address !== ''
-                    : !validMeteoAddress(item.address))
-                : model.isThermostat
-                  ? !['id', 'name', 'meteoId', 'relayId', 'mode'].every(
+              : model.isIrrigation
+                ? !context.irrigationParametersValid(item) ||
+                  typeof item.enabled !== 'boolean' ||
+                  typeof item.id !== 'string' ||
+                  typeof item.name !== 'string'
+                : model.isTank
+                  ? !['id', 'name', 'pumpRelayId', 'valveRelayId'].every(
                       (key) => typeof item[key] === 'string',
                     ) ||
-                    !thermostatParametersValid(item) ||
-                    (document.version === 6 &&
-                      !['minOnSeconds', 'minOffSeconds'].every(
-                        (key) =>
-                          Number.isInteger(item[key]) && item[key] >= 0 && item[key] <= 86400,
-                      )) ||
-                    (document.version >= 5 &&
-                      (typeof item.inputId !== 'string' || typeof item.enabled !== 'boolean'))
-                  : !['id', 'name', 'relayId', 'inputId'].every(
-                      (key) => typeof item[key] === 'string',
-                    ) || typeof item.state !== 'boolean'),
+                    !Array.isArray(item.levelInputs) ||
+                    item.levelInputs.length < 1 ||
+                    item.levelInputs.length > 3 ||
+                    item.levelInputs.some((id) => typeof id !== 'string') ||
+                    !Number.isInteger(item.fillLevel) ||
+                    item.fillLevel < 1 ||
+                    item.fillLevel > item.levelInputs.length ||
+                    typeof item.enabled !== 'boolean'
+                  : model.isMeteo
+                    ? !['id', 'name', 'portId', 'sensorType', 'address'].every(
+                        (key) => typeof item[key] === 'string',
+                      ) ||
+                      !['dht22', 'onewire'].includes(item.sensorType) ||
+                      (item.sensorType === 'dht22'
+                        ? item.address !== ''
+                        : !validMeteoAddress(item.address))
+                    : model.isThermostat
+                      ? !['id', 'name', 'meteoId', 'relayId', 'mode'].every(
+                          (key) => typeof item[key] === 'string',
+                        ) ||
+                        !thermostatParametersValid(item) ||
+                        (document.version === 6 &&
+                          !['minOnSeconds', 'minOffSeconds'].every(
+                            (key) =>
+                              Number.isInteger(item[key]) && item[key] >= 0 && item[key] <= 86400,
+                          )) ||
+                        (document.version >= 5 &&
+                          (typeof item.inputId !== 'string' || typeof item.enabled !== 'boolean'))
+                      : !['id', 'name', 'relayId', 'inputId'].every(
+                          (key) => typeof item[key] === 'string',
+                        ) || typeof item.state !== 'boolean'),
         )
       ) {
         throw new Error(`В файле отсутствуют корректные настройки контроллера «${model.title}».`);

@@ -6,12 +6,16 @@ find_package(Threads REQUIRED)
 add_library(fcplcn_meteo_json STATIC "${FCPLCN_CJSON_DIR}/cJSON.c")
 target_include_directories(fcplcn_meteo_json PUBLIC "${FCPLCN_CJSON_DIR}")
 add_executable(fcplcn_meteo_tests meteo_test.cpp
-    "${FCPLCN_BASE_DIR}/main/sensors/meteo_codec.cpp" "${FCPLCN_BASE_DIR}/main/sensors/meteo_sensors.cpp"
+    "${FCPLCN_BASE_DIR}/main/hardware/meteo_codec.cpp"
+    "${FCPLCN_BASE_DIR}/main/hardware/sensor_ports.cpp"
+    "${FCPLCN_BASE_DIR}/main/sensors/meteo_sensors.cpp"
     "${FCPLCN_BASE_DIR}/main/sensors/ibutton.cpp"
+    "${FCPLCN_BASE_DIR}/main/sensors/sensor_worker.cpp"
     "${FCPLCN_BASE_DIR}/main/hardware/board_profile.cpp")
 target_compile_features(fcplcn_meteo_tests PRIVATE cxx_std_17)
 target_compile_definitions(fcplcn_meteo_tests PRIVATE FCPLCN_METEO_SENSORS_TESTING=1)
-target_include_directories(fcplcn_meteo_tests PRIVATE stubs ../rtc/stubs "${FCPLCN_BASE_DIR}/main")
+target_include_directories(fcplcn_meteo_tests PRIVATE stubs ../rtc/stubs
+    "${FCPLCN_BASE_DIR}/main" "${FCPLCN_BASE_DIR}/main/platform")
 target_compile_options(fcplcn_meteo_tests PRIVATE -Wall -Wextra -Werror)
 target_link_libraries(fcplcn_meteo_tests PRIVATE fcplcn_meteo_json Threads::Threads)
 option(FCPLCN_METEO_SANITIZERS "Enable native AddressSanitizer and UndefinedBehaviorSanitizer" ON)

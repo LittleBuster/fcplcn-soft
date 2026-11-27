@@ -4,7 +4,7 @@
  * @details Registry pointers have process lifetime. Atomic single-assignment activation prevents
  * a live driver from observing another pin map; UI selection only persists a future boot ID.
  */
-#include "hardware/board_profile.h"
+#include "board_profile.h"
 
 #include <atomic>
 #include <memory>

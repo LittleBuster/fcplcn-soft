@@ -5,8 +5,8 @@
  * not overwrite the caller's last temperature or parsed ROM. No runtime services,
  * GPIO, storage or synchronization are needed by these pure codecs.
  */
-#include "sensors/meteo_codec.h"
-#include "util/checksum.h"
+#include "meteo_codec.h"
+#include "checksum.h"
 
 /**
  * @cond FCPLCN_SOURCE_CONTRACTS
@@ -42,13 +42,16 @@ std::string meteo_rom_address(std::uint64_t address)
 
 /**
  * @cond FCPLCN_SOURCE_CONTRACTS
- * @brief Parse and validate a DS18B20 ROM.
- * @param text Exactly sixteen hex characters; uppercase input is accepted.
+ * @brief Parse a hexadecimal OneWire ROM of the requested family and validate its CRC.
+ * @param text Exactly sixteen hex characters in wire order, accepting uppercase.
+ * @param family Expected family byte.
  * @param[out] bytes Wire-order ROM, assigned only on success.
- * @return True only for family 0x28 with a correct ROM CRC.
+ * @return True when the family and CRC both match.
  * @endcond
  */
-bool meteo_parse_address(std::string_view text, std::array<std::uint8_t, 8>& bytes)
+bool onewire_parse_address(std::string_view text,
+                           std::uint8_t family,
+                           std::array<std::uint8_t, 8>& bytes)
 {
     if (text.size() != 16)
         return false;
@@ -68,10 +71,23 @@ bool meteo_parse_address(std::string_view text, std::array<std::uint8_t, 8>& byt
             return false;
         parsed[i] = static_cast<std::uint8_t>((high << 4) | low);
     }
-    if (parsed[0] != 0x28 || meteo_crc8(parsed.data(), 7) != parsed[7])
+    if (parsed[0] != family || meteo_crc8(parsed.data(), 7) != parsed[7])
         return false;
     bytes = parsed;
     return true;
+}
+
+/**
+ * @cond FCPLCN_SOURCE_CONTRACTS
+ * @brief Parse and validate a DS18B20 ROM.
+ * @param text Exactly sixteen hex characters; uppercase input is accepted.
+ * @param[out] bytes Wire-order ROM, assigned only on success.
+ * @return True only for family 0x28 with a correct ROM CRC.
+ * @endcond
+ */
+bool meteo_parse_address(std::string_view text, std::array<std::uint8_t, 8>& bytes)
+{
+    return onewire_parse_address(text, 0x28, bytes);
 }
 
 /**

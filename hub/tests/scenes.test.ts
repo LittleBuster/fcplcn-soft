@@ -1,6 +1,7 @@
 /** @file Persistent scene plans, global modes, ordering and interruption safety. */
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
 import { mkdtempSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -14,6 +15,9 @@ import type {
   WritableControllerKind,
 } from '../shared/types.js';
 import { Scenes } from '../server/scenes.js';
+import { currentActivity, withActivity } from '../server/activity-context.js';
+import { ActivityJournal } from '../server/activity-journal.js';
+import { HubDatabase } from '../server/database.js';
 
 function device(id: string, enabled = true): DeviceView {
   const module = (kind: 'security' | 'sockets' | 'lights' | 'thermostats', itemId: string) => ({
@@ -145,6 +149,37 @@ test('exact legacy builtin descriptions migrate without changing actions or acce
     assert.equal(readFileSync(file, 'utf8'), invalid);
     await reloaded.stop();
     await scenes.stop();
+  } finally {
+    rmSync(path, { recursive: true, force: true });
+  }
+});
+
+test('restart migrates the historical prepare description and preserves its configured actions and schedule', async () => {
+  const engine = new FakeEngine(),
+    path = directory(),
+    file = join(path, 'scenes.json');
+  try {
+    const scenes = new Scenes(engine, { directory: path });
+    scenes.update('prepare', 1, [action()], { schedule });
+    const expected = scenes.snapshot().definitions;
+    await scenes.stop();
+    const stored = JSON.parse(readFileSync(file, 'utf8'));
+    const prepare = stored.definitions.find((scene: { id: string }) => scene.id === 'prepare');
+    prepare.description = 'Выполнить назначенные действия света, розеток, термостатов и охраны.';
+    writeFileSync(file, JSON.stringify(stored));
+    const upgraded = new Scenes(engine, { directory: path });
+    assert.deepEqual(upgraded.snapshot().definitions, expected);
+    assert.deepEqual(JSON.parse(readFileSync(file, 'utf8')).definitions, expected);
+    await upgraded.stop();
+    const restarted = new Scenes(engine, { directory: path });
+    assert.deepEqual(restarted.snapshot().definitions, expected);
+    assert.equal(engine.calls.length, 0, 'Neither restart runs a configured action');
+    await restarted.stop();
+    prepare.description += ' Изменено.';
+    const invalid = JSON.stringify(stored);
+    writeFileSync(file, invalid);
+    assert.throws(() => new Scenes(engine, { directory: path }), /Основной режим повреждён/);
+    assert.equal(readFileSync(file, 'utf8'), invalid, 'Invalid input is never overwritten');
   } finally {
     rmSync(path, { recursive: true, force: true });
   }
@@ -311,6 +346,7 @@ test('schedules validate weekdays, time and IANA zone, persist and retain manual
       { ...schedule, time: '24:00' },
       { ...schedule, timeZone: 'Missing/Zone' },
       { ...schedule, enabled: 'yes' },
+      { ...schedule, paused: 'yes' },
     ])
       assert.throws(
         () => scenes.update(custom.id, 1, custom.actions, { schedule: invalid }),
@@ -331,6 +367,24 @@ test('schedules validate weekdays, time and IANA zone, persist and retain manual
   } finally {
     rmSync(path, { recursive: true, force: true });
   }
+});
+
+test('pausing preserves missing PLC actions and manual mode clears the previous pause', () => {
+  const engine = new FakeEngine();
+  const scenes = new Scenes(engine);
+  const scene = scenes.create('Полив', '', [action()], schedule);
+  engine.state.devices = [];
+  const paused = scenes.setScheduleEnabled(scene.id, scene.revision, false);
+  assert.deepEqual(scenes.setScheduleEnabled(scene.id, paused.revision, false), paused);
+  assert.deepEqual(paused.actions, scene.actions);
+  const manual = scenes.update(scene.id, paused.revision, [], {
+    schedule: { ...schedule, enabled: false },
+  });
+  assert.deepEqual(manual.schedule, { ...schedule, enabled: false });
+  assert.throws(() => scenes.setScheduleEnabled(scene.id, manual.revision, true), /нет расписания/);
+  const scheduled = scenes.update(scene.id, manual.revision, [], { schedule });
+  assert.deepEqual(scheduled.schedule, schedule);
+  assert.deepEqual(engine.calls, []);
 });
 
 test('only one scene runs globally; stop marks in-flight unknown and never executes remaining commands', async () => {
@@ -520,6 +574,159 @@ test('restoring a running journal marks pending results unknown without dispatch
     rmSync(path, { recursive: true, force: true });
   }
 });
+
+const databaseUrl = process.env.FCPLCN_HUB_TEST_DATABASE_URL;
+
+test(
+  'PostgreSQL commits scene plans before dispatch and preserves actors, acknowledgements, and interruptions',
+  { skip: !databaseUrl },
+  async () => {
+    if (!databaseUrl) return;
+    const path = directory();
+    const engine = new FakeEngine();
+    const schema = 'scenes_test_' + randomUUID().replaceAll('-', '');
+    const admin = new HubDatabase(databaseUrl);
+    const database = new HubDatabase(databaseUrl, { schema });
+    let scenes: Scenes | undefined;
+    let activity: ActivityJournal | undefined;
+    try {
+      await admin.query(`CREATE SCHEMA "${schema}"`);
+      activity = await ActivityJournal.open(database);
+      const legacy = new Scenes(engine, { directory: path });
+      const scene = legacy.create('Проверка', '', [action()]);
+      const imported = legacy.run(scene.id);
+      await idle(legacy);
+      await legacy.stop();
+      const file = join(path, 'scenes.json');
+      const legacyFile = readFileSync(file);
+      scenes = await Scenes.open(engine, { directory: path, database });
+      assert.equal(scenes.snapshot().runs[0].id, imported.id);
+      assert.equal(scenes.snapshot().runs[0].status, 'completed');
+      assert.deepEqual(readFileSync(file), legacyFile);
+
+      const readRun = async (id: string) => {
+        const { rows } = await database.query<{ data: SceneRun }>(
+          'SELECT data FROM hub_scene_runs WHERE id = $1',
+          [id],
+        );
+        return rows[0]?.data;
+      };
+      const actor = { source: 'telegram' as const, name: 'Хозяин', id: '1234' };
+      engine.hook = async () => {
+        const context = currentActivity();
+        assert.deepEqual(context?.actor, actor);
+        assert.ok(context.sceneRunId);
+        const saved = await readRun(context.sceneRunId);
+        assert.equal(saved.status, 'running');
+        assert.equal(saved.results[0].status, 'pending');
+        assert.deepEqual(saved.actor, actor);
+        return 'applied';
+      };
+      const opened = scenes;
+      const accepted = await withActivity({ actor }, () => opened.startRun(scene.id));
+      const completed = await idle(opened);
+      assert.equal(completed.status, 'completed', completed.results[0].error ?? undefined);
+      assert.deepEqual(await readRun(accepted.id), completed);
+      assert.equal(completed.results[0].deviceId, 'fcplcn-a');
+      assert.equal(completed.results[0].status, 'applied');
+      assert.ok(completed.results[0].commandId);
+      assert.ok(completed.completedAt);
+
+      const controller = new AbortController();
+      const locked = deferred<void>();
+      const release = deferred<void>();
+      const held = database.transaction(async (sql) => {
+        await sql.query('LOCK TABLE hub_scene_runs IN ACCESS EXCLUSIVE MODE');
+        locked.resolve();
+        await release.promise;
+      });
+      await locked.promise;
+      const expired = opened.startRun(scene.id, 'manual', controller.signal);
+      try {
+        await assert.rejects(opened.startRun(scene.id), /выполняется/);
+        controller.abort();
+      } finally {
+        release.resolve();
+        await held;
+      }
+      await assert.rejects(expired, /истёк/);
+      const interrupted = opened.snapshot().runs[0];
+      assert.equal(interrupted.status, 'interrupted');
+      assert.equal(interrupted.results[0].status, 'unavailable');
+      assert.deepEqual(await readRun(interrupted.id), interrupted);
+      assert.equal(engine.calls.length, 2);
+
+      const old = {
+        ...completed,
+        id: randomUUID(),
+        startedAt: '2025-01-01T00:00:00.000Z',
+        status: 'running',
+        completedAt: null,
+        results: [
+          { ...completed.results[0], status: 'pending', commandId: undefined },
+          {
+            ...completed.results[0],
+            id: 'configured:light',
+            deviceId: 'fcplcn-b',
+            deviceName: 'fcplcn-b',
+            controller: 'lights',
+            itemId: 'light-1',
+            status: 'pending',
+            commandId: undefined,
+          },
+        ],
+      };
+      await database.query('INSERT INTO hub_scene_runs VALUES ($1, $2, $3)', [
+        old.id,
+        old.startedAt,
+        old,
+      ]);
+      const acknowledgement: CommandView = {
+        id: randomUUID(),
+        sceneRunId: old.id,
+        deviceId: old.results[0].deviceId,
+        controller: 'sockets',
+        itemId: old.results[0].itemId,
+        value: old.results[0].value,
+        sequence: 8,
+        status: 'applied',
+        createdAt: '2025-01-01T00:00:01.000Z',
+        completedAt: '2025-01-01T00:00:02.000Z',
+        error: null,
+      };
+      await activity.commandStarted({ ...acknowledgement, status: 'pending', completedAt: null });
+      await activity.commandFinished(acknowledgement);
+      for (let index = 0; index < 22; ++index) await opened.startRun('prepare', 'schedule');
+      await opened.stop();
+      scenes = await Scenes.open(engine, { directory: path, database });
+      assert.equal(scenes.snapshot().runs.length, 20);
+      assert.equal(scenes.snapshot().activeRun, null);
+      assert.equal(scenes.snapshot().runs[0].actor?.source, 'schedule');
+      assert.deepEqual(await readRun(accepted.id), completed);
+      assert.equal((await readRun(imported.id)).status, 'completed');
+      const recovered = await readRun(old.id);
+      assert.equal(recovered.status, 'interrupted');
+      assert.deepEqual(
+        recovered.results.map((result) => result.status),
+        ['applied', 'unknown'],
+      );
+      assert.equal(recovered.results[0].commandId, acknowledgement.id);
+      assert.equal(engine.calls.length, 2, 'Startup must never resume interrupted actions');
+      assert.deepEqual(readFileSync(file), legacyFile);
+
+      await database.query('ALTER TABLE hub_scene_runs RENAME TO unavailable_scene_runs');
+      await assert.rejects(scenes.startRun(scene.id), /PostgreSQL/);
+      assert.equal(engine.calls.length, 2, 'A failed insert must prevent dispatch');
+    } finally {
+      await scenes?.stop();
+      await activity?.close();
+      await database.close();
+      await admin.query(`DROP SCHEMA IF EXISTS "${schema}" CASCADE`);
+      await admin.close();
+      rmSync(path, { recursive: true, force: true });
+    }
+  },
+);
 
 test('saved schedules are optional for version-one compatibility and deleted bindings fail visibly', async () => {
   const engine = new FakeEngine(),

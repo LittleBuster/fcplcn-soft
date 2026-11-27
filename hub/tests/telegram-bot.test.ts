@@ -221,7 +221,8 @@ test('private last-contact pairing is visible before authorization; groups and f
     f.bot.start();
     await until(() => f.bot.snapshot().state === 'running');
     const denied = await f.send(1, '/start', 99);
-    assert.match(denied.text, /Chat ID: 99/);
+    assert.equal(denied.parse_mode, 'HTML');
+    assert.match(denied.text, /<b>Ваш Chat ID:<\/b> <code>99<\/code>/);
     assert.doesNotMatch(denied.text, /Дом|Розетк/);
     assert.equal(denied.reply_markup.remove_keyboard, true);
     assert.equal(f.store.snapshot().lastContact?.chatId, '99');
@@ -366,17 +367,44 @@ test('HTTPS transport fixes the host, forbids redirects, uses native keyboard an
   }) as typeof fetch);
   const signal = new AbortController().signal;
   await client.identity(signal);
+  const html = `<b>${'&amp;'.repeat(1000)}</b>`;
   await client.send(
     '42',
-    { text: 'Дом', reply_markup: { keyboard: [['🏠 Я дома']], resize_keyboard: true } },
+    {
+      text: html,
+      parse_mode: 'HTML',
+      reply_markup: { keyboard: [['🏠 Я дома']], resize_keyboard: true },
+    },
     signal,
   );
   assert.ok(requests.every((request) => request.url.startsWith('https://api.telegram.org/bot')));
   assert.ok(requests.every((request) => request.init.redirect === 'error'));
-  assert.equal(
-    JSON.parse(requests[1].init.body as string).reply_markup.keyboard[0][0],
-    '🏠 Я дома',
+  const message = JSON.parse(requests[1].init.body as string);
+  assert.equal(message.text, html);
+  assert.equal(message.parse_mode, 'HTML');
+  assert.equal(message.reply_markup.keyboard[0][0], '🏠 Я дома');
+  assert.deepEqual(message.link_preview_options, { is_disabled: true });
+  const photo = Buffer.from([137, 80, 78, 71]);
+  const replyMarkup = { keyboard: [['📈 24 часа', '📈 7 дней']], resize_keyboard: true };
+  const caption = 'Метео <датчик> за 24 часа';
+  await client.send(
+    '42',
+    { text: html, chart: { photo, caption }, reply_markup: replyMarkup },
+    signal,
   );
+  const photoRequest = requests[2];
+  assert.match(photoRequest.url, /^https:\/\/api.telegram.org\/bot[^/]+\/sendPhoto$/);
+  assert.equal(photoRequest.init.redirect, 'error');
+  const upload = photoRequest.init.body;
+  assert.ok(upload instanceof FormData);
+  assert.equal(upload.get('chat_id'), '42');
+  assert.equal(upload.get('caption'), caption);
+  assert.equal(upload.get('parse_mode'), null);
+  assert.deepEqual(JSON.parse(String(upload.get('reply_markup'))), replyMarkup);
+  const file = upload.get('photo');
+  assert.ok(file instanceof File);
+  assert.equal(file.type, 'image/png');
+  assert.deepEqual(Buffer.from(await file.arrayBuffer()), photo);
   const failing = new TelegramClient(token, (async () => {
     throw new Error('Failed https://api.telegram.org/bot' + token);
   }) as typeof fetch);

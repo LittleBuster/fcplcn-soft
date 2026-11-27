@@ -9,7 +9,7 @@
 #include "system/firmware_update.h"
 #include "config/settings_json.h"
 #include "config/settings_store.h"
-#include "util/operation_context.h"
+#include "platform/operation_context.h"
 #include "product_identity.h"
 #include "esp_app_desc.h"
 #include "esp_app_format.h"

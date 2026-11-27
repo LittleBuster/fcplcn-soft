@@ -28,9 +28,9 @@
 #include "config/settings_json.h"
 #include "config/model.h"
 #include "config/state_journal.h"
-#include "system/runtime_supervisor.h"
-#include "util/checksum.h"
-#include "util/operation_context.h"
+#include "platform/runtime_supervisor.h"
+#include "platform/checksum.h"
+#include "platform/operation_context.h"
 
 /** @cond FCPLCN_CONTROLLER_INTERNALS */
 namespace fcplcn::controllers::detail {
@@ -38,7 +38,9 @@ namespace fcplcn::controllers::detail {
 inline constexpr char kTag[] = "fcplcn_controllers";
 inline constexpr std::array<std::uint8_t, 8> kMagic{{'F', 'C', 'S', 'O', 'C', 'K', '0', '1'}};
 inline constexpr std::array<std::uint8_t, 8> kControllerMagic{
-    {'F', 'C', 'C', 'T', 'R', 'L', '0', '9'}};
+    {'F', 'C', 'C', 'T', 'R', 'L', '1', '1'}};
+inline constexpr std::array<std::uint8_t, 8> kV10Magic{{'F', 'C', 'C', 'T', 'R', 'L', '1', '0'}};
+inline constexpr std::array<std::uint8_t, 8> kV9Magic{{'F', 'C', 'C', 'T', 'R', 'L', '0', '9'}};
 inline constexpr std::array<std::uint8_t, 8> kV8Magic{{'F', 'C', 'C', 'T', 'R', 'L', '0', '8'}};
 inline constexpr std::array<std::uint8_t, 8> kV7Magic{{'F', 'C', 'C', 'T', 'R', 'L', '0', '7'}};
 inline constexpr std::array<std::uint8_t, 8> kV6Magic{{'F', 'C', 'C', 'T', 'R', 'L', '0', '6'}};
@@ -46,13 +48,17 @@ inline constexpr std::array<std::uint8_t, 8> kV5Magic{{'F', 'C', 'C', 'T', 'R', 
 inline constexpr std::array<std::uint8_t, 8> kV4Magic{{'F', 'C', 'C', 'T', 'R', 'L', '0', '4'}};
 inline constexpr std::array<std::uint8_t, 8> kV3Magic{{'F', 'C', 'C', 'T', 'R', 'L', '0', '3'}};
 inline constexpr std::array<std::uint8_t, 8> kV2Magic{{'F', 'C', 'C', 'T', 'R', 'L', '0', '2'}};
-inline constexpr std::size_t kMaxBlobBytes = 5120;
+inline constexpr std::size_t kRemoteTankDeviceIdBytes = 104;
+inline constexpr std::size_t kIrrigationTankIdBytes =
+    kRemoteTankDeviceIdBytes + 1 + kSocketMaxIdBytes;
+inline constexpr std::size_t kMaxBlobBytes =
+    5120 + 6 + kSocketMaxItems * (kRemoteTankDeviceIdBytes + 1);
 inline constexpr std::int64_t kDebounceUs = 50'000;
 inline constexpr std::int64_t kPressLockoutUs = 300'000;
 inline constexpr unsigned kPressConfirmSamples = 3;
 inline constexpr std::uint32_t kLegacyMaxDwellSeconds = 86'400;
 inline constexpr std::int64_t kRetryUs = 1'000'000;
-inline constexpr std::size_t kControllerCount = 5;
+inline constexpr std::size_t kControllerCount = 7;
 inline constexpr std::size_t kRelayControllerCount = 2;
 inline constexpr std::int64_t kMeteoStaleMs = 15'000;
 
@@ -85,7 +91,7 @@ struct SecuritySettings {
 /**
  * @brief Persisted row shared by the versioned module codecs.
  * @details Fields are interpreted by ControllerKind. state is the durable static
- * switch value; enabled is a thermostat permission, not its runtime relay demand.
+ * switch value; enabled is a thermostat or tank monitoring permission, never derived relay demand.
  * Meteo port/ROM bindings are sensor claims; meteoId is only a reusable reference.
  */
 struct Item {
@@ -99,6 +105,12 @@ struct Item {
     bool enabled = false;
     SecuritySensorType securityType = SecuritySensorType::Reed;
     bool entryDelay = false;
+    std::string pumpRelayId, valveRelayId;
+    std::vector<std::string> levelInputs;
+    unsigned fillLevel = 2;
+    std::string tankId;  ///< Empty, local tank ID, or remote device/tank ID.
+    std::uint8_t daysMask = 0;
+    std::uint16_t startMinute = 0, durationMinutes = 0;
 };
 
 /** @brief Persisted settings for one module, sharing the common board identity and commit bundle.
@@ -120,6 +132,22 @@ struct Configuration {
  * Neither thermostatDemand nor inhibit is restored as a saved ON at boot.
  */
 struct Runtime {
+    std::int64_t irrigationStopUs = 0;
+    std::int64_t irrigationLastMinute = -1;
+    int irrigationLastDate = -1;
+    int irrigationWater = -1;
+    std::uint32_t irrigationRelayGeneration = 0;
+    std::int64_t irrigationWaterExpiry = 0;
+    std::uint64_t irrigationWaterGeneration = 0;
+    std::array<bool, 3> tankCandidate{}, tankWet{};
+    std::array<std::uint32_t, 3> tankGeneration{};
+    std::array<std::int64_t, 3> tankSampleAt{{-1, -1, -1}};
+    std::int64_t tankStableSinceUs = -1;
+    unsigned tankSamples = 0;
+    bool tankHealthy = false;
+    bool tankAccepted = false;
+    std::array<std::uint32_t, 2> tankRelayGeneration{};
+    bool tankRelaySeen = false;
     bool baseline = false;
     bool armed = false;
     std::int64_t highSinceUs = -1;  ///< Logical release interval, independent of raw GPIO polarity.
@@ -186,6 +214,29 @@ extern std::array<std::vector<Runtime>, kControllerCount> runtimes;
 extern bool initialized;
 extern esp_err_t worker_error;
 extern std::string service_error;
+
+bool parse_irrigation_item(const cJSON* json, Item& item, bool backup = false);
+cJSON* irrigation_item_json(const Item& item);
+cJSON* irrigation_status_locked();
+void irrigation_step_locked();
+void irrigation_off_locked();
+int irrigation_tank_water(const std::string& id, std::int64_t& expiry);
+bool remote_tank_id(std::string_view id);
+int remote_tank_water(std::string_view id,
+                      std::int64_t nowUs,
+                      std::int64_t& expiry,
+                      std::uint64_t& generation);
+bool add_remote_tanks(cJSON* root);
+ControllerResult update_irrigation_locked(const cJSON* request, std::string& error);
+
+bool parse_tank_item(const cJSON* json, Item& item, bool backup = false);
+cJSON* tank_item_json(const Item& item);
+cJSON* tanks_status_locked();
+void tanks_step_locked();
+void tanks_off_locked();
+ControllerResult update_tanks_locked(const cJSON* request, std::string& error);
+ControllerResult tank_enabled_command(
+    std::string_view id, bool enabled, std::string& error, bool limited, std::int64_t deadlineMs);
 
 const char* mode_id(ThermostatMode mode);
 
@@ -263,8 +314,9 @@ bool state_record_key(const SettingsBytes& record, StateJournalKey& key);
 
 StateJournalPayload encode_states(const Configurations& configs);
 
-esp_err_t
-apply_states(const StateJournalPayload& payload, Configurations& configs, bool allowLegacy = false);
+esp_err_t apply_states(const StateJournalPayload& payload,
+                       Configurations& configs,
+                       std::uint8_t recordVersion);
 
 void clear_states(Configurations& configs);
 

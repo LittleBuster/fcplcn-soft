@@ -25,8 +25,8 @@
 #include "nvs.h"
 #include "config/settings_json.h"
 #include "config/model.h"
-#include "system/runtime_supervisor.h"
-#include "util/checksum.h"
+#include "platform/runtime_supervisor.h"
+#include "platform/checksum.h"
 
 /** @cond FCPLCN_CONTROLLER_INTERNALS */
 namespace fcplcn::controllers::detail {
@@ -173,7 +173,7 @@ void append_text(std::vector<std::uint8_t>& bytes, std::string_view text)
  * Thermostat demand/measurements are intentionally absent; legacy versions are
  * migrated once by load() after their state-memory seed has been confirmed.
  * @param[in] configs Complete validated module set whose profiles resolve to one canonical board.
- * @return Encoded version-8 record with CRC and a fresh state identity, or an empty vector.
+ * @return Current-version record with CRC and a fresh state identity, or an empty vector.
  * @pre Row strings and counts satisfy their schema limits; the storage caller enforces the total
  * blob bound.
  */
@@ -234,6 +234,21 @@ SettingsBytes encode_record(const Configurations& configs)
                            static_cast<std::uint16_t>(
                                static_cast<std::int16_t>(std::lround(item.setpointC * 10))));
                 bytes.push_back(static_cast<std::uint8_t>(item.hysteresisC));
+            } else if (module == index(ControllerKind::Irrigation)) {
+                append_text(bytes, item.relayId);
+                append_text(bytes, item.tankId);
+                bytes.push_back(item.daysMask);
+                append_u16(bytes, item.startMinute);
+                append_u16(bytes, item.durationMinutes);
+                bytes.push_back(item.enabled);
+            } else if (module == index(ControllerKind::Tanks)) {
+                append_text(bytes, item.pumpRelayId);
+                append_text(bytes, item.valveRelayId);
+                bytes.push_back(static_cast<std::uint8_t>(item.levelInputs.size()));
+                for (const auto& input : item.levelInputs)
+                    append_text(bytes, input);
+                bytes.push_back(static_cast<std::uint8_t>(item.fillLevel));
+                bytes.push_back(item.enabled);
             } else if (module == index(ControllerKind::Security)) {
                 append_text(bytes, item.inputId);
                 bytes.push_back(item.securityType == SecuritySensorType::Reed ? 1 : 2);
@@ -372,13 +387,17 @@ esp_err_t decode_record(const SettingsBytes& bytes, Configurations& result)
     const bool version6 = std::equal(kV6Magic.begin(), kV6Magic.end(), bytes.begin());
     const bool version7 = std::equal(kV7Magic.begin(), kV7Magic.end(), bytes.begin());
     const bool version8 = std::equal(kV8Magic.begin(), kV8Magic.end(), bytes.begin());
-    const auto& magic = version2   ? kV2Magic
+    const bool version9 = std::equal(kV9Magic.begin(), kV9Magic.end(), bytes.begin());
+    const bool version10 = std::equal(kV10Magic.begin(), kV10Magic.end(), bytes.begin());
+    const auto& magic = version10  ? kV10Magic
+                        : version2 ? kV2Magic
                         : version3 ? kV3Magic
                         : version4 ? kV4Magic
                         : version5 ? kV5Magic
                         : version6 ? kV6Magic
                         : version7 ? kV7Magic
                         : version8 ? kV8Magic
+                        : version9 ? kV9Magic
                                    : kControllerMagic;
     Reader reader(bytes, offset);
     for (const auto expected : magic) {
@@ -390,14 +409,16 @@ esp_err_t decode_record(const SettingsBytes& bytes, Configurations& result)
     std::string board;
     if (!reader.byte(low) || !reader.byte(high)
         || (low | (static_cast<unsigned>(high) << 8))
-               != (version2   ? 2U
-                   : version3 ? 3U
-                   : version4 ? 4U
-                   : version5 ? 5U
-                   : version6 ? 6U
-                   : version7 ? 7U
-                   : version8 ? 8U
-                              : kControllerStorageVersion))
+               != (version2    ? 2U
+                   : version3  ? 3U
+                   : version4  ? 4U
+                   : version5  ? 5U
+                   : version6  ? 6U
+                   : version7  ? 7U
+                   : version8  ? 8U
+                   : version9  ? 9U
+                   : version10 ? 10U
+                               : kControllerStorageVersion))
         return ESP_ERR_INVALID_RESPONSE;
     if (!version2 && !version3 && !version4 && !version5 && !version6 && !version7) {
         StateJournalKey key{};
@@ -421,6 +442,8 @@ esp_err_t decode_record(const SettingsBytes& bytes, Configurations& result)
     for (std::size_t module = 0; module < (version2      ? kRelayControllerCount
                                            : version3    ? 3U
                                            : legacy_four ? 4U
+                                           : version10   ? 6U
+                                           : version9    ? 5U
                                                          : kControllerCount);
          ++module) {
         auto& config = parsed[module];
@@ -494,6 +517,29 @@ esp_err_t decode_record(const SettingsBytes& bytes, Configurations& result)
                         || legacy_off > kLegacyMaxDwellSeconds)
                         return ESP_ERR_INVALID_RESPONSE;
                 }
+            } else if (module == index(ControllerKind::Irrigation)) {
+                std::uint8_t flag;
+                if (!reader.text(item.relayId, 32)
+                    || !reader.text(item.tankId, kIrrigationTankIdBytes)
+                    || !reader.byte(item.daysMask) || !reader.small_number(item.startMinute)
+                    || !reader.small_number(item.durationMinutes) || !reader.byte(flag) || flag > 1)
+                    return ESP_ERR_INVALID_RESPONSE;
+                item.enabled = flag != 0;
+            } else if (module == index(ControllerKind::Tanks)) {
+                std::uint8_t count_inputs, fill, enabled;
+                if (!reader.text(item.pumpRelayId, 32) || !reader.text(item.valveRelayId, 32)
+                    || !reader.byte(count_inputs) || count_inputs < 1 || count_inputs > 3)
+                    return ESP_ERR_INVALID_RESPONSE;
+                for (unsigned n = 0; n < count_inputs; ++n) {
+                    std::string input;
+                    if (!reader.text(input, 32))
+                        return ESP_ERR_INVALID_RESPONSE;
+                    item.levelInputs.push_back(std::move(input));
+                }
+                if (!reader.byte(fill) || !reader.byte(enabled) || enabled > 1)
+                    return ESP_ERR_INVALID_RESPONSE;
+                item.fillLevel = fill;
+                item.enabled = enabled != 0;
             } else if (module == index(ControllerKind::Security)) {
                 std::uint8_t type, delayed;
                 if (!reader.text(item.inputId, 32) || !reader.byte(type) || (type != 1 && type != 2)
@@ -539,8 +585,8 @@ esp_err_t load(Configurations& result)
     StateJournalKey key{};
     if (bytes[8] != kControllerStorageVersion) {
         if (state_record_key(bytes, key)) {
-            // Version 8 already has frequent states in state-memory; its NVS seed is deliberately
-            // stale.
+            // Previous journaled formats keep frequent states outside flash; the NVS seed is
+            // deliberately stale.
             activate_state_record(bytes);
             if (load_states(result) != ESP_OK)
                 clear_states(result);
@@ -559,12 +605,6 @@ esp_err_t load(Configurations& result)
     if (error != ESP_OK) {
         // A current-format record must never resurrect its stale migration/import seeds.
         clear_states(result);
-        auto& security = result[index(ControllerKind::Security)];
-        if (security.enabled && !security.items.empty()) {
-            // Unreadable alarm state must never silently turn a configured guard off.
-            security.armed = true;
-            security.triggered = true;
-        }
         ESP_LOGW(kTag,
                  "State memory unavailable: %s; starting with operative flags OFF",
                  esp_err_to_name(error));
@@ -613,7 +653,16 @@ cJSON* backup_module_json(const Configuration& config, ControllerKind kind)
     if (!items)
         return nullptr;
     for (const auto& item : config.items) {
-        Json object(cJSON_CreateObject(), cJSON_Delete);
+        Json object(kind == ControllerKind::Irrigation ? irrigation_item_json(item)
+                    : kind == ControllerKind::Tanks    ? tank_item_json(item)
+                                                       : cJSON_CreateObject(),
+                    cJSON_Delete);
+        if (kind == ControllerKind::Irrigation || kind == ControllerKind::Tanks) {
+            if (!object || !cJSON_AddItemToArray(items, object.get()))
+                return nullptr;
+            object.release();
+            continue;
+        }
         if (!object || !cJSON_AddStringToObject(object.get(), "id", item.id.c_str())
             || !cJSON_AddStringToObject(object.get(), "name", item.name.c_str()))
             return nullptr;
@@ -691,6 +740,16 @@ bool parse_backup_module(const cJSON* json,
         if (kind == ControllerKind::Meteo) {
             if (!parse_meteo_item(object, item)) {
                 error = "Некорректные поля Метео или ROM DS18B20";
+                return false;
+            }
+        } else if (kind == ControllerKind::Irrigation) {
+            if (!parse_irrigation_item(object, item, true)) {
+                error = "Некорректное правило полива";
+                return false;
+            }
+        } else if (kind == ControllerKind::Tanks) {
+            if (!parse_tank_item(object, item, true)) {
+                error = "Некорректные поля бака";
                 return false;
             }
         } else if (kind == ControllerKind::Thermostats) {
@@ -772,6 +831,8 @@ cJSON* controllers_backup_json(const SettingsBytes& record, std::string& error)
  * @param[out] record Encoded current-version Controllers section on success.
  * @param[out] error Failure diagnostic.
  * @param securityRevision Target Security configuration revision.
+ * @param tankRevision Target tank configuration revision.
+ * @param irrigationRevision Target irrigation configuration revision.
  * @return Typed result distinguishing malformed data from resource conflicts.
  * @details Pure structural codecs preserve valid dangling Meteo references as
  * fault-OFF configurations. New assignments still require a known source in
@@ -786,10 +847,25 @@ ControllerResult controllers_backup_prepare(const cJSON* json,
                                             std::uint32_t thermostatRevision,
                                             SettingsBytes& record,
                                             std::string& error,
-                                            std::uint32_t securityRevision)
+                                            std::uint32_t securityRevision,
+                                            std::uint32_t tankRevision,
+                                            std::uint32_t irrigationRevision)
 {
     const bool has_security = cJSON_GetObjectItemCaseSensitive(json, "security") != nullptr;
-    if (!(has_security
+    const bool has_tanks = cJSON_GetObjectItemCaseSensitive(json, "tanks") != nullptr;
+    const bool has_irrigation = cJSON_HasObjectItem(json, "irrigation");
+    if (!(has_irrigation ? settings_json_fields(json,
+                                                {"sockets",
+                                                 "lights",
+                                                 "meteo",
+                                                 "thermostats",
+                                                 "security",
+                                                 "tanks",
+                                                 "irrigation"})
+          : has_tanks
+              ? settings_json_fields(
+                    json, {"sockets", "lights", "meteo", "thermostats", "security", "tanks"})
+          : has_security
               ? settings_json_fields(json,
                                      {"sockets", "lights", "meteo", "thermostats", "security"})
               : settings_json_fields(json, {"sockets", "lights", "meteo", "thermostats"}))) {
@@ -797,10 +873,23 @@ ControllerResult controllers_backup_prepare(const cJSON* json,
         return SocketResult::InvalidInput;
     }
     Configurations parsed = defaults();
-    const std::array<std::uint32_t, kControllerCount> revisions{
-        {socketRevision, lightRevision, meteoRevision, thermostatRevision, securityRevision}};
+    const std::array<std::uint32_t, kControllerCount> revisions{{socketRevision,
+                                                                 lightRevision,
+                                                                 meteoRevision,
+                                                                 thermostatRevision,
+                                                                 securityRevision,
+                                                                 tankRevision,
+                                                                 irrigationRevision}};
     for (std::size_t module = 0; module < kControllerCount; ++module) {
         const auto kind = static_cast<ControllerKind>(module);
+        if (kind == ControllerKind::Irrigation && !has_irrigation) {
+            parsed[module].revision = irrigationRevision;
+            continue;
+        }
+        if (kind == ControllerKind::Tanks && !has_tanks) {
+            parsed[module].revision = tankRevision;
+            continue;
+        }
         if (kind == ControllerKind::Security && !has_security) {
             parsed[module].revision = securityRevision;
             continue;
@@ -816,8 +905,13 @@ ControllerResult controllers_backup_prepare(const cJSON* json,
         error = "Конфликт назначений реле, входов или датчиков в резервной копии";
         return SocketResult::Conflict;
     }
-    record = encode_record(parsed);
-    return record.empty() ? SocketResult::InvalidInput : SocketResult::Ok;
+    auto encoded = encode_record(parsed);
+    if (encoded.empty() || encoded.size() > kMaxBlobBytes) {
+        error = "Настройки превышают доступный объём памяти контроллеров";
+        return SocketResult::InvalidInput;
+    }
+    record = std::move(encoded);
+    return SocketResult::Ok;
 }
 
 /**
@@ -843,7 +937,11 @@ ControllerResult controllers_backup_prepare(const cJSON* json,
                                             SettingsBytes& record,
                                             std::string& error)
 {
-    if (settings_json_fields(json, {"sockets", "lights", "meteo", "thermostats"})
+    if (settings_json_fields(
+            json, {"sockets", "lights", "meteo", "thermostats", "security", "tanks", "irrigation"})
+        || settings_json_fields(json,
+                                {"sockets", "lights", "meteo", "thermostats", "security", "tanks"})
+        || settings_json_fields(json, {"sockets", "lights", "meteo", "thermostats"})
         || settings_json_fields(json, {"sockets", "lights", "meteo", "thermostats", "security"}))
         return controllers_backup_prepare(
             json, socketRevision, lightRevision, meteoRevision, 1, record, error);
@@ -913,6 +1011,8 @@ ControllerResult controllers_backup_prepare(const cJSON* json,
  * @param[out] record Encoded current-version Controllers section on success.
  * @param[out] error Failure diagnostic.
  * @param securityRevision Target Security configuration revision.
+ * @param tankRevision Target tank configuration revision.
+ * @param irrigationRevision Target irrigation configuration revision.
  * @return True on successful validation/encoding.
  * @details Pure structural codecs preserve valid dangling Meteo references as
  * fault-OFF configurations. New assignments still require a known source in
@@ -927,7 +1027,9 @@ bool controllers_backup_record(const cJSON* json,
                                std::uint32_t thermostatRevision,
                                SettingsBytes& record,
                                std::string& error,
-                               std::uint32_t securityRevision)
+                               std::uint32_t securityRevision,
+                               std::uint32_t tankRevision,
+                               std::uint32_t irrigationRevision)
 {
     return controllers_backup_prepare(json,
                                       socketRevision,
@@ -936,7 +1038,9 @@ bool controllers_backup_record(const cJSON* json,
                                       thermostatRevision,
                                       record,
                                       error,
-                                      securityRevision)
+                                      securityRevision,
+                                      tankRevision,
+                                      irrigationRevision)
            == SocketResult::Ok;
 }
 
@@ -1003,6 +1107,8 @@ bool controllers_backup_record(const cJSON* json,
  * @param[out] thermostatRevision Decoded Thermostats config revision.
  * @param[out] error Failure diagnostic.
  * @param[out] securityRevision Optional Security revision destination; nullptr skips it.
+ * @param[out] tankRevision Optional tank revision destination; nullptr skips it.
+ * @param[out] irrigationRevision Optional irrigation revision destination; nullptr skips it.
  * @return True for a valid record.
  * @details Missing modules in historical records have initial revision 1.
  * @endcond
@@ -1013,7 +1119,9 @@ bool controllers_record_revisions(const SettingsBytes& record,
                                   std::uint32_t& meteoRevision,
                                   std::uint32_t& thermostatRevision,
                                   std::string& error,
-                                  std::uint32_t* securityRevision)
+                                  std::uint32_t* securityRevision,
+                                  std::uint32_t* tankRevision,
+                                  std::uint32_t* irrigationRevision)
 {
     Configurations parsed;
     if (decode_record(record, parsed) != ESP_OK) {
@@ -1026,6 +1134,10 @@ bool controllers_record_revisions(const SettingsBytes& record,
     thermostatRevision = parsed[3].revision;
     if (securityRevision)
         *securityRevision = parsed[4].revision;
+    if (irrigationRevision)
+        *irrigationRevision = parsed[6].revision;
+    if (tankRevision)
+        *tankRevision = parsed[5].revision;
     return true;
 }
 

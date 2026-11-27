@@ -21,7 +21,7 @@ import { HubLayout } from './layout';
 import { PageHeading } from './page-heading';
 import { ActionNotice, ConnectionNotice } from './notices';
 import { Icon } from '../icons';
-import { canControl, portal } from '../portal';
+import { canConfigure, canControl, portal } from '../portal';
 
 /** Соединяет страницы и хуки; автоматизация и MQTT выполняются независимо от браузера. */
 export function App() {
@@ -44,7 +44,10 @@ export function App() {
   });
   const notices = useHubNotices(data.snapshot?.scenes.runs[0]?.id);
   const commands = useHubCommands(auth, data, notices);
-  const scenes = useHubScenes(data);
+  const scenes = useHubScenes(data, auth, (starting) => {
+    commands.setSceneStarting(starting);
+    if (starting) notices.setNotice(null);
+  });
 
   const { session, initialError, loadSession, loginUsername, logout } = auth;
   const { snapshot, loadError, refreshing, refresh } = data;
@@ -96,13 +99,9 @@ export function App() {
           snapshot={snapshot.scenes}
           devices={devices}
           unavailable={Boolean(loadError)}
-          manualBusy={commands.pending.size > 0}
-          onRunAccepted={scenes.acceptSceneRun}
+          manualBusy={commands.sceneStarting || commands.pending.size > 0}
+          onRun={scenes.runScene}
           onSaved={scenes.acceptSceneDefinition}
-          onStarting={(starting) => {
-            commands.setSceneStarting(starting);
-            if (starting) clearNotice();
-          }}
           onDeleted={scenes.deleteSceneDefinition}
           clearNoticeToken={notices.clearSceneNoticeToken}
           expanded={view === 'scenes'}
@@ -135,7 +134,13 @@ export function App() {
           }
           onCommand={commands.command}
           openDevice={navigation.openDevice}
+          configureIrrigation={canConfigure ? navigation.configureIrrigation : undefined}
           onPultSettingsSaved={data.acceptPultSettings}
+          hubAvailable={data.connectionFresh && !loadError && snapshot.cloud?.online !== false}
+          sceneGroup={navigation.pultSceneGroup}
+          onSelectSceneGroup={navigation.selectPultSceneGroup}
+          onRun={scenes.runScene}
+          onSchedule={scenes.setScheduleEnabled}
         />
       ) : configuringId || selected ? (
         <DevicePage
@@ -145,6 +150,7 @@ export function App() {
           commands={commands}
           brokerConnected={brokerConnected}
           clearNotice={clearNotice}
+          onNotice={notices.setNotice}
         />
       ) : view === 'activity' ? (
         <ActivityPage snapshot={snapshot} />

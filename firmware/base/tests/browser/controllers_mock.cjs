@@ -8,6 +8,8 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const { canonicalBoardId } = require('./board_profiles_mock.cjs');
 const { createMeteoMock, validRom } = require('./meteo_mock.cjs');
+const { createIrrigationMock, isRemoteTank, validateIrrigation } = require('./irrigation_mock.cjs');
+const { createTanksMock, validateTank } = require('./tanks_mock.cjs');
 const { createThermostatsMock } = require('./thermostats_mock.cjs');
 const { createSecurityMock, emptySecurity, validateSecurity } = require('./security_mock.cjs');
 const {
@@ -22,9 +24,10 @@ function createControllersMock({
   statePath,
   boardId = canonicalBoardId,
   normalizeId = (id) => id,
+  irrigationClock = Date.now,
 }) {
   const actuatorIds = ['sockets', 'lights'],
-    ids = [...actuatorIds, 'meteo', 'thermostats', 'security'];
+    ids = [...actuatorIds, 'meteo', 'thermostats', 'security', 'tanks', 'irrigation'];
   const ports = {
     relays: Array.from({ length: 16 }, (_, i) => `rly-0/${i + 1}`),
     inputs: Array.from({ length: 16 }, (_, i) => `in-0/${i + 1}`),
@@ -38,12 +41,16 @@ function createControllersMock({
       meteo: empty(),
       thermostats: empty(),
       security: emptySecurity(),
+      tanks: empty(),
+      irrigation: empty(),
     },
     stagedRestore;
   let lockedInputs = new Set();
   const filters = new Map(),
     errors = new Map();
   const inhibitedThermostats = new Set();
+  const inhibitedIrrigation = new Set();
+  const inhibitedTanks = new Set();
   const buttonIds = [...actuatorIds, 'thermostats'];
   const faults = Object.fromEntries(
     ids.map((id) => [
@@ -72,6 +79,21 @@ function createControllersMock({
     return run;
   }
   function validate(module, states = false, kind = 'sockets') {
+    if (kind === 'irrigation')
+      return validateIrrigation(
+        module,
+        hardware.snapshot().relays.map((r) => r.id),
+        states,
+      );
+    if (kind === 'tanks')
+      return validateTank(
+        module,
+        {
+          relays: hardware.snapshot().relays.map((row) => row.id),
+          inputs: hardware.snapshot().inputs.map((row) => row.id),
+        },
+        states,
+      );
     if (kind === 'security') return validateSecurity(module, ports, states);
     if (
       !module ||
@@ -163,12 +185,16 @@ function createControllersMock({
           if (
             item.relayId === resource.id ||
             item.inputId === resource.id ||
-            item.portId === resource.id
+            item.portId === resource.id ||
+            item.pumpRelayId === resource.id ||
+            item.valveRelayId === resource.id ||
+            item.levelInputs?.includes(resource.id)
           )
             owners.push({
               ownerController: moduleId,
               ownerId: item.id,
               ownerName: item.name,
+              tankId: item.tankId ?? '',
               sensorType: item.sensorType,
               address: item.address?.toLowerCase(),
             });
@@ -186,24 +212,36 @@ function createControllersMock({
           (owner) => owner.ownerController === 'meteo' && owner.sensorType === 'onewire',
         ) &&
         new Set(owners.map((owner) => owner.address)).size === owners.length;
+      const sharedValve =
+        resource.kind === 'relay' &&
+        owners.every(
+          (owner) => owner.ownerController === 'irrigation' && owner.tankId === owners[0].tankId,
+        );
       const owner = owners[0];
       return {
         ...resource,
         ownerController: owner?.ownerController || null,
         ownerId: owner?.ownerId || null,
         ownerName: owner?.ownerName || null,
-        conflict: owners.length > 1 && !sharedBus,
+        conflict: owners.length > 1 && !sharedBus && !sharedValve,
       };
     });
   }
   const conflict = (bundle) => resources(bundle).find((resource) => resource.conflict);
+  function hasMissingTank(rules, tanks) {
+    return rules.some(
+      (rule) =>
+        rule.tankId && !isRemoteTank(rule.tankId) && !tanks.some((tank) => tank.id === rule.tankId),
+    );
+  }
+
   /** @brief Write a private temporary record before atomically replacing the durable bundle. */
   function persist(bundle) {
     if (!statePath) return;
     const target = path.resolve(statePath),
       temporary = `${target}.${process.pid}.${crypto.randomBytes(4).toString('hex')}.tmp`;
     fs.mkdirSync(path.dirname(target), { recursive: true, mode: 0o700 });
-    const record = { version: 8, boardId, controllers: bundle };
+    const record = { version: 10, boardId, controllers: bundle };
     if (conflict(bundle)) record.legacyConflicts = true;
     try {
       fs.writeFileSync(temporary, JSON.stringify(record, null, 2) + '\n', {
@@ -238,12 +276,16 @@ function createControllersMock({
     )
       settings = { ...clone(record.controllers), thermostats: empty() };
     else if (
-      [4, 5, 6, 7, 8].includes(record.version) &&
+      [4, 5, 6, 7, 8, 9, 10].includes(record.version) &&
       record.controllers &&
       Object.keys(record.controllers).sort().join(',') ===
-        (record.version === 8
-          ? 'lights,meteo,security,sockets,thermostats'
-          : 'lights,meteo,sockets,thermostats')
+        (record.version === 10
+          ? ids.slice().sort().join(',')
+          : record.version === 9
+            ? 'lights,meteo,security,sockets,tanks,thermostats'
+            : record.version === 8
+              ? 'lights,meteo,security,sockets,thermostats'
+              : 'lights,meteo,sockets,thermostats')
     ) {
       settings = clone(record.controllers);
       if (record.version === 4)
@@ -259,6 +301,8 @@ function createControllersMock({
       settings.thermostats.items = settings.thermostats.items.map(withoutLegacyThermostatDurations);
     }
     settings.security ||= emptySecurity();
+    settings.tanks ||= empty();
+    settings.irrigation ||= empty();
     for (const id of ids)
       if (
         validate(settings[id], true, id) ||
@@ -266,6 +310,7 @@ function createControllersMock({
         settings[id].revision < 1
       )
         throw new Error('Файл состояния симулятора имеет неверный формат');
+    for (const item of settings.irrigation.items) item.tankId ??= '';
     for (const item of settings.meteo.items) item.address = item.address.toLowerCase();
     const clashes = resources().filter((resource) => resource.conflict);
     if (
@@ -279,6 +324,7 @@ function createControllersMock({
       [
         ...buttonIds.flatMap((id) => settings[id].items.map((item) => item.inputId)),
         ...settings.security.items.map((item) => item.inputId),
+        ...settings.tanks.items.flatMap((item) => item.levelInputs),
       ].filter(Boolean),
     );
     for (const id of lockedInputs)
@@ -292,6 +338,10 @@ function createControllersMock({
       if (fresh) {
         const zone = settings.security.items.find((item) => item.inputId === id);
         if (zone) hardware.setInputLevel(id, zone.sensorType !== 'reed');
+        if (settings.tanks.items.some((item) => item.levelInputs.includes(id))) {
+          const channel = hardware.snapshot().inputs.find((input) => input.id === id);
+          hardware.setInputLevel(id, !channel.activeHigh);
+        }
       }
     }
     lockedInputs = next;
@@ -322,6 +372,8 @@ function createControllersMock({
       }
   }
   function snapshot(id) {
+    if (id === 'irrigation') return irrigationDriver.snapshot();
+    if (id === 'tanks') return tankDriver.snapshot();
     if (id === 'security') return securityDriver.snapshot();
     if (id === 'thermostats') return thermostatDriver.snapshot();
     if (id === 'meteo')
@@ -500,6 +552,8 @@ function createControllersMock({
       }
     thermostatDriver.step();
     securityDriver.step();
+    tankDriver.step();
+    irrigationDriver.step();
   }
   const meteoDriver = createMeteoMock({
     sensors: ports.sensors,
@@ -548,6 +602,19 @@ function createControllersMock({
           resource.ownerController !== 'security',
       ),
   });
+  const tankDriver = createTanksMock({
+    hardware,
+    configuration: () => settings.tanks,
+    resources,
+    inhibited: (id) => inhibitedTanks.has(id),
+  });
+  const irrigationDriver = createIrrigationMock({
+    hardware,
+    configuration: () => settings.irrigation,
+    waterForIrrigation: tankDriver.waterForIrrigation,
+    localClock: irrigationClock,
+    inhibited: (id) => inhibitedIrrigation.has(id),
+  });
   meteoDriver.configure(settings.meteo);
   configureInputs();
   drive();
@@ -565,6 +632,8 @@ function createControllersMock({
         meteo: snapshot('meteo'),
         thermostats: snapshot('thermostats'),
         security: snapshot('security'),
+        tanks: snapshot('tanks'),
+        irrigation: irrigationDriver.snapshot(false),
         resources: resources(),
       };
     },
@@ -573,10 +642,7 @@ function createControllersMock({
       return error ? fail(error, 503) : { status: 200, data: engine.snapshot() };
     },
     validateRestore(data) {
-      if (
-        !data ||
-        Object.keys(data).sort().join(',') !== 'lights,meteo,security,sockets,thermostats'
-      )
+      if (!data || Object.keys(data).sort().join(',') !== ids.slice().sort().join(','))
         return 'Неполный набор контроллеров';
       for (const id of ids)
         if (
@@ -584,6 +650,8 @@ function createControllersMock({
           (id !== 'security' && Object.keys(data[id]).sort().join(',') !== 'enabled,items')
         )
           return 'Некорректный контроллер';
+      if (hasMissingTank(data.irrigation.items, data.tanks.items))
+        return 'Бак правила полива отсутствует';
       return conflict(data) ? 'Конфликт назначенных портов' : '';
     },
     stageRestore(data) {
@@ -591,9 +659,12 @@ function createControllersMock({
         const next = Object.fromEntries(
           ids.map((id) => [id, { revision: settings[id].revision + 1, ...clone(data[id]) }]),
         );
+        for (const item of next.irrigation.items) item.tankId ??= '';
         for (const item of next.meteo.items) item.address = item.address.toLowerCase();
         persist(next);
         thermostatDriver.reset();
+        tankDriver.reset();
+        irrigationDriver.reset();
         stagedRestore = next;
       });
     },
@@ -604,14 +675,31 @@ function createControllersMock({
         filters.clear();
         errors.clear();
         inhibitedThermostats.clear();
+        inhibitedTanks.clear();
+        inhibitedIrrigation.clear();
         configureInputs();
       }
     },
+    setIrrigationTime: irrigationDriver.setTime,
+    setRemoteIrrigationTanks: irrigationDriver.setRemoteTanks,
+    irrigationWaterSource() {
+      const water = tankDriver.waterForIrrigation();
+      return settings.tanks.items.map(({ id, name }) => ({
+        id,
+        name,
+        water: water.get(id) ?? null,
+      }));
+    },
     reboot() {
+      irrigationDriver.setRemoteTanks([]);
+      irrigationDriver.reset();
       filters.clear();
       errors.clear();
       inhibitedThermostats.clear();
+      inhibitedTanks.clear();
+      inhibitedIrrigation.clear();
       thermostatDriver.reset();
+      tankDriver.reset();
       securityDriver.reset();
       meteoDriver.reset();
       meteoDriver.configure(settings.meteo);
@@ -649,15 +737,23 @@ function createControllersMock({
       }
     },
     relay(data) {
+      if (settings.irrigation.items.some((rule) => rule.relayId === data?.id))
+        return Promise.resolve(fail('Реле принадлежит поливу', 409));
       if (settings.security.sirenRelayId === data?.id)
         return Promise.resolve(fail('Реле принадлежит сирене охраны', 409));
+      if (
+        settings.tanks.items.some((item) =>
+          [item.pumpRelayId, item.valveRelayId].includes(data?.id),
+        )
+      )
+        return Promise.resolve(fail('Реле принадлежит баку', 409));
       if (settings.thermostats.items.some((item) => item.relayId === data?.id))
         return Promise.resolve(fail('Реле принадлежит термостату', 409));
       return hardware.relay(data);
     },
     simulatedInputs,
     simulateInput(data) {
-      if (!lockedInputs.has(data?.id)) return fail('Вход не назначен кнопке контроллера', 404);
+      if (!lockedInputs.has(data?.id)) return fail('Вход не назначен контроллеру', 404);
       if (typeof data.pressed !== 'boolean') return fail('Некорректное состояние кнопки');
       hardware.setInputLevel(data.id, !data.pressed);
       tick();
@@ -698,7 +794,21 @@ function createControllersMock({
             return fail('Конфигурация контроллера изменена. Перезагрузите настройки.', 409);
           const error = validate(data, false, id);
           if (error) return fail(error);
+          if (id === 'irrigation' && hasMissingTank(data.items, settings.tanks.items))
+            return fail('Бак не найден', 409);
+          if (id === 'tanks' && hasMissingTank(settings.irrigation.items, data.items))
+            return fail('Бак назначен правилу полива', 409);
           if (faults[id].save) {
+            if (id === 'irrigation') {
+              for (const row of settings.irrigation.items) inhibitedIrrigation.add(row.id);
+              irrigationDriver.reset();
+              irrigationDriver.step();
+            }
+            if (id === 'tanks') {
+              for (const item of settings.tanks.items) inhibitedTanks.add(item.id);
+              tankDriver.reset();
+              tankDriver.step();
+            }
             if (id === 'thermostats') thermostatDriver.reset();
             return fail(faults[id].save, 503);
           }
@@ -724,6 +834,28 @@ function createControllersMock({
                   portId: item.portId,
                   sensorType: item.sensorType,
                   address: item.address.toLowerCase(),
+                };
+              if (id === 'irrigation')
+                return {
+                  id: item.id,
+                  name: item.name.trim(),
+                  relayId: item.relayId,
+                  tankId: item.tankId ?? '',
+                  days: [...item.days].sort((a, b) => a - b),
+                  startTime: item.startTime,
+                  durationMinutes: item.durationMinutes,
+                  enabled:
+                    settings.irrigation.items.find((old) => old.id === item.id)?.enabled || false,
+                };
+              if (id === 'tanks')
+                return {
+                  id: item.id,
+                  name: item.name.trim(),
+                  pumpRelayId: item.pumpRelayId,
+                  valveRelayId: item.valveRelayId,
+                  levelInputs: [...item.levelInputs],
+                  fillLevel: item.fillLevel,
+                  enabled: settings.tanks.items.find((old) => old.id === item.id)?.enabled || false,
                 };
               if (id === 'thermostats')
                 return {
@@ -757,9 +889,26 @@ function createControllersMock({
             clash = conflict(next);
           if (clash) return fail(`Порт ${clash.id} уже назначен: ${clash.ownerName}`, 409);
           if (JSON.stringify(nextModule) !== JSON.stringify(settings[id])) nextModule.revision++;
+          if (
+            id === 'irrigation' &&
+            nextModule.revision !== settings.irrigation.revision &&
+            !irrigationDriver.reset(nextModule.items)
+          ) {
+            for (const rule of settings.irrigation.items) inhibitedIrrigation.add(rule.id);
+            return fail('Нельзя подтвердить закрытие крана перед изменением правила', 503);
+          }
+          if (id === 'tanks') tankDriver.reset();
           try {
             persist(next);
           } catch (error) {
+            if (id === 'irrigation') {
+              for (const row of settings.irrigation.items) inhibitedIrrigation.add(row.id);
+              irrigationDriver.step();
+            }
+            if (id === 'tanks') {
+              for (const item of settings.tanks.items) inhibitedTanks.add(item.id);
+              tankDriver.step();
+            }
             if (id === 'thermostats') thermostatDriver.reset();
             return fail(error.message, 503);
           }
@@ -786,6 +935,7 @@ function createControllersMock({
               );
             if (!unchanged) filters.delete(key(id, item.id));
           }
+          if (id === 'tanks') tankDriver.reset();
           settings = next;
           for (const itemId of inhibitedThermostats)
             if (!settings.thermostats.items.some((item) => item.id === itemId))
@@ -904,6 +1054,109 @@ function createControllersMock({
       );
       return setThermostatEnabled(data);
     });
+  engine.modules.irrigation.enabled = (data) =>
+    exclusive(() => {
+      counts.irrigation.enabled++;
+      if (stagedRestore) return fail('Перезагрузка после восстановления', 503);
+      if (
+        !data ||
+        typeof data.id !== 'string' ||
+        typeof data.value !== 'boolean' ||
+        Object.keys(data).some((key) => !['id', 'value'].includes(key))
+      )
+        return fail('Некорректная команда правила');
+      const rule = settings.irrigation.items.find((row) => row.id === data.id);
+      if (!rule) return fail('Правило не найдено', 404);
+      if (rule.enabled && data.value && !inhibitedIrrigation.has(rule.id))
+        return { status: 200, data: { ok: true, ...snapshot('irrigation') } };
+      if (!irrigationDriver.resetRule(rule.id)) {
+        inhibitedIrrigation.add(rule.id);
+        irrigationDriver.step();
+        return fail('Закрытие крана не подтверждено', 503);
+      }
+      const next = {
+        ...settings,
+        irrigation: {
+          ...settings.irrigation,
+          items: settings.irrigation.items.map((row) =>
+            row.id === data.id ? { ...row, enabled: data.value } : row,
+          ),
+        },
+      };
+      try {
+        if (faults.irrigation.enabled) throw new Error(faults.irrigation.enabled);
+        persist(next);
+      } catch (error) {
+        inhibitedIrrigation.add(data.id);
+        irrigationDriver.step();
+        return fail(error.message, 503);
+      }
+      settings = next;
+      inhibitedIrrigation.delete(data.id);
+      return { status: 200, data: { ok: true, ...snapshot('irrigation') } };
+    });
+  engine.modules.tanks.enabled = (data) =>
+    exclusive(() => {
+      counts.tanks.enabled++;
+      if (
+        typeof data?.id !== 'string' ||
+        typeof data.value !== 'boolean' ||
+        Object.keys(data).some((key) => !['id', 'value'].includes(key))
+      )
+        return fail('Некорректный режим бака');
+      const item = settings.tanks.items.find((entry) => entry.id === data.id);
+      if (!item) return fail('Бак не найден', 404);
+      if (faults.tanks.enabled) {
+        inhibitedTanks.add(item.id);
+        tankDriver.step();
+        return fail(faults.tanks.enabled, 503);
+      }
+      const next = {
+        ...settings,
+        tanks: {
+          ...settings.tanks,
+          items: settings.tanks.items.map((row) =>
+            row.id === item.id ? { ...row, enabled: data.value } : row,
+          ),
+        },
+      };
+      try {
+        persist(next);
+      } catch (error) {
+        inhibitedTanks.add(item.id);
+        tankDriver.step();
+        return fail(error.message, 503);
+      }
+      settings = next;
+      inhibitedTanks.delete(item.id);
+      tankDriver.step();
+      irrigationDriver.step();
+      return { status: 200, data: { ok: true, ...snapshot('tanks') } };
+    });
+  engine.simulateTankLevel = (data) => {
+    const item = settings.tanks.items.find((row) => row.id === data?.id);
+    if (
+      !item ||
+      !Array.isArray(data.wet) ||
+      data.wet.length !== item.levelInputs.length ||
+      data.wet.some((v) => typeof v !== 'boolean')
+    )
+      return fail('Некорректные уровни бака');
+    item.levelInputs.forEach((id, index) => {
+      const channel = hardware.snapshot().inputs.find((row) => row.id === id);
+      hardware.setInputLevel(id, channel.activeHigh ? data.wet[index] : !data.wet[index]);
+    });
+    tankDriver.step();
+    irrigationDriver.step();
+    return { status: 200, data: { ok: true, ...snapshot('tanks') } };
+  };
+  engine.simulatedTanks = () =>
+    snapshot('tanks').items.map((item) => ({
+      ...item,
+      simulatedWet: item.levelInputs.map(
+        (id) => hardware.snapshot().inputs.find((row) => row.id === id)?.active === true,
+      ),
+    }));
   return engine;
 }
 module.exports = { createControllersMock };

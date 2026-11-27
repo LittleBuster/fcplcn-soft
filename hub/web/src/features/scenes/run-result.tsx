@@ -5,25 +5,10 @@ import { Icon } from '../../icons';
 import { time } from '../../model';
 import { actionLabel, readableError, resultLabels, runLabels } from './labels';
 
-/** Сохраняет видимость результата каждого действия, даже если сценарий выполнился лишь частично. */
-export function RunResult({
-  run,
-  collapsible = false,
-  onDismiss,
-  onDetailsChange,
-}: {
-  run: SceneRun;
-  collapsible?: boolean;
-  onDismiss?: () => void;
-  onDetailsChange?: (open: boolean) => void;
-}) {
-  const applied = run.results.filter((result) => result.status === 'applied').length;
-  const failed = run.results.filter(
-    (result) => !['pending', 'applied'].includes(result.status),
-  ).length;
-  const actions = run.results.length ? (
+export function SceneActionResults({ results }: { results: SceneRun['results'] }) {
+  return (
     <div class="scene-result-list">
-      {run.results.map((result) => (
+      {results.map((result) => (
         <div
           class={`scene-action-result result-${result.status}`}
           key={result.id}
@@ -40,7 +25,26 @@ export function RunResult({
         </div>
       ))}
     </div>
-  ) : null;
+  );
+}
+
+/** Сохраняет видимость результата каждого действия, даже если сценарий выполнился лишь частично. */
+export function RunResult({
+  run,
+  collapsible = false,
+  onDismiss,
+  onDetailsChange,
+}: {
+  run: SceneRun;
+  collapsible?: boolean;
+  onDismiss?: () => void;
+  onDetailsChange?: (open: boolean) => void;
+}) {
+  const applied = run.results.filter((result) => result.status === 'applied').length;
+  const failed = run.results.filter(
+    (result) => !['pending', 'applied'].includes(result.status),
+  ).length;
+  const actions = run.results.length ? <SceneActionResults results={run.results} /> : null;
 
   return (
     <div

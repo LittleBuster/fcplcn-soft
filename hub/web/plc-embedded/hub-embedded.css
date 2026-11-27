@@ -1,0 +1,22 @@
+/* Scoped to the packaged editor; standalone PLC assets do not load this adapter. */
+html[data-fcplcn-hub-embedded='true'] #logout,
+html[data-fcplcn-hub-embedded='true'] #login-form label,
+html[data-fcplcn-hub-embedded='true'] #login-form input {
+  display: none !important;
+}
+html[data-fcplcn-hub-embedded='true'] .shell {
+  max-width: 1300px;
+  margin: 0 auto;
+  padding: 20px;
+}
+html[data-fcplcn-hub-embedded='true'] .header {
+  margin-bottom: 20px;
+}
+html[data-fcplcn-notice-relay='true'] [data-fcplcn-action-notice] {
+  display: none !important;
+}
+@media (max-width: 600px) {
+  html[data-fcplcn-hub-embedded='true'] .shell {
+    padding: 14px;
+  }
+}

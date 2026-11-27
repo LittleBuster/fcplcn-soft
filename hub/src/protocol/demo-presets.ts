@@ -40,6 +40,8 @@ export function demoPresets(
     meteo: module(),
     thermostats: module(),
     security: security(),
+    tanks: module(),
+    irrigation: module(),
   });
   const outlet = (id: string, name: string, relay: number, state: boolean) => ({
     id,
@@ -124,6 +126,35 @@ export function demoPresets(
         ),
         thermostats: module(
           [thermostat('thermo-room', 'Отопление котельной', 'temp-utility', 3, 21)],
+          true,
+        ),
+        irrigation: module(
+          [
+            {
+              id: 'irrigation-garden',
+              name: 'Полив сада',
+              enabled: false,
+              relayId: 'rly-0/8',
+              tankId: 'tank-water',
+              days: [1, 3, 5],
+              startTime: '07:00',
+              durationMinutes: 15,
+            },
+          ],
+          true,
+        ),
+        tanks: module(
+          [
+            {
+              id: 'tank-water',
+              name: 'Бак с водой',
+              pumpRelayId: 'rly-0/6',
+              valveRelayId: 'rly-0/7',
+              levelInputs: ['in-0/6', 'in-0/7'],
+              fillLevel: 2,
+              enabled: true,
+            },
+          ],
           true,
         ),
       },

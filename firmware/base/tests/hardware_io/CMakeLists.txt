@@ -12,11 +12,14 @@ find_package(Threads REQUIRED)
 add_library(fcplcn_io_cjson STATIC "${FCPLCN_CJSON_DIR}/cJSON.c")
 target_include_directories(fcplcn_io_cjson PUBLIC "${FCPLCN_CJSON_DIR}")
 set(FCPLCN_IO_TEST_SOURCES io_test.cpp stubs/driver.cpp
-    "${FCPLCN_BASE_DIR}/main/hardware/hardware_io.cpp" "${FCPLCN_BASE_DIR}/main/hardware/board_profile.cpp"
+    "${FCPLCN_BASE_DIR}/main/hardware/hardware_io.cpp"
+    "${FCPLCN_BASE_DIR}/main/hardware/board_gpio.cpp"
+    "${FCPLCN_BASE_DIR}/main/hardware/board_profile.cpp"
     "${FCPLCN_BASE_DIR}/main/hardware/fram.cpp")
 foreach(target fcplcn_io_tests fcplcn_io_tick_tests)
     add_executable(${target} ${FCPLCN_IO_TEST_SOURCES})
-    target_include_directories(${target} PRIVATE stubs "${FCPLCN_BASE_DIR}/main")
+    target_include_directories(${target} PRIVATE stubs
+        "${FCPLCN_BASE_DIR}/main" "${FCPLCN_BASE_DIR}/main/platform")
     target_compile_definitions(${target} PRIVATE FCPLCN_HARDWARE_IO_TESTING=1)
     target_compile_options(${target} PRIVATE -Wall -Wextra -Werror)
     target_link_libraries(${target} PRIVATE fcplcn_io_cjson Threads::Threads)
@@ -31,7 +34,7 @@ if(FCPLCN_TEST_SANITIZERS AND CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
     target_link_options(fcplcn_io_tick_tests PRIVATE -fsanitize=address,undefined)
 endif()
 enable_testing()
-foreach(case fake_map safe_init relay_rmw raw_inputs failures missing_recovery scans concurrent
+foreach(case fake_map boot_gpio legacy_boot_gpio recovery_button safe_init relay_rmw raw_inputs failures missing_recovery scans concurrent
              emi_reset emi_layout emi_fields emi_readback emi_repair_faults off_revocation
              failed_on recovery_visibility controller_policy json_stale
              fram_transfer fram_bounds fram_failures fram_concurrent probe_adapter

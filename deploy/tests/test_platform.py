@@ -21,6 +21,9 @@ import unittest
 ROOT = Path(__file__).resolve().parents[2]
 PLATFORM = ROOT / "deploy" / "platform.sh"
 INSTALLER = ROOT / "install.sh"
+UPDATER = ROOT / "update.sh"
+MANAGER = ROOT / "deploy" / "manage.sh"
+ROLE_ENTRY_POINTS = ((INSTALLER, "install"), (UPDATER, "update"))
 
 
 # Use the actual Python executable for the doubles: neither PATH nor the host's
@@ -133,22 +136,23 @@ class PlatformBoundaryTests(unittest.TestCase):
             timeout=15,
         )
 
-    def cli(self, *arguments):
+    def cli(self, script, *arguments):
         return subprocess.run(
-            ["/bin/bash", str(INSTALLER), *arguments],
+            ["/bin/bash", str(script), *arguments],
             cwd=self.directory,
             env=self.environment,
+            stdin=subprocess.DEVNULL,
             text=True,
             capture_output=True,
             timeout=15,
         )
 
-    def terminal_cli(self, choices, *arguments):
+    def terminal_cli(self, script, choices, *arguments):
         """Exercise the real interactive entry point using a terminal for stdin."""
         master, slave = pty.openpty()
         process = None
         try:
-            command = ["/bin/bash", str(INSTALLER), *arguments]
+            command = ["/bin/bash", str(script), *arguments]
             process = subprocess.Popen(
                 command, cwd=self.directory, env=self.environment,
                 stdin=slave, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
@@ -193,45 +197,74 @@ class PlatformBoundaryTests(unittest.TestCase):
 
     def test_help_works_on_unsupported_host_without_dependencies(self):
         self.environment["FCPLCN_TEST_SYSTEM"] = "Windows_NT"
-        result = self.cli("--help")
-        self.assert_success(result)
-        self.assertIn("cloud", result.stdout)
-        self.assertIn("hub", result.stdout)
+        for script in (INSTALLER, UPDATER, MANAGER):
+            with self.subTest(script=script.name):
+                result = self.cli(script, "--help")
+                self.assert_success(result)
+                self.assertIn("cloud", result.stdout)
+                self.assertIn("hub", result.stdout)
         self.assertEqual(self.calls(), [])
 
-    def test_menus_dispatch_install_and_update_for_both_components(self):
-        for component, role in (("1", "cloud"), ("2", "hub")):
-            for choice, action in (("1", "install"), ("2", "update")):
+    def test_single_role_menu_dispatches_each_entry_point_for_both_components(self):
+        for script, action in ROLE_ENTRY_POINTS:
+            for choice, role in (("1", "cloud"), ("2", "hub")):
                 with self.subTest(role=role, action=action):
                     destination = self.directory / "deployment must not exist"
                     result = self.terminal_cli(
-                        component + "\n" + choice + "\n",
+                        script, choice + "\n",
                         "--dry-run", "--dir", str(destination),
                     )
                     self.assert_success(result)
-                    self.assertIn("1. Установка", result.stdout)
-                    self.assertIn("2. Обновление", result.stdout)
+                    self.assertIn("1. cloud", result.stdout)
+                    self.assertIn("2. hub", result.stdout)
+                    self.assertIn("0. Выход", result.stdout)
+                    self.assertNotIn("Выберите действие", result.stdout)
                     self.assertIn(f"FCPLCn {role}, действие {action}", result.stdout)
                     self.assertFalse(destination.exists())
         self.assert_no_mutations()
 
     def test_menu_exit_never_reaches_platform_or_dependencies(self):
-        for choices in ("0\n", "1\n0\n", "2\n0\n"):
-            with self.subTest(choices=choices):
-                self.assert_success(self.terminal_cli(choices))
+        for script, _ in ROLE_ENTRY_POINTS:
+            with self.subTest(script=script.name):
+                self.assert_success(self.terminal_cli(script, "0\n"))
         self.assertEqual(self.calls(), [])
 
     def test_invalid_menu_choices_retry_before_dispatching(self):
-        result = self.terminal_cli("wrong\n2\nwrong\n2\n", "--dry-run")
+        result = self.terminal_cli(UPDATER, "wrong\n2\n", "--dry-run")
         self.assert_success(result)
-        self.assertEqual(result.stdout.count("Введите 1, 2 или 0."), 2)
+        self.assertEqual(result.stdout.count("Введите 1, 2 или 0."), 1)
         self.assertIn("FCPLCn hub, действие update", result.stdout)
         self.assert_no_mutations()
 
-    def test_missing_action_never_defaults_to_install_without_a_terminal(self):
-        result = self.cli("hub", "--dry-run")
+    def test_missing_role_fails_safely_without_a_terminal(self):
+        for script, _ in ROLE_ENTRY_POINTS:
+            with self.subTest(script=script.name):
+                result = self.cli(script, "--dry-run")
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn(script.name, result.stderr)
+        self.assertEqual(self.calls(), [])
+
+    def test_old_install_update_command_redirects_to_the_updater(self):
+        result = self.cli(INSTALLER, "hub", "update", "--dry-run")
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn("выбора установки или обновления", result.stderr)
+        self.assertIn("update.sh", result.stderr)
+        self.assertEqual(self.calls(), [])
+
+    def test_legacy_explicit_install_syntax_is_supported(self):
+        result = self.cli(INSTALLER, "hub", "install", "--dry-run")
+        self.assert_success(result)
+        self.assertIn("FCPLCn hub, действие install", result.stdout)
+        self.assert_no_mutations()
+
+    def test_management_command_uses_its_own_entry_point(self):
+        result = self.cli(MANAGER, "cloud", "status", "--dry-run")
+        self.assert_success(result)
+        self.assertIn("FCPLCn cloud, действие status", result.stdout)
+        self.assert_no_mutations()
+
+    def test_unsupported_update_action_fails_before_bootstrap(self):
+        result = self.cli(UPDATER, "hub", "install", "--dry-run")
+        self.assertNotEqual(result.returncode, 0)
         self.assertEqual(self.calls(), [])
 
     def test_debian_13_uses_debian_repository_codename(self):
@@ -305,11 +338,28 @@ fcplcn_linux_dependencies
         self.assert_success(result)
         self.assert_no_mutations()
 
+    def test_update_bootstrap_checks_existing_tools_without_installing_host_packages(self):
+        for system, machine in (("Linux", "x86_64"), ("Darwin", "arm64")):
+            with self.subTest(system=system):
+                self.environment.update(FCPLCN_TEST_SYSTEM=system, FCPLCN_TEST_MACHINE=machine)
+                result = self.shell("""
+fcplcn_linux_dependencies() { return 99; }
+fcplcn_macos_dependencies() { return 99; }
+fcplcn_bootstrap hub update 0
+""")
+                self.assert_success(result)
+        self.assert_no_mutations()
+
     def test_cli_dry_run_does_not_create_a_deployment(self):
         before = sorted(str(path.relative_to(self.home)) for path in self.home.rglob("*"))
         state = self.directory / "deployment"
-        result = self.cli("hub", "install", "--dry-run", "--dir", str(state))
-        self.assert_success(result)
+        for script, action in ROLE_ENTRY_POINTS:
+            for role in ("hub", "cloud"):
+                with self.subTest(role=role, action=action):
+                    result = self.cli(script, role, "--dry-run", "--dir", str(state))
+                    self.assert_success(result)
+                    self.assertIn(f"FCPLCn {role}, действие {action}", result.stdout)
+                    self.assertNotIn("Выберите пункт", result.stdout)
         self.assert_no_mutations()
         self.assertFalse(state.exists())
         after = sorted(str(path.relative_to(self.home)) for path in self.home.rglob("*"))

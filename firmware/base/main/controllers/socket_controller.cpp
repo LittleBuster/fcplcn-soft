@@ -27,8 +27,8 @@
 #include "nvs.h"
 #include "config/settings_json.h"
 #include "config/model.h"
-#include "system/runtime_supervisor.h"
-#include "util/checksum.h"
+#include "platform/runtime_supervisor.h"
+#include "platform/checksum.h"
 
 using namespace fcplcn::controllers::detail;
 
@@ -100,7 +100,8 @@ controller_set_state(ControllerKind kind, std::string_view id, bool on, std::str
         return SocketResult::NotFound;
     }
     if (kind == ControllerKind::Meteo || kind == ControllerKind::Thermostats
-        || kind == ControllerKind::Security) {
+        || kind == ControllerKind::Security || kind == ControllerKind::Tanks
+        || kind == ControllerKind::Irrigation) {
         error = "Этот контроллер не поддерживает ручное SET";
         return SocketResult::InvalidInput;
     }
@@ -144,7 +145,8 @@ ControllerResult controller_set_state_until(ControllerKind kind,
         return SocketResult::NotFound;
     }
     if (kind == ControllerKind::Meteo || kind == ControllerKind::Thermostats
-        || kind == ControllerKind::Security) {
+        || kind == ControllerKind::Security || kind == ControllerKind::Tanks
+        || kind == ControllerKind::Irrigation) {
         error = "Этот контроллер не поддерживает ручное SET";
         return SocketResult::InvalidInput;
     }
@@ -242,6 +244,16 @@ ControllerResult controllers_set_relay(std::string_view relayId, bool on, std::s
         error = "Реле принадлежит сирене охраны: ручное управление запрещено";
         return SocketResult::Conflict;
     }
+    for (const auto& rule : configurations[index(ControllerKind::Irrigation)].items)
+        if (rule.relayId == relayId) {
+            error = "Реле принадлежит автоматике полива";
+            return SocketResult::Conflict;
+        }
+    for (const auto& item : configurations[index(ControllerKind::Tanks)].items)
+        if (relayId == item.pumpRelayId || relayId == item.valveRelayId) {
+            error = "Реле принадлежит автоматике бака";
+            return SocketResult::Conflict;
+        }
     for (const auto& item : configurations[index(ControllerKind::Thermostats)].items)
         if (relayId == item.relayId) {
             error = "Реле принадлежит термостату: ручное управление запрещено";
@@ -292,6 +304,10 @@ ControllerResult controller_update(ControllerKind kind, const cJSON* request, st
         return expired(error);
     if (!initialized || worker_error != ESP_OK)
         return unavailable(error, "Автономные контроллеры недоступны");
+    if (kind == ControllerKind::Irrigation)
+        return update_irrigation_locked(request, error);
+    if (kind == ControllerKind::Tanks)
+        return update_tanks_locked(request, error);
     if (kind == ControllerKind::Meteo)
         return update_meteo_locked(request, error);
     if (kind == ControllerKind::Security)
@@ -421,15 +437,20 @@ ControllerResult controller_update(ControllerKind kind, const cJSON* request, st
  * @cond FCPLCN_SOURCE_CONTRACTS
  * @brief Copy one module's config, confirmed state and cached diagnostics under one lock.
  * @param kind Module to inspect.
+ * @param includeRemoteTanks Include the bounded private catalogue in an irrigation snapshot.
  * @return Owned JSON snapshot, or nullptr for an invalid kind/allocation failure.
  * @endcond
  */
-cJSON* controller_status_json(ControllerKind kind)
+cJSON* controller_status_json(ControllerKind kind, bool includeRemoteTanks)
 {
     if (!valid_kind(kind))
         return nullptr;
     std::lock_guard<std::mutex> lock(controller_mutex);
-    return status_locked(kind);
+    Json result(status_locked(kind), cJSON_Delete);
+    if (result && kind == ControllerKind::Irrigation && includeRemoteTanks
+        && !add_remote_tanks(result.get()))
+        return nullptr;
+    return result.release();
 }
 
 /**

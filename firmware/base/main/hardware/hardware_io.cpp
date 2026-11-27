@@ -7,16 +7,16 @@
  * ownership revokes ON before any fault repair, while Buffered outputs retain
  * their last confirmed RAM intent. No owner callback runs under the I/O mutex.
  */
-#include "hardware/hardware_io.h"
-#include "util/operation_context.h"
+#include "hardware_io.h"
+#include "operation_context.h"
 
 #include <array>
 #include <memory>
 #include <mutex>
 #include <vector>
 
-#include "hardware/board_profile.h"
-#include "system/runtime_supervisor.h"
+#include "board_profile.h"
+#include "runtime_supervisor.h"
 #include "cJSON.h"
 #include "driver/gpio.h"
 #include "driver/i2c_master.h"

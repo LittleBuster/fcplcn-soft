@@ -78,6 +78,25 @@ export function createControllersUI(context) {
         sensorType: item.sensorType,
         address: item.address,
       }));
+    if (model?.isIrrigation)
+      return items.map(({ id, name, relayId, tankId = '', days, startTime, durationMinutes }) => ({
+        id,
+        name,
+        relayId,
+        tankId,
+        days: [...days],
+        startTime,
+        durationMinutes: Number(durationMinutes),
+      }));
+    if (model?.isTank)
+      return items.map(({ id, name, pumpRelayId, valveRelayId, levelInputs, fillLevel }) => ({
+        id,
+        name,
+        pumpRelayId: pumpRelayId || '',
+        valveRelayId: valveRelayId || '',
+        levelInputs: [...levelInputs],
+        fillLevel: Number(fillLevel),
+      }));
     if (model?.isThermostat)
       return items.map((item) => ({
         id: item.id,
@@ -163,20 +182,32 @@ export function createControllersUI(context) {
             ? typeof item.portId === 'string' &&
               ['dht22', 'onewire'].includes(item.sensorType) &&
               typeof item.address === 'string'
-            : model.isThermostat
-              ? typeof item.meteoId === 'string' &&
-                typeof item.relayId === 'string' &&
-                typeof item.inputId === 'string' &&
-                typeof item.enabled === 'boolean' &&
-                ['heating', 'cooling'].includes(item.mode) &&
-                Number.isFinite(item.setpointC) &&
-                Number.isFinite(item.hysteresisC)
-              : typeof item.relayId === 'string' && typeof item.inputId === 'string'),
+            : model.isIrrigation
+              ? context.irrigationParametersValid(item) && typeof item.enabled === 'boolean'
+              : model.isTank
+                ? typeof item.pumpRelayId === 'string' &&
+                  typeof item.valveRelayId === 'string' &&
+                  Array.isArray(item.levelInputs) &&
+                  item.levelInputs.length >= 1 &&
+                  item.levelInputs.length <= 3 &&
+                  item.levelInputs.every((id) => typeof id === 'string') &&
+                  Number.isInteger(item.fillLevel) &&
+                  typeof item.enabled === 'boolean'
+                : model.isThermostat
+                  ? typeof item.meteoId === 'string' &&
+                    typeof item.relayId === 'string' &&
+                    typeof item.inputId === 'string' &&
+                    typeof item.enabled === 'boolean' &&
+                    ['heating', 'cooling'].includes(item.mode) &&
+                    Number.isFinite(item.setpointC) &&
+                    Number.isFinite(item.hysteresisC)
+                  : typeof item.relayId === 'string' && typeof item.inputId === 'string'),
       ) ||
       new Set(snapshot.items.map((item) => item.id)).size !== snapshot.items.length ||
       (model.isMeteo
         ? !Array.isArray(snapshot.ports?.sensors)
-        : !Array.isArray(snapshot.ports?.relays) || !Array.isArray(snapshot.ports?.inputs))
+        : !Array.isArray(snapshot.ports?.relays) ||
+          (!model.isIrrigation && !Array.isArray(snapshot.ports?.inputs)))
     ) {
       throw new Error('Контроллер вернул неверный формат настроек.');
     }
@@ -213,7 +244,21 @@ export function createControllersUI(context) {
   }
 
   function acceptControllersSnapshot(snapshot, replaceIds = []) {
-    for (const model of controllers) validateControllerSnapshot(snapshot?.[model.id], model);
+    const supported = controllers.filter(
+      (model) => !model.isIrrigation || snapshot?.irrigation !== undefined,
+    );
+    const irrigation = controllers.find((model) => model.isIrrigation);
+    if (irrigation) {
+      const missing = !supported.includes(irrigation);
+      document.querySelector('[data-controller-id="irrigation"]').hidden = missing;
+      if (missing) {
+        irrigation.loaded = irrigation.fresh = false;
+        irrigation.snapshot = null;
+        irrigation.remoteTanks = [];
+        if (state.controllersView === irrigation.id) state.controllersView = '';
+      }
+    }
+    for (const model of supported) validateControllerSnapshot(snapshot?.[model.id], model);
     if (!Array.isArray(snapshot.resources)) throw new Error('Контроллер не вернул каталог портов.');
     state.controllerResources = snapshot.resources.filter(
       (resource) =>
@@ -221,7 +266,7 @@ export function createControllersUI(context) {
         typeof resource.id === 'string' &&
         ['relay', 'input', 'sensor'].includes(resource.kind),
     );
-    for (const model of controllers)
+    for (const model of supported)
       acceptControllerSnapshot(model, snapshot[model.id], replaceIds.includes(model.id));
     if (state.controllersView === 'meteo' && controllersActive()) {
       const meteo = controllers.find((model) => model.isMeteo);
@@ -235,6 +280,13 @@ export function createControllersUI(context) {
       }
     }
     renderControllers();
+    if (state.initialIrrigationRule) {
+      if (state.controllersView === 'irrigation') {
+        const rule = byId('irrigation-' + state.initialIrrigationRule + '-name');
+        (rule || byId('irrigation-page-title')).focus();
+      }
+      state.initialIrrigationRule = '';
+    }
   }
 
   /**
@@ -272,11 +324,15 @@ export function createControllersUI(context) {
           add(source?.readerPortId, model.id, 'reader', 'Считыватель iButton');
         }
       for (const item of model.snapshot?.items || []) {
+        for (const port of [item.pumpRelayId, item.valveRelayId, ...(item.levelInputs || [])])
+          add(port, model.id, item.id, item.name);
         add(item.relayId, model.id, item.id, item.name);
         add(item.inputId, model.id, item.id, item.name);
         add(item.portId, model.id, item.id, item.name, item.sensorType, item.address);
       }
       for (const item of model.draft) {
+        for (const port of [item.pumpRelayId, item.valveRelayId, ...(item.levelInputs || [])])
+          add(port, model.id, item.id, item.name);
         add(item.relayId, model.id, item.id, item.name);
         add(item.inputId, model.id, item.id, item.name);
         add(item.portId, model.id, item.id, item.name, item.sensorType, item.address);
@@ -392,7 +448,14 @@ export function createControllersUI(context) {
     const action = state.controllersAction;
     const ownAction = action?.controllerId === model.id;
     const resourceConflict = (snapshot?.items || []).some((item) =>
-      [item.relayId, item.inputId, item.portId].some(
+      [
+        item.relayId,
+        item.inputId,
+        item.portId,
+        item.pumpRelayId,
+        item.valveRelayId,
+        ...(item.levelInputs || []),
+      ].some(
         (id) =>
           id &&
           state.controllerResources.some((resource) => resource.id === id && resource.conflict),
@@ -455,16 +518,28 @@ export function createControllersUI(context) {
     const inputs = snapshot?.ports.inputs || [];
     const freeBinding = model.isSecurity
       ? inputs.find((id) => !claims.some((claim) => claim.portId === id))
-      : model.isMeteo
-        ? newMeteoBinding(model, claims)
-        : relays.find((id) => !claims.some((claim) => claim.portId === id));
+      : model.isIrrigation
+        ? context.newIrrigationBinding(model, claims)
+        : model.isTank
+          ? context.newTankBinding(model, claims)
+          : model.isMeteo
+            ? newMeteoBinding(model, claims)
+            : relays.find((id) => !claims.some((claim) => claim.portId === id));
     byId(`${model.id}-add`).disabled =
       !model.loaded || state.controllersBusy || model.draft.length >= 16 || !freeBinding;
     byId(`${model.id}-save`).disabled =
       !model.loaded || state.controllersBusy || !state.dirty.has(model.dirtyKey);
+    const saving = ownAction && action.kind === 'save';
+    byId(`${model.id}-save`).setAttribute('aria-busy', String(saving));
     byId(`${model.id}-reload`).disabled = state.controllersBusy;
-    byId(`${model.id}-save`).textContent =
-      ownAction && action.kind === 'save' ? 'Сохранение…' : 'Сохранить настройки';
+    byId(`${model.id}-save`).textContent = saving ? 'Сохранение…' : 'Сохранить настройки';
+    document.querySelector(`[data-save-state="${model.dirtyKey}"]`).textContent = saving
+      ? 'Сохраняем настройки…'
+      : state.dirty.has(model.dirtyKey)
+        ? 'Есть несохранённые изменения'
+        : model.loaded
+          ? 'Все изменения сохранены'
+          : '';
     byId(`${model.id}-empty`).hidden = model.draft.length > 0;
     const emptyIcon = controllerIcon(model);
     iconHeading(
@@ -487,7 +562,11 @@ export function createControllersUI(context) {
             ? createMeteoCard(model, item)
             : model.isThermostat
               ? createThermostatCard(model, item)
-              : createControllerCard(model, item);
+              : model.isTank
+                ? context.createTankCard(model, item)
+                : model.isIrrigation
+                  ? context.createIrrigationCard(model, item)
+                  : createControllerCard(model, item);
         container.append(card);
       }
       retained.add(item.id);
@@ -510,6 +589,14 @@ export function createControllersUI(context) {
       }
       if (model.isMeteo) {
         renderMeteoCard(card, model, item, claims);
+        continue;
+      }
+      if (model.isIrrigation) {
+        context.renderIrrigationCard(card, model, item, claims);
+        continue;
+      }
+      if (model.isTank) {
+        context.renderTankCard(card, model, item, claims);
         continue;
       }
       if (model.isThermostat) {
@@ -619,6 +706,25 @@ export function createControllersUI(context) {
       state.controllersTimer = window.setTimeout(pollControllers, delay);
   }
 
+  async function refreshRemoteTanks(sessionVersion, generation) {
+    if (state.controllersView !== 'irrigation') return;
+    const model = controllers.find((entry) => entry.isIrrigation);
+    if (!model?.loaded) return;
+    // The aggregate controller snapshot keeps the port claims. Remote tank names and
+    // identities use a separate read so they do not enlarge ordinary controller polling.
+    const reply = await api('/controllers/irrigation', {}, false).catch(() => null);
+    if (
+      reply &&
+      controllersActive() &&
+      state.controllersView === 'irrigation' &&
+      sessionVersion === state.sessionVersion &&
+      generation === state.controllersGeneration
+    ) {
+      model.remoteTanks = Array.isArray(reply.remoteTanks) ? reply.remoteTanks : [];
+      renderControllers();
+    }
+  }
+
   async function pollControllers() {
     if (!controllersActive() || state.controllersPending || state.controllersBusy) return;
     const generation = state.controllersGeneration;
@@ -632,6 +738,7 @@ export function createControllersUI(context) {
           sessionVersion === state.sessionVersion
         ) {
           acceptControllersSnapshot(snapshot);
+          if (!state.controllersBusy) await refreshRemoteTanks(sessionVersion, generation);
           if (!state.controllersBusy) await pollMeteoScan(sessionVersion, generation);
         }
       } catch (error) {
@@ -789,9 +896,12 @@ export function createControllersUI(context) {
   }
 
   async function refreshControllerResources(sessionVersion, replaceIds = []) {
+    const generation = state.controllersGeneration;
     const snapshot = await api('/controllers');
-    if (state.authenticated && sessionVersion === state.sessionVersion)
+    if (state.authenticated && sessionVersion === state.sessionVersion) {
       acceptControllersSnapshot(snapshot, replaceIds);
+      await refreshRemoteTanks(sessionVersion, generation);
+    }
   }
 
   function setControllerEnabled(model) {
@@ -846,6 +956,10 @@ export function createControllersUI(context) {
         validateSecuritySettings(model, items, claims);
       } else if (model.isMeteo) {
         validateMeteoSettings(model, items, claims);
+      } else if (model.isIrrigation) {
+        context.validateIrrigationSettings(model, items, claims);
+      } else if (model.isTank) {
+        context.validateTankSettings(model, items, claims);
       } else if (model.isThermostat) {
         validateThermostatSettings(model, items, claims);
       } else {
@@ -903,6 +1017,7 @@ export function createControllersUI(context) {
         notice: '',
         noticeKind: '',
         ...(model.isSecurity ? { common: null, scan: null } : {}),
+        ...(model.isIrrigation ? { remoteTanks: [] } : {}),
       });
       model.errors.clear();
       model.uncertain.clear();

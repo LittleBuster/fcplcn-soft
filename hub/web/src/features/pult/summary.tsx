@@ -6,6 +6,7 @@ import { Icon } from '../../icons';
 import { deviceName, temperature, text } from '../../model';
 import { canConfigure } from '../../portal';
 import { pultAirReading, type PultEntry } from './model';
+import { PultNetworkSummary } from './network-summary';
 import { TemperatureSettings } from './temperature-settings';
 
 /** Приоритет тревоги выше отсутствующей связи; неподтверждённые модули не выглядят снятыми. */
@@ -85,9 +86,6 @@ export function PultSummary({
     setEditing(false);
     configureButton.current?.focus({ preventScroll: true });
   };
-  const online = connected
-    ? snapshot.devices.filter((device) => device.online && device.status === 'online').length
-    : 0;
   return (
     <>
       <div class="pult-summary">
@@ -145,25 +143,7 @@ export function PultSummary({
             ) : null}
           </div>
         </section>
-        <section class="pult-summary-card pult-summary-network" aria-label="Связь с устройствами">
-          <span class="pult-summary-icon">
-            <Icon name="wifi" />
-          </span>
-          <div>
-            <span class="pult-summary-label">Устройства</span>
-            <strong>
-              {online}
-              <span class="pult-summary-total"> / {snapshot.devices.length}</span>
-            </strong>
-            <small>
-              {!connected
-                ? 'Управление недоступно'
-                : online === snapshot.devices.length && online > 0
-                  ? 'Все устройства на связи'
-                  : 'На связи с хабом'}
-            </small>
-          </div>
-        </section>
+        <PultNetworkSummary snapshot={snapshot} connected={connected} />
       </div>
       {editing && canConfigure ? (
         <TemperatureSettings

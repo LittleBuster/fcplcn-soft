@@ -1,26 +1,53 @@
-/** @file Журнал команд с разделением подтверждённых и неизвестных результатов. */
+/** @file История управления домом и связи с контроллерами. */
+import { useState } from 'preact/hooks';
 import type { HubSnapshot } from '../../../shared/types.js';
 import { CommandLog } from '../components';
+import { DeviceConnectionHistory } from '../features/activity/connection-history';
+import { DeviceOutages } from '../features/activity/outages';
+import { SceneRuns } from '../features/activity/scene-runs';
 import { Icon } from '../icons';
+import { portal } from '../portal';
+import '../features/activity/activity.css';
 
-/** Команда считается выполненной только после подтверждения соответствующего PLC. */
+const sections = [
+  { id: 'commands', label: 'Команды', icon: 'activity' },
+  { id: 'scenes', label: 'Сценарии', icon: 'prepare' },
+  { id: 'outages', label: 'Связь с PLC', icon: 'wifi' },
+] as const;
+
 export function ActivityPage({ snapshot }: { snapshot: HubSnapshot }) {
-  const devices = snapshot.devices;
+  const [section, setSection] = useState<(typeof sections)[number]['id']>('commands');
   return (
     <>
-      <div class="section-heading">
-        <h2>
-          <Icon name="activity" />
-          Последние команды
-        </h2>
-        <span class="section-meta">{snapshot.commands.length} в журнале</span>
+      <div class="activity-sections" role="group" aria-label="Раздел журнала">
+        {sections.map(({ id, label, icon }) => (
+          <button
+            type="button"
+            key={id}
+            aria-pressed={section === id}
+            onClick={() => setSection(id)}
+          >
+            <Icon name={icon} />
+            {label}
+          </button>
+        ))}
       </div>
-      <CommandLog commands={snapshot.commands} devices={devices} />
-      <p class="activity-note">
-        <Icon name="check" />
-        «Выполнено» означает, что PLC вернул подтверждение. Потерянное подтверждение отображается
-        отдельно.
-      </p>
+      {section === 'commands' && (
+        <CommandLog commands={snapshot.commands} devices={snapshot.devices} />
+      )}
+      {section === 'scenes' && <SceneRuns runs={snapshot.scenes.runs} />}
+      {section === 'outages' && (
+        <>
+          {!portal && (
+            <DeviceConnectionHistory
+              devices={snapshot.devices}
+              outages={snapshot.outages ?? []}
+              now={snapshot.now}
+            />
+          )}
+          <DeviceOutages outages={snapshot.outages ?? []} now={snapshot.now} />
+        </>
+      )}
     </>
   );
 }

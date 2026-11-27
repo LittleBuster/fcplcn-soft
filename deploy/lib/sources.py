@@ -66,10 +66,18 @@ def tree_digest(root):
 
 def schema_digest(source, role):
     digest = hashlib.sha256()
+    source = Path(source)
     if role == "cloud":
-        paths = sorted((Path(source) / "cloud/server/migrations").glob("*.sql"))
-        for path in paths:
-            digest.update(path.name.encode() + b"\0" + path.read_bytes())
+        paths = sorted((source / "cloud/server/migrations").glob("*.sql"))
+    else:
+        # The hub used files prior to this Compose startup script. New SQL migrations
+        # extend the digest while older hub records keep the empty legacy digest.
+        paths = sorted((source / "hub/server/migrations").glob("*.sql"))
+        bootstrap = source / "hub/deploy/postgres-init.sh"
+        if bootstrap.is_file():
+            paths.insert(0, bootstrap)
+    for path in paths:
+        digest.update(path.name.encode() + b"\0" + path.read_bytes())
     return digest.hexdigest()
 
 

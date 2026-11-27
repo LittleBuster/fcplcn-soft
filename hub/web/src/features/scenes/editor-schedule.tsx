@@ -6,10 +6,16 @@ import type { SceneEditorProps } from './types';
 import type { SceneEditorModel } from './use-scene-editor';
 
 type EditorScheduleProps = Pick<SceneEditorProps, 'disabled'> &
-  Pick<SceneEditorModel, 'schedule' | 'setSchedule' | 'saving'>;
+  Pick<SceneEditorModel, 'schedule' | 'setSchedule' | 'saving'> & { paused: boolean };
 
 /** Меняет дни, время и часовой пояс только в черновике редактора. */
-export function EditorSchedule({ disabled, schedule, setSchedule, saving }: EditorScheduleProps) {
+export function EditorSchedule({
+  disabled,
+  paused,
+  schedule,
+  setSchedule,
+  saving,
+}: EditorScheduleProps) {
   return (
     <section class="scene-schedule-settings">
       <h3>
@@ -42,9 +48,11 @@ export function EditorSchedule({ disabled, schedule, setSchedule, saving }: Edit
         </label>
       </div>
       <p>
-        {schedule.enabled
-          ? 'Сценарий запускается в выбранные дни и время. Кнопка ручного запуска тоже доступна.'
-          : 'Только вручную — нажатием кнопки сценария.'}
+        {!schedule.enabled
+          ? 'Только вручную — нажатием кнопки сценария.'
+          : paused
+            ? 'Расписание выключено. Включить его можно на вкладке «Сценарии» пульта.'
+            : 'Сценарий запускается в выбранные дни и время. Кнопка ручного запуска тоже доступна.'}
       </p>
       <fieldset class="scene-schedule-fields" disabled={!schedule.enabled || disabled || saving}>
         <legend class="visually-hidden">Параметры расписания</legend>

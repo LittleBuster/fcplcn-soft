@@ -13,6 +13,10 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { join } from 'node:path';
+import type { ActivityActor } from '../shared/activity.js';
+import { currentActivity, withActivity } from './activity-context.js';
+import type { HubDatabase } from './database.js';
+import { PostgresSceneJournal, type RecordedSceneCommand } from './scene-journal.js';
 import {
   sceneIds,
   type DeviceView,
@@ -34,7 +38,7 @@ const MAX_SCENES = 32;
 const MAX_RUNS = 20;
 const MAX_RESULTS = 320;
 const MAX_FILE_BYTES = 16 * 1024 * 1024;
-const writable = ['sockets', 'lights', 'thermostats', 'security'];
+const writable = ['sockets', 'lights', 'thermostats', 'security', 'tanks', 'irrigation'];
 const runStates = ['running', 'completed', 'partial', 'failed', 'empty', 'interrupted'];
 const resultStates = ['pending', 'applied', 'rejected', 'unknown', 'unavailable', 'skipped'];
 
@@ -78,6 +82,16 @@ function text(value: unknown, maximum: number): value is string {
     typeof value === 'string' &&
     Buffer.byteLength(value) <= maximum &&
     !/[\x00-\x1f\x7f]/.test(value)
+  );
+}
+
+function validActor(value: unknown): value is ActivityActor {
+  return (
+    object(value) &&
+    only(value, ['source', 'name', 'id']) &&
+    ['web', 'cloud', 'telegram', 'schedule', 'key', 'system'].includes(value.source as string) &&
+    text(value.name, 256) &&
+    (value.id === undefined || text(value.id, 256))
   );
 }
 
@@ -131,7 +145,7 @@ function fixedDefinitions(demo: boolean): SceneDefinition[] {
     {
       id: 'prepare',
       name: 'Готовлюсь',
-      description: 'Выполнить назначенные действия света, розеток, термостатов и охраны.',
+      description: 'Выполнить назначенные действия оборудования и охраны.',
       revision: 1,
       builtin: true,
       schedule: null,
@@ -167,15 +181,17 @@ function fixedDefinitions(demo: boolean): SceneDefinition[] {
 const legacyBuiltinDescriptions: Record<string, string> = {
   home: 'Снять охрану на всех PLC, затем выполнить назначенные действия.',
   away: 'Поставить все PLC на охрану, затем выполнить назначенные действия.',
+  prepare: 'Выполнить назначенные действия света, розеток, термостатов и охраны.',
 };
 
 /** @brief Validate wall-clock scheduling data; execution/once-per-slot claims belong to the scheduler. */
-function decodeSchedule(value: unknown): SceneSchedule | null {
+function decodeSchedule(value: unknown, previouslyPaused?: boolean): SceneSchedule | null {
   if (value === undefined || value === null) return null;
   if (
     !object(value) ||
-    !only(value, ['enabled', 'days', 'time', 'timeZone']) ||
+    !only(value, ['enabled', 'paused', 'days', 'time', 'timeZone']) ||
     typeof value.enabled !== 'boolean' ||
+    (value.paused !== undefined && typeof value.paused !== 'boolean') ||
     !Array.isArray(value.days) ||
     !value.days.length ||
     value.days.length > 7 ||
@@ -194,8 +210,10 @@ function decodeSchedule(value: unknown): SceneSchedule | null {
   } catch {
     throw new SceneError('Неизвестный часовой пояс расписания', 400);
   }
+  const paused = value.paused ?? previouslyPaused;
   return {
     enabled: value.enabled,
+    ...(value.enabled && paused !== undefined ? { paused } : {}),
     days: [...(value.days as number[])].sort((a, b) => a - b),
     time: value.time,
     timeZone: value.timeZone,
@@ -259,6 +277,7 @@ export class Scenes {
   constructor(
     private readonly engine: HubEngine,
     options: { directory?: string; demo?: boolean } = {},
+    private readonly journal?: PostgresSceneJournal,
   ) {
     this.definitions = fixedDefinitions(options.demo === true);
     if (options.directory) {
@@ -267,6 +286,28 @@ export class Scenes {
       if (existsSync(this.path)) this.load();
       else this.persist();
     }
+  }
+
+  /** Load the operational scene file and the PostgreSQL journal before accepting any commands. */
+  static async open(
+    engine: HubEngine,
+    options: { directory?: string; demo?: boolean; database?: HubDatabase } = {},
+  ): Promise<Scenes> {
+    const journal =
+      options.database && !options.demo ? new PostgresSceneJournal(options.database) : undefined;
+    const scenes = new Scenes(engine, options, journal);
+    if (!journal) return scenes;
+    const runs = (await journal.open(scenes.runs, MAX_RUNS)).map((value) =>
+      scenes.decodeRun(value),
+    );
+    const incomplete = runs.filter(
+      (run) => run.status === 'running' || run.status === 'interrupted',
+    );
+    const commands = await journal.commandResults(incomplete.map((run) => run.id));
+    for (const run of incomplete)
+      if (scenes.recoverRun(run, commands.get(run.id))) await scenes.persistRun(run);
+    scenes.runs = runs.slice(0, MAX_RUNS);
+    return scenes;
   }
 
   /** @brief Return detached editable definitions and truthful per-target outcomes. */
@@ -334,10 +375,30 @@ export class Scenes {
       schedule:
         metadata.schedule === undefined
           ? (current.schedule ?? null)
-          : decodeSchedule(metadata.schedule),
+          : decodeSchedule(metadata.schedule, current.schedule?.paused),
     };
     this.knownTargets(copy.actions);
-    const next = this.definitions.map((definition) => (definition.id === id ? copy : definition));
+    return this.replaceDefinition(copy);
+  }
+
+  /** Pause or resume only future runs, even when the participating PLCs are offline. */
+  setScheduleEnabled(id: SceneId, baseRevision: number, enabled: boolean): SceneDefinition {
+    this.mutable();
+    const current = this.definition(id);
+    this.checkRevision(current, baseRevision);
+    if (!current.schedule?.enabled) throw new SceneError('У сценария нет расписания', 400);
+    if (enabled === !current.schedule.paused) return structuredClone(current);
+    return this.replaceDefinition({
+      ...current,
+      revision: current.revision + 1,
+      schedule: { ...current.schedule, paused: !enabled },
+    });
+  }
+
+  private replaceDefinition(copy: SceneDefinition): SceneDefinition {
+    const next = this.definitions.map((definition) =>
+      definition.id === copy.id ? copy : definition,
+    );
     this.persist(next);
     this.definitions = next;
     return structuredClone(copy);
@@ -356,6 +417,55 @@ export class Scenes {
 
   /** @brief Save a complete plan first, then start one bounded background run without retries. */
   run(id: SceneId, trigger: 'manual' | 'schedule' = 'manual'): SceneRun {
+    if (this.journal) throw new SceneError('Для журнала PostgreSQL используйте startRun', 503);
+    const { run, planned } = this.plan(id, trigger);
+    const next = [run, ...this.runs].slice(0, MAX_RUNS);
+    this.persist(this.definitions, next);
+    try {
+      this.activate(run, planned, next);
+    } catch (error) {
+      this.persist();
+      throw error;
+    }
+    return structuredClone(run);
+  }
+
+  /** Reserve the active slot during the initial database commit. */
+  async startRun(
+    id: SceneId,
+    trigger: 'manual' | 'schedule' = 'manual',
+    signal?: AbortSignal,
+  ): Promise<SceneRun> {
+    if (signal?.aborted) throw new SceneError('Срок запроса истёк до отправки', 408);
+    if (!this.journal) return this.run(id, trigger);
+    const { run, planned } = this.plan(id, trigger);
+    const next = [run, ...this.runs].slice(0, MAX_RUNS);
+    this.active = run;
+    try {
+      await this.persistRun(run, true);
+      if (this.stopped || this.active !== run)
+        throw new SceneError('Сервис сценариев остановлен до отправки действий', 503);
+      if (signal?.aborted) {
+        const error = new SceneError('Срок запроса истёк до отправки', 408);
+        this.runs = next;
+        this.interruptBeforeDispatch(run, error);
+        await this.persistRun(run);
+        throw error;
+      }
+      try {
+        this.activate(run, planned, next);
+      } catch (error) {
+        await this.persistRun(run);
+        throw error;
+      }
+      return structuredClone(run);
+    } catch (error) {
+      if (this.active === run) this.active = null;
+      throw error;
+    }
+  }
+
+  private plan(id: SceneId, trigger: 'manual' | 'schedule') {
     this.mutable();
     if (trigger !== 'manual' && trigger !== 'schedule')
       throw new SceneError('Неизвестный источник запуска', 400);
@@ -390,11 +500,22 @@ export class Scenes {
           snapshot.broker.connected,
         ),
       );
+    const origin: ActivityActor | undefined =
+      trigger === 'schedule'
+        ? { source: 'schedule', name: 'Расписание' }
+        : (currentActivity()?.actor ??
+          (this.journal ? { source: 'system', name: 'Хаб' } : undefined));
+    const actor = origin && {
+      source: origin.source,
+      name: readable(origin.name, 'Хаб', 256),
+      ...(origin.id && { id: readable(origin.id, '', 256) }),
+    };
     const run: SceneRun = {
       id: randomUUID(),
       sceneId: id,
       name: definition.name,
       trigger,
+      ...(actor && { actor }),
       status: planned.some((target) => target.result.status === 'pending') ? 'running' : 'empty',
       startedAt: new Date().toISOString(),
       completedAt: null,
@@ -405,33 +526,41 @@ export class Scenes {
       run.status = this.resultStatus(run);
       run.completedAt = new Date().toISOString();
     }
-    const next = [run, ...this.runs].slice(0, MAX_RUNS);
-    // No physical command is dispatched unless the plan is durably committed first.
-    this.persist(this.definitions, next);
-    if ((id === 'home' || id === 'away') && this.houseSecurity) {
+    return { run, planned };
+  }
+
+  /** Dispatch only after the caller has committed the complete plan. */
+  private activate(run: SceneRun, planned: PlannedTarget[], next: SceneRun[]): void {
+    this.runs = next;
+    if ((run.sceneId === 'home' || run.sceneId === 'away') && this.houseSecurity) {
       try {
         this.houseSecurity.accept(run);
       } catch (error) {
-        run.status = 'interrupted';
-        run.completedAt = new Date().toISOString();
-        run.error = readable((error as Error).message, 'Общее намерение охраны не сохранено');
-        for (const result of run.results)
-          if (result.status === 'pending') {
-            result.status = 'unavailable';
-            result.error = run.error;
-          }
-        this.runs = next;
-        this.persist();
+        this.interruptBeforeDispatch(run, error);
         throw error;
       }
     }
-    this.runs = next;
     if (run.status === 'running') {
       this.active = run;
       const generation = ++this.generation;
-      void Promise.resolve().then(() => this.execute(run, planned, generation));
+      const execute = () => Promise.resolve().then(() => this.execute(run, planned, generation));
+      void (run.actor
+        ? withActivity({ actor: run.actor, sceneRunId: run.id }, execute)
+        : execute());
+    } else {
+      this.active = null;
     }
-    return structuredClone(run);
+  }
+
+  private interruptBeforeDispatch(run: SceneRun, error: unknown): void {
+    run.status = 'interrupted';
+    run.completedAt = new Date().toISOString();
+    run.error = readable((error as Error).message, 'Общее намерение охраны не сохранено');
+    for (const result of run.results)
+      if (result.status === 'pending') {
+        result.status = 'unavailable';
+        result.error = run.error;
+      }
   }
 
   /** @brief Stop future dispatches; an in-flight physical result remains explicitly unknown. */
@@ -439,7 +568,11 @@ export class Scenes {
     this.stopped = true;
     ++this.generation;
     const run = this.active;
-    if (!run) return;
+    if (!run || run.status !== 'running') {
+      this.active = null;
+      await this.journal?.flush();
+      return;
+    }
     for (const result of run.results) {
       if (result.status !== 'pending') continue;
       result.status = this.inFlight.has(result.id) ? 'unknown' : 'unavailable';
@@ -453,7 +586,7 @@ export class Scenes {
     this.active = null;
     this.inFlight.clear();
     try {
-      this.persist();
+      await this.persistRun(run);
     } catch (error) {
       this.storageError = readable((error as Error).message, 'Не удалось сохранить прерывание');
       run.error = this.storageError;
@@ -608,12 +741,12 @@ export class Scenes {
             if (this.generation === generation) this.inFlight.delete(result.id);
           }
         }
-        this.persist();
+        await this.persistRun(run);
       }
       if (this.stopped || this.generation !== generation) return;
       run.status = this.resultStatus(run);
       run.completedAt = new Date().toISOString();
-      this.persist();
+      await this.persistRun(run);
       this.active = null;
     } catch (error) {
       if (this.stopped || this.generation !== generation) return;
@@ -631,6 +764,7 @@ export class Scenes {
         }
       this.active = null;
       this.inFlight.clear();
+      await this.archiveInterruption(run);
     }
   }
 
@@ -679,7 +813,7 @@ export class Scenes {
         }
       }
       if (!live()) return false;
-      this.persist();
+      await this.persistRun(run);
       return result.status !== 'unknown' && this.engine.snapshot().broker.connected;
     };
     try {
@@ -696,7 +830,7 @@ export class Scenes {
             if (!safe && target.result.status === 'pending') {
               target.result.status = 'unavailable';
               target.result.error = 'Результат предыдущего дополнительного действия неизвестен';
-              this.persist();
+              await this.persistRun(run);
               continue;
             }
             safe = await execute(target, false);
@@ -706,7 +840,7 @@ export class Scenes {
       if (!live()) return;
       run.status = this.resultStatus(run);
       run.completedAt = new Date().toISOString();
-      this.persist();
+      await this.persistRun(run);
       this.active = null;
     } catch (error) {
       if (!live()) return;
@@ -722,6 +856,7 @@ export class Scenes {
       this.active = null;
       this.inFlight.clear();
       ++this.generation; // Stop the parallel branch before it can dispatch another extra action.
+      await this.archiveInterruption(run);
     }
   }
 
@@ -731,6 +866,30 @@ export class Scenes {
       ['rejected', 'unknown', 'unavailable'].includes(result.status),
     );
     return failed ? (applied ? 'partial' : 'failed') : applied ? 'completed' : 'empty';
+  }
+
+  private async persistRun(run: SceneRun, starting = false): Promise<void> {
+    if (!this.journal) {
+      this.persist();
+      return;
+    }
+    try {
+      await this.journal.save(run, starting);
+      this.storageError = null;
+    } catch {
+      this.storageError = 'Не удалось сохранить запуск сценария в PostgreSQL';
+      throw new SceneError(this.storageError, 503);
+    }
+  }
+
+  /** A storage failure cancels the plan. Only the diagnostic record can be retried. */
+  private async archiveInterruption(run: SceneRun): Promise<void> {
+    if (!this.journal) return;
+    try {
+      await this.journal.save(run, false);
+    } catch {
+      // Startup classifies any still-running record as interrupted without dispatching it.
+    }
   }
 
   /** @brief Atomically replace the journal; a failed save never starts physical commands. */
@@ -743,7 +902,11 @@ export class Scenes {
     let descriptor: number | undefined;
     try {
       const encoded =
-        JSON.stringify({ version: 1, definitions, runs } satisfies StoredScenes, null, 2) + '\n';
+        JSON.stringify(
+          { version: 1, definitions, runs: this.journal ? [] : runs } satisfies StoredScenes,
+          null,
+          2,
+        ) + '\n';
       if (Buffer.byteLength(encoded) > MAX_FILE_BYTES)
         throw new Error('Журнал сценариев превысил допустимый размер');
       descriptor = openSync(temporary, 'wx', 0o600);
@@ -833,29 +996,50 @@ export class Scenes {
       const runs = stored.runs.map((value: unknown) => this.decodeRun(value));
       if (new Set(runs.map((run) => run.id)).size !== runs.length)
         throw new Error('Повторяется идентификатор запуска');
-      let recovered = false;
-      for (const run of runs)
-        if (run.status === 'running') {
-          recovered = true;
-          run.status = 'interrupted';
-          run.completedAt = new Date().toISOString();
-          run.error =
-            'Хаб перезапущен; старый сценарий не продолжается, проверьте фактические состояния';
-          for (const result of run.results)
-            if (result.status === 'pending') {
-              result.status = 'unknown';
-              result.error = 'До перезапуска результат не был сохранён';
-            }
-        }
       this.definitions = definitions;
       this.runs = runs;
-      if (recovered || normalized) this.persist();
+      if (!this.journal) {
+        let recovered = false;
+        for (const run of runs) recovered = this.recoverRun(run) || recovered;
+        if (recovered || normalized) this.persist();
+      }
     } catch (error) {
       throw new SceneError(
         `Не удалось прочитать scenes.json; файл сохранён без замены: ${readable((error as Error).message, 'Файл повреждён')}`,
         503,
       );
     }
+  }
+
+  private recoverRun(run: SceneRun, commands: RecordedSceneCommand[] = []): boolean {
+    let changed = run.status === 'running';
+    if (changed) {
+      run.status = 'interrupted';
+      run.completedAt = new Date().toISOString();
+      run.error =
+        'Хаб перезапущен; старый сценарий не продолжается, проверьте фактические состояния';
+    }
+    for (const result of run.results) {
+      if (result.status !== 'pending' && result.status !== 'unknown') continue;
+      const command = commands.find((entry) =>
+        result.commandId
+          ? entry.id === result.commandId
+          : entry.deviceId === result.deviceId &&
+            entry.controller === result.controller &&
+            entry.itemId === result.itemId &&
+            entry.value === result.value,
+      );
+      if (command) {
+        changed = true;
+        result.commandId = command.id;
+        result.status = command.status;
+        result.error = command.error ? readable(command.error, 'PLC отклонил команду') : null;
+      } else if (result.status === 'pending') {
+        result.status = 'unknown';
+        result.error = 'До перезапуска результат не был сохранён';
+      }
+    }
+    return changed;
   }
 
   private decodeRun(value: unknown): SceneRun {
@@ -866,6 +1050,7 @@ export class Scenes {
         'sceneId',
         'name',
         'trigger',
+        'actor',
         'status',
         'startedAt',
         'completedAt',
@@ -875,6 +1060,7 @@ export class Scenes {
       !identifier(value.id) ||
       !identifier(value.sceneId) ||
       !text(value.name, 96) ||
+      !(value.actor === undefined || validActor(value.actor)) ||
       !(
         value.trigger === undefined ||
         value.trigger === 'manual' ||
@@ -930,6 +1116,7 @@ export class Scenes {
       sceneId: value.sceneId,
       name: value.name,
       trigger: (value.trigger as SceneRun['trigger']) ?? 'manual',
+      ...(value.actor && { actor: value.actor }),
       status: value.status as SceneRun['status'],
       startedAt: value.startedAt,
       completedAt: value.completedAt as string | null,

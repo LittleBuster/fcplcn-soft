@@ -96,19 +96,3 @@
 .result-unknown {
   color: var(--red);
 }
-
-.activity-note {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-size: 11px;
-  color: #8ca3bc;
-  margin-top: 22px;
-  line-height: 1.8;
-}
-
-.activity-note .icon {
-  width: 18px;
-  height: 18px;
-  color: var(--green);
-}

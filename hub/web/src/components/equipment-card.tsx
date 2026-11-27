@@ -6,9 +6,12 @@ import type {
   DeviceView,
   WritableControllerKind,
 } from '../../../shared/types.js';
+import { IrrigationCard } from './irrigation-card';
+import { TankCard } from './tank-card';
+import { MeteoHistoryButton } from '../features/meteo/history-button';
 import { Icon, type IconName } from '../icons';
 import { number, temperature, text, type Row } from '../model';
-import type { CommandAction } from './types';
+import type { CommandAction, ConfigureIrrigation } from './types';
 
 /** Показывает собственную иконку канала; активное состояние требует свежего подтверждения PLC. */
 export function ItemCard({
@@ -20,6 +23,7 @@ export function ItemCard({
   connected,
   controlsBlocked,
   onCommand,
+  configureIrrigation,
 }: {
   device: DeviceView;
   kind: ControllerKind;
@@ -29,7 +33,23 @@ export function ItemCard({
   connected: boolean;
   controlsBlocked: boolean;
   onCommand: CommandAction;
+  configureIrrigation?: ConfigureIrrigation;
 }) {
+  if (kind === 'tanks' || kind === 'irrigation') {
+    const Card = kind === 'tanks' ? TankCard : IrrigationCard;
+    return (
+      <Card
+        device={device}
+        module={module}
+        item={item}
+        pending={pending}
+        connected={connected}
+        controlsBlocked={controlsBlocked}
+        configureIrrigation={configureIrrigation}
+        onCommand={onCommand}
+      />
+    );
+  }
   const id = text(item.id);
   const name = text(item.name, id);
   const fresh = module.fresh && device.online && device.status === 'online' && connected;
@@ -177,6 +197,7 @@ export function ItemCard({
                   ? `Кнопка ${text(item.inputId)}`
                   : 'Управление из веба и хаба'}
         </p>
+        {sensor ? <MeteoHistoryButton deviceId={device.id} sensorId={id} name={name} /> : null}
         {fresh && text(item.error) ? <p class="inline-error">{text(item.error)}</p> : null}
       </div>
     </article>

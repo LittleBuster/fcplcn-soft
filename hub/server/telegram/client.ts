@@ -1,8 +1,15 @@
 /** @file Restricted Telegram HTTPS transport with redacted failures and bounded responses. */
 import { validTelegramToken } from './store.js';
 
+export interface TelegramPhoto {
+  photo: Buffer;
+  caption: string;
+}
+
 export interface TelegramReply {
   text: string;
+  parse_mode?: 'HTML';
+  chart?: TelegramPhoto;
   reply_markup: {
     keyboard?: string[][];
     resize_keyboard?: boolean;
@@ -53,16 +60,17 @@ export class TelegramClient implements TelegramTransport {
   }
 
   private async call(
-    method: 'getMe' | 'getWebhookInfo' | 'getUpdates' | 'sendMessage',
-    body: Record<string, unknown>,
+    method: 'getMe' | 'getWebhookInfo' | 'getUpdates' | 'sendMessage' | 'sendPhoto',
+    body: Record<string, unknown> | FormData,
     signal: AbortSignal,
     timeout = 12_000,
   ): Promise<unknown> {
     try {
+      const multipart = body instanceof FormData;
       const response = await this.request(`https://api.telegram.org/bot${this.token}/${method}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
+        headers: multipart ? undefined : { 'Content-Type': 'application/json' },
+        body: multipart ? body : JSON.stringify(body),
         redirect: 'error',
         signal: AbortSignal.any([signal, AbortSignal.timeout(timeout)]),
       });
@@ -163,11 +171,25 @@ export class TelegramClient implements TelegramTransport {
   }
 
   async send(chatId: string, reply: TelegramReply, signal: AbortSignal): Promise<void> {
+    if (reply.chart) {
+      const upload = new FormData();
+      upload.set('chat_id', chatId);
+      upload.set(
+        'photo',
+        new Blob([Uint8Array.from(reply.chart.photo)], { type: 'image/png' }),
+        'meteo.png',
+      );
+      upload.set('caption', reply.chart.caption.slice(0, 1024));
+      upload.set('reply_markup', JSON.stringify(reply.reply_markup));
+      await this.call('sendPhoto', upload, signal);
+      return;
+    }
     await this.call(
       'sendMessage',
       {
         chat_id: chatId,
-        text: reply.text.slice(0, 4096),
+        text: reply.parse_mode ? reply.text : reply.text.slice(0, 4096),
+        ...(reply.parse_mode && { parse_mode: reply.parse_mode }),
         reply_markup: reply.reply_markup,
         link_preview_options: { is_disabled: true },
       },

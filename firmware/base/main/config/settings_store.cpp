@@ -7,8 +7,8 @@
  * waits without holding a module/store mutex, then commits with generation CAS.
  */
 #include "config/settings_store.h"
-#include "util/operation_context.h"
-#include "util/checksum.h"
+#include "platform/operation_context.h"
+#include "platform/checksum.h"
 #include <algorithm>
 #include <atomic>
 #include <condition_variable>

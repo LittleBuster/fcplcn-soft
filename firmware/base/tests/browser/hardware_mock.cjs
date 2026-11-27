@@ -76,8 +76,8 @@ function createHardwareMock({ interactive, unixTime, localTime, profile = () => 
     const available = !faults.fram || faults.fram === 'corrupt';
     const valid = available && !faults.fram;
     const payloadBytes =
-      8 +
-      ['sockets', 'lights', 'thermostats'].reduce(
+      9 +
+      ['sockets', 'lights', 'thermostats', 'tanks', 'irrigation'].reduce(
         (total, id) => total + (Array.isArray(settings[id]?.items) ? settings[id].items.length : 0),
         0,
       );

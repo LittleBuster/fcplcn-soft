@@ -11,5 +11,7 @@
   "modules/settings.js",
   "modules/backup.js",
   "modules/firmware.js",
-  "modules/bootstrap.js"
+  "modules/bootstrap.js",
+  "modules/tanks.js",
+  "modules/irrigation.js"
 ]

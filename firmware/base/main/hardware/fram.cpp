@@ -2,12 +2,12 @@
  * @file fram.cpp
  * @brief Bounded FM24CL64B-GTR transfers over the shared hardware I2C service.
  */
-#include "hardware/fram.h"
+#include "fram.h"
 
 #include <algorithm>
 
-#include "hardware/board_profile.h"
-#include "hardware/hardware_io.h"
+#include "board_profile.h"
+#include "hardware_io.h"
 
 namespace {
 constexpr std::size_t kCapacityBytes = 8192;

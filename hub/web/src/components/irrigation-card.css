@@ -1,0 +1,122 @@
+.irrigation-card {
+  padding: 0;
+  overflow: hidden;
+}
+.irrigation-face {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  width: 100%;
+  padding: 16px 18px;
+  color: #dce8f8;
+  background: transparent;
+  text-align: left;
+}
+.irrigation-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.irrigation-top .irrigation-symbol {
+  width: 45px;
+  height: 45px;
+  stroke-width: 1.5;
+  color: #94acc8;
+}
+.irrigation-switch {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid #475b71;
+  color: #9fb5cf;
+  border-radius: 50%;
+}
+.irrigation-switch .icon {
+  width: 18px;
+  height: 18px;
+}
+.irrigation-face[aria-pressed='true'] .irrigation-switch {
+  color: #173547;
+  background: #a2def3;
+  border-color: #a2def3;
+}
+.irrigation-name {
+  font-size: 17px;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+.irrigation-details,
+.irrigation-ports {
+  display: grid;
+  gap: 5px;
+  font-size: 13px;
+  line-height: 1.35;
+  color: #a1b5c9;
+}
+.irrigation-details {
+  margin-top: 6px;
+}
+.irrigation-remote-tank {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.irrigation-remote-tank .icon {
+  width: 14px;
+  height: 14px;
+  vertical-align: -2px;
+}
+.irrigation-ports {
+  padding: 12px 18px;
+  border-top: 1px solid #34465b;
+  overflow-wrap: anywhere;
+}
+.irrigation-ports b {
+  color: #d0dfed;
+  font-weight: 500;
+}
+.irrigation-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+.irrigation-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  flex-shrink: 0;
+}
+.irrigation-dot[data-watering='true'] {
+  background: #56ec84;
+}
+.irrigation-card.state-on {
+  background: linear-gradient(140deg, #1b303d, #142230);
+  border-color: #3e6378;
+}
+.irrigation-card.state-on .irrigation-state {
+  color: #92c8df;
+}
+:is(.irrigation-card.state-on, .pult-kind-irrigation.pult-state-on)
+  .irrigation-top
+  .irrigation-symbol {
+  color: #a2def3;
+}
+.irrigation-card.state-error,
+.pult-page .pult-kind-irrigation.pult-state-error {
+  border-color: #9c6761;
+}
+.irrigation-card.state-error .irrigation-state,
+.pult-kind-irrigation.pult-state-error .irrigation-state {
+  color: #f3b1a4;
+}
+
+.controller-section[data-module='irrigation'] .section-heading {
+  flex-wrap: wrap;
+}
+
+.pult-page .pult-tile-face.irrigation-face {
+  padding-block: 12px 10px;
+}

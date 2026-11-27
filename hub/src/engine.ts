@@ -12,6 +12,7 @@ export function createEngine(options: EngineOptions): HubEngine {
   let managementReady = false;
   let securityReady = false;
   let started = false;
+  let outageTimer: NodeJS.Timeout | undefined;
   const registry = new HubRegistry(options, {
     async publish(topic, payload, expirySeconds) {
       if (options.mode === 'demo') {
@@ -77,6 +78,7 @@ export function createEngine(options: EngineOptions): HubEngine {
     async start() {
       if (started) return;
       started = true;
+      outageTimer = setInterval(() => registry.checkOutages(), 1000).unref();
       if (options.mode === 'demo') {
         registry.setConnection(true);
         const demo = createDemo(registry, options.product, { dataDir: options.demoDataDir });
@@ -146,6 +148,13 @@ export function createEngine(options: EngineOptions): HubEngine {
                 !error && Boolean(grants?.length) && grants!.every((grant) => grant.qos <= 2);
           },
         );
+        active.subscribe(
+          [
+            `${options.product.id}/+/irrigation-water/source`,
+            `${options.product.id}/+/irrigation-water/request`,
+          ],
+          { qos: 0, rap: true, rh: 2 },
+        );
       });
       active.on('message', (topic, payload, packet) => {
         if (!current() || !active.connected) return;
@@ -159,7 +168,7 @@ export function createEngine(options: EngineOptions): HubEngine {
           management.receive(parts[1], payload, packet.retain);
         else {
           registry.receive(topic, payload, packet.retain);
-          management.observe();
+          if (parts[2] !== 'irrigation-water') management.observe();
         }
       });
       active.on('offline', () => {
@@ -189,6 +198,8 @@ export function createEngine(options: EngineOptions): HubEngine {
     },
     async stop() {
       started = false;
+      clearInterval(outageTimer);
+      outageTimer = undefined;
       managementReady = false;
       securityReady = false;
       management.disconnect();
@@ -200,6 +211,7 @@ export function createEngine(options: EngineOptions): HubEngine {
       const active = client;
       client = undefined;
       await Promise.all([
+        registry.flushActivity(),
         retiredDemo?.(),
         active
           ? new Promise<void>((resolve) => active.end(true, {}, () => resolve()))

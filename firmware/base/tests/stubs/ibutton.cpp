@@ -6,7 +6,7 @@
 
 #include "esp_timer.h"
 #include "hardware/board_profile.h"
-#include "util/checksum.h"
+#include "platform/checksum.h"
 
 namespace {
 std::mutex mutex;

@@ -18,7 +18,7 @@ DEPLOY = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(DEPLOY))
 from lib.backups import load_backup, make_backup, restore_backup, validate_archive
 from lib.common import DOCKER_ENVIRONMENT, DeploymentError, atomic_json, deployment_lock, docker_prefix, host_platform, point_release, read_json
-from lib.docker import Stack
+from lib.docker import HUB_DATABASE_CREDENTIALS, Stack
 from lib.lifecycle import deploy, initial_metadata, operate, renew_certificates, rollback, validate_identity
 from lib.sources import default_image, github_repository, prepare_source, schema_digest, tree_digest
 
@@ -31,7 +31,14 @@ class FakeRunner:
     def __init__(self):
         self.calls = []
         self.config = {"volumes": {"hub-data": {"name": "test_hub-data"},
-                                   "broker-data": {"name": "test_broker-data"}}}
+                                   "broker-data": {"name": "test_broker-data"}},
+                       "services": {"hub": {"image": "fcplcn-hub:test"},
+                                    "broker": {"image": "mosquitto:test"},
+                                    "broker-setup": {"image": "mosquitto:test", "profiles": ["setup"]}}}
+        self.proposed_config = None
+        self.image_ids = {"mosquitto:test": "sha256:previous-mosquitto"}
+        self.per_pull = {}
+        self.postgres_env = {}
         self.fail = None
 
     def run(self, arguments, **kwargs):
@@ -40,11 +47,30 @@ class FakeRunner:
         if self.fail and self.fail(arguments):
             raise DeploymentError("Имитированная ошибка команды")
         if "config" in arguments:
-            output = json.dumps(self.config).encode()
+            current = any(argument.endswith("installer.compose.json") for argument in arguments)
+            config = self.config if current or self.proposed_config is None else self.proposed_config
+            output = json.dumps(config).encode()
+        elif "pull" in arguments:
+            image = arguments[-1]
+            if image in self.per_pull:
+                self.image_ids[image] = self.per_pull[image]
+            output = b""
         elif "--status" in arguments:
             output = b"hub\nbroker\n"
+        elif "container" in arguments and "inspect" in arguments:
+            output = b"sha256:previous-mosquitto\n"
         elif "image" in arguments and "inspect" in arguments:
-            output = b"sha256:verified-image"
+            if "--format" not in arguments:
+                return subprocess.CompletedProcess(arguments, 0, b"[]", b"")
+            index = arguments.index("--format")
+            if arguments[index + 1] == "{{json .Config.Env}}":
+                output = json.dumps(self.postgres_env.get(arguments[-1], [
+                    "PG_MAJOR=18", "PGDATA=/var/lib/postgresql/18/docker",
+                ])).encode()
+            else:
+                output = "\n".join(self.image_ids.get(
+                    image, image if image.startswith("sha256:") else "sha256:verified-image"
+                ) for image in arguments[index + 2:]).encode()
         else:
             output = b""
         if kwargs.get("stdout"):
@@ -161,6 +187,7 @@ class LifecycleTests(unittest.TestCase):
 
     def test_arm64_runtime_uses_node24_without_broker_architecture_override(self):
         self.stack.prepare_image(image="custom/hub:arm64", source_build=True)
+        self.stack.pin_release()
         build = next(args for args, _ in self.runner.calls if "build" in args)
         self.assertIn("FCPLCN_NODE_RUNTIME_IMAGE=node:24.22.3-bookworm-slim", build)
         self.assertEqual(build[build.index("--platform") + 1], "linux/arm64")
@@ -206,6 +233,45 @@ class LifecycleTests(unittest.TestCase):
         self.assertIn("FCPLCN_PLC_PASSWORD", command[1].split("=", 1)[1].split(","))
         self.assertNotIn("secret-plc-password", " ".join(command))
         self.assertEqual(options["env"]["FCPLCN_PLC_PASSWORD"], "secret-plc-password")
+
+    def enable_hub_database(self, stack):
+        bootstrap = stack.source / "hub/deploy/postgres-init.sh"
+        bootstrap.parent.mkdir(parents=True, exist_ok=True)
+        bootstrap.write_text("# database bootstrap\n")
+
+    def hub_database_compose(self):
+        return {
+            "services": {**self.runner.config["services"], "db": {
+                "image": "postgres:18-alpine",
+                "volumes": [{"type": "volume", "source": "hub-db-data", "target": "/var/lib/postgresql"}],
+            }},
+            "volumes": {**self.runner.config["volumes"], "hub-db-data": {"name": "test_hub-db-data"}},
+        }
+
+    def test_hub_database_credentials_are_private_and_never_change_on_retry(self):
+        self.enable_hub_database(self.stack)
+        self.stack.prepare_hub_environment()
+        database_env = self.stack.hub_database_env
+        first = database_env.read_text()
+        passwords = [line.split("=", 1)[1] for line in first.splitlines()]
+        self.assertTrue(all(re.fullmatch("[a-f0-9]{64}", password) for password in passwords))
+        self.assertEqual(len(set(passwords)), 2)
+        self.assertEqual(database_env.stat().st_mode & 0o777, 0o600)
+        self.stack.prepare_hub_environment()
+        self.assertEqual(database_env.read_text(), first)
+        command = self.stack.command(["config"])
+        self.assertEqual(command.count("--env-file"), 2)
+        self.assertIn(str(database_env), command)
+        self.assertFalse(any(password in " ".join(command) for password in passwords))
+        with patch.dict(os.environ, dict.fromkeys(HUB_DATABASE_CREDENTIALS, "unintended-override")):
+            self.assertTrue(all(name not in self.stack.environment() for name in HUB_DATABASE_CREDENTIALS))
+
+    def test_missing_credentials_never_overwrite_a_populated_hub_database(self):
+        self.enable_hub_database(self.stack)
+        self.runner.config = self.hub_database_compose()
+        with self.assertRaisesRegex(DeploymentError, "без файла паролей"):
+            self.stack.prepare_hub_database()
+        self.assertFalse(self.stack.hub_database_env.exists())
 
     def test_hub_password_is_generated_once_and_never_printed(self):
         with contextlib.redirect_stdout(io.StringIO()) as output:
@@ -316,6 +382,157 @@ class LifecycleTests(unittest.TestCase):
         self.assertEqual((self.state / "current").resolve(), self.stack.release)
         self.assertFalse(any("stop" in arguments for arguments, _ in self.runner.calls))
 
+    def update_fixture(self, role="hub"):
+        self.metadata["ports"]["https"] = 443
+        if role == "cloud":
+            self.metadata.update(role=role, domain="cloud.example.com")
+            self.runner.config["services"] = {
+                "cloud": {"image": "cloud:test"},
+                "broker": {"image": "mosquitto:test"},
+                "db": {"image": "postgres:18-alpine"},
+                "caddy": {"image": "caddy:test"},
+            }
+        self.record["repo"] = "https://github.com/test/repository"
+        self.stack = Stack(self.runner, self.state, self.metadata, self.record)
+        self.stack.write_override()
+        atomic_json(self.stack.release / "release.json", self.record)
+        atomic_json(self.state / "metadata.json", self.metadata)
+        point_release(self.state, "current", self.stack.release)
+        return self.args(role, "update")
+
+    def run_update(self, args, record=None):
+        with patch("lib.lifecycle.host_platform", return_value=self.metadata["platform"]), \
+             patch("lib.lifecycle.prepare_source", return_value=dict(record or self.record)), \
+             contextlib.redirect_stdout(io.StringIO()):
+            deploy(args, self.runner, self.state, self.root)
+
+    def test_legacy_hub_update_adds_only_its_postgresql_volume(self):
+        args = self.update_fixture()
+        runtime = self.state / "runtime/hub.env"
+        runtime.write_text("FCPLCN_HUB_MQTT_PASSWORD=legacy-password\n")
+        next_record = dict(self.record, revision="d" * 40, content="e" * 64)
+        candidate = Stack(self.runner, self.state, self.metadata, next_record)
+        self.enable_hub_database(candidate)
+        next_record["schema"] = schema_digest(candidate.source, "hub")
+        self.assertNotEqual(next_record["schema"], self.record["schema"])
+        self.runner.proposed_config = self.hub_database_compose()
+        self.run_update(args, next_record)
+        active = read_json(self.state / "current/release.json")
+        self.assertIn("db", active["serviceImages"])
+        self.assertTrue(candidate.hub_database_env.is_file())
+        self.assertEqual(runtime.read_text(), "FCPLCN_HUB_MQTT_PASSWORD=legacy-password\n")
+        copies = list((self.state / "backups").glob("*/manifest.json"))
+        self.assertEqual(len(copies), 1)
+        self.assertEqual(set(read_json(copies[0])["volumes"]), {"test_hub-data", "test_broker-data"})
+        with patch("lib.lifecycle.host_platform", return_value=self.metadata["platform"]):
+            with self.assertRaisesRegex(DeploymentError, "схема"):
+                rollback(self.args("hub", "rollback", "--yes"), self.runner, self.state)
+        self.assertFalse(any("broker-setup" in command or "down" in command
+                             for command, _ in self.runner.calls))
+
+    def test_legacy_hub_update_rejects_unrelated_additional_volume(self):
+        args = self.update_fixture()
+        next_record = dict(self.record, revision="d" * 40, content="e" * 64)
+        self.enable_hub_database(Stack(self.runner, self.state, self.metadata, next_record))
+        self.runner.proposed_config = self.hub_database_compose()
+        self.runner.proposed_config["volumes"]["unrelated"] = {"name": "test_unrelated"}
+        with self.assertRaisesRegex(DeploymentError, "подключения постоянных данных"):
+            self.run_update(args, next_record)
+        self.assertFalse(any("stop" in command for command, _ in self.runner.calls))
+
+    def test_legacy_restore_keeps_later_hub_database_dormant(self):
+        self.update_fixture()
+        with contextlib.redirect_stdout(io.StringIO()):
+            legacy = make_backup(self.stack)
+        next_record = dict(self.record, revision="d" * 40, content="e" * 64)
+        current = Stack(self.runner, self.state, self.metadata, next_record)
+        self.enable_hub_database(current)
+        current.prepare_hub_environment()
+        self.runner.config = self.hub_database_compose()
+        self.runner.calls.clear()
+        with contextlib.redirect_stdout(io.StringIO()):
+            target = restore_backup(self.runner, self.state, self.metadata, legacy, current=current)
+        self.assertFalse(target.uses_hub_database)
+        self.assertTrue(target.hub_database_fence.is_file())
+        self.assertFalse(any("rm" in command and "test_hub-db-data" in command
+                             for command, _ in self.runner.calls))
+        with self.assertRaisesRegex(DeploymentError, "до PostgreSQL"):
+            current.prepare_hub_database()
+
+    def test_same_commit_can_update_broker_without_overwriting_hub_runtime(self):
+        args = self.update_fixture()
+        runtime = self.state / "runtime/hub.env"
+        runtime.write_text("FCPLCN_HUB_MQTT_PASSWORD=custom-secret\n")
+        self.runner.per_pull["mosquitto:test"] = "sha256:new-mosquitto"
+        self.run_update(args)
+        active = read_json(self.state / "current/release.json")
+        previous = read_json(self.state / "previous/release.json")
+        self.assertEqual(active["content"], previous["content"])
+        self.assertEqual(active["serviceImages"], {"broker": "sha256:new-mosquitto"})
+        self.assertEqual(previous["serviceImages"], {"broker": "sha256:previous-mosquitto"})
+        self.assertEqual(runtime.read_text(), "FCPLCN_HUB_MQTT_PASSWORD=custom-secret\n")
+        override = read_json(self.state / "current/installer.compose.json")
+        self.assertEqual(override["services"]["broker"]["image"], "sha256:new-mosquitto")
+        calls = [command for command, _ in self.runner.calls]
+        stop = next(index for index, command in enumerate(calls) if "stop" in command)
+        self.assertEqual(len([command for command in calls[:stop] if "pull" in command]), 2)
+        self.assertFalse(any("broker-setup" in command or "down" in command for command in calls))
+        save = next(command for command in calls if "save" in command)
+        self.assertIn("sha256:previous-mosquitto", save)
+        self.assertEqual(calls[-1][calls[-1].index("--pull") + 1], "never")
+
+    def test_unchanged_service_image_ids_skip_downtime(self):
+        args = self.update_fixture()
+        self.run_update(args)
+        self.assertTrue(any("pull" in command and command[-1] == "mosquitto:test"
+                            for command, _ in self.runner.calls))
+        self.assertFalse(any("stop" in command for command, _ in self.runner.calls))
+        self.assertEqual((self.state / "current").resolve(), self.stack.release)
+
+    def test_failed_auxiliary_pull_keeps_existing_stack_online(self):
+        args = self.update_fixture()
+        self.runner.fail = lambda command: "pull" in command and command[-1] == "mosquitto:test"
+        with self.assertRaises(DeploymentError):
+            self.run_update(args)
+        self.assertFalse(any("stop" in command for command, _ in self.runner.calls))
+        self.assertEqual((self.state / "current").resolve(), self.stack.release)
+
+    def test_cloud_update_pulls_postgres_broker_and_caddy(self):
+        args = self.update_fixture("cloud")
+        self.runner.per_pull.update({"postgres:18-alpine": "sha256:postgres-new",
+                                     "mosquitto:test": "sha256:mosquitto-new",
+                                     "caddy:test": "sha256:caddy-new"})
+        self.run_update(args)
+        pinned = read_json(self.state / "current/release.json")["serviceImages"]
+        self.assertEqual(pinned, {"db": "sha256:postgres-new", "broker": "sha256:mosquitto-new",
+                                  "caddy": "sha256:caddy-new"})
+
+    def test_postgres_minor_updates_keep_pgdata_and_major_updates_are_blocked(self):
+        args = self.update_fixture("cloud")
+        self.runner.per_pull["postgres:18-alpine"] = "sha256:postgres-incompatible"
+        for environment in (["PG_MAJOR=19", "PGDATA=/var/lib/postgresql/18/docker"],
+                            ["PG_MAJOR=18", "PGDATA=/var/lib/postgresql/18/moved"]):
+            with self.subTest(environment=environment):
+                self.runner.postgres_env["sha256:postgres-incompatible"] = environment
+                with self.assertRaisesRegex(DeploymentError, "отдельный перенос базы"):
+                    self.run_update(args)
+        self.assertFalse(any("stop" in command for command, _ in self.runner.calls))
+
+    def test_persistent_volume_mount_cannot_be_changed_by_update(self):
+        args = self.update_fixture()
+        self.runner.config["services"]["hub"]["volumes"] = [
+            {"type": "volume", "source": "hub-data", "target": "/var/lib/fcplcn"},
+        ]
+        self.runner.proposed_config = dict(self.runner.config, services={
+            **self.runner.config["services"],
+            "hub": {"image": "fcplcn-hub:test", "volumes": [
+                {"type": "volume", "source": "hub-data", "target": "/new-data"},
+            ]},
+        })
+        with self.assertRaisesRegex(DeploymentError, "подключения постоянных данных"):
+            self.run_update(args)
+        self.assertFalse(any("stop" in command for command, _ in self.runner.calls))
+
     def test_dry_run_never_executes_commands_or_creates_state(self):
         directory = self.root / "must-not-exist"
         with contextlib.redirect_stdout(io.StringIO()):
@@ -346,6 +563,7 @@ class LifecycleTests(unittest.TestCase):
         self.stack.metadata["platform"] = "linux/arm64"
         with contextlib.redirect_stdout(io.StringIO()):
             selected = self.stack.prepare_image(source_build=True)
+            self.stack.pin_release()
         self.assertTrue(selected.startswith("fcplcn-hub:local-"))
         override = read_json(self.stack.release / "installer.compose.json")
         self.assertEqual(override["services"]["hub"]["image"], "sha256:verified-image")
@@ -387,12 +605,15 @@ class LifecycleTests(unittest.TestCase):
         atomic_json(self.state / "metadata.json", metadata)
         atomic_json(self.stack.release / "release.json", self.record)
         point_release(self.state, "current", self.stack.release)
+        self.runner.config["services"] = {
+            "cloud": {"image": "cloud:test"}, "db": {"image": "postgres:18-alpine"},
+        }
         next_record = dict(self.record, revision="c" * 40, content="d" * 64, schema="new-schema")
         args = self.args("cloud", "update", "--repo", "https://github.com/test/repository")
         with patch("lib.lifecycle.host_platform", return_value="linux/arm64"), \
              patch("lib.lifecycle.prepare_source", return_value=next_record), \
              patch("lib.lifecycle.make_backup", return_value=self.root / "copy"), \
-             patch.object(Stack, "prepare_image"), patch.object(Stack, "initialize"), \
+             patch.object(Stack, "prepare_image"), patch.object(Stack, "pin_release"), \
              patch.object(Stack, "stop"), \
              patch.object(Stack, "start", side_effect=DeploymentError("unhealthy")) as start, \
              contextlib.redirect_stdout(io.StringIO()):

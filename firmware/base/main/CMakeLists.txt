@@ -9,41 +9,31 @@ idf_component_register(
         "config/state_journal.cpp"
         "config/backup.cpp"
         "security/auth.cpp"
-        "hardware/board_profile.cpp"
-        "hardware/hardware_io.cpp"
-        "hardware/fram.cpp"
-        "hardware/eeprom.cpp"
-        "hardware/state_memory.cpp"
         ${FCPLCN_CONTROLLER_SOURCES}
         "network/network.cpp"
         "network/socket_mqtt.cpp"
         "network/mqtt_telemetry.cpp"
         "network/management_mqtt.cpp"
         "network/management_routes.cpp"
-        "sensors/meteo_codec.cpp"
         "sensors/meteo_sensors.cpp"
         "sensors/ibutton.cpp"
-        "time/rtc_codec.cpp"
+        "sensors/sensor_worker.cpp"
         "time/rtc_clock.cpp"
         "time/time_service.cpp"
         "system/system_metrics.cpp"
         "system/firmware_update.cpp"
-        "system/runtime_supervisor.cpp"
         "system/recovery_mode.cpp"
         "web/web_server.cpp"
         "web/static_cache.cpp"
     INCLUDE_DIRS "."
-    REQUIRES esp_wifi esp_netif esp_event esp_eth esp_driver_gpio esp_driver_spi esp_driver_tsens esp_driver_i2c
+    PRIV_REQUIRES hardware platform esp_wifi esp_netif esp_event esp_eth
              esp_system esp_timer esp_psram spi_flash nvs_flash mbedtls esp_http_server app_update
-             espressif__cjson espressif__onewire_bus esp-idf-lib__dht
+             espressif__cjson espressif__mqtt
 )
 
 get_filename_component(FCPLCN_ROOT "${CMAKE_CURRENT_LIST_DIR}/../../.." REALPATH)
-file(READ "${FCPLCN_ROOT}/config/product.json" FCPLCN_IDENTITY_JSON)
-string(JSON FCPLCN_PRODUCT_NAME GET "${FCPLCN_IDENTITY_JSON}" name)
-string(JSON FCPLCN_PRODUCT_FULL_NAME GET "${FCPLCN_IDENTITY_JSON}" fullName)
-configure_file(system/product_identity.h.in generated/product_identity.h @ONLY)
-target_include_directories(${COMPONENT_LIB} PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/generated")
+target_include_directories(${COMPONENT_LIB} PRIVATE
+    "${FCPLCN_GENERATED_INCLUDE_DIR}" "${CMAKE_CURRENT_BINARY_DIR}/generated")
 
 set(FCPLCN_WEB_DIR "${CMAKE_CURRENT_LIST_DIR}/../web")
 set(FCPLCN_WEB_MANIFEST "${FCPLCN_WEB_DIR}/assets.json")

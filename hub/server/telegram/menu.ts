@@ -1,15 +1,37 @@
 /** @file Private reply-keyboard navigation over verified PLC states and explicit SET operations. */
+import { irrigationDays } from '../../shared/irrigation.js';
 import { createHash } from 'node:crypto';
+import type { MeteoHistoryPeriod } from '../../shared/meteo-history.js';
+import {
+  controllerItemDetails,
+  controllerItemStatusLines,
+  controllerModuleDetails,
+  controllerModuleSummaryLines,
+  itemName,
+  rows,
+  text,
+} from '../../shared/telegram-controller-status.js';
+import { formatTelegramMessage } from '../../shared/telegram-format.js';
+import type { TelegramControllerSettingsActions } from './controller-settings.js';
+import {
+  handleTelegramSettings,
+  parseTelegramSetting,
+  settingPrompts,
+  renderTelegramSettings,
+  type SettingEditor,
+  type SettingsAction,
+} from './settings-menu.js';
 import type {
   CommandView,
   ControllerKind,
   DeviceView,
   EngineSnapshot,
+  HouseSecurityView,
   SceneRun,
   ScenesSnapshot,
   WritableControllerKind,
 } from '../../shared/types.js';
-import type { TelegramReply } from './client.js';
+import type { TelegramPhoto, TelegramReply } from './client.js';
 
 export interface TelegramActions {
   snapshot(): EngineSnapshot;
@@ -20,18 +42,32 @@ export interface TelegramActions {
     itemId: string,
     value: boolean,
   ): Promise<CommandView>;
-  runScene(id: string): SceneRun;
+  runScene(id: string, signal?: AbortSignal): SceneRun | Promise<SceneRun>;
+  houseStatus?(): HouseSecurityView | undefined;
+  setSceneSchedule?(id: string, revision: number, enabled: boolean): Promise<void>;
+  meteoChart?(
+    deviceId: string,
+    itemId: string,
+    period: MeteoHistoryPeriod,
+  ): Promise<TelegramPhoto | null>;
+  service?: TelegramControllerSettingsActions['service'];
 }
 
 type Row = Record<string, unknown>;
 type Page = {
-  view: 'home' | 'scenes' | 'device' | 'module' | 'item';
+  view:
+    'home' | 'scenes' | 'scheduled' | 'scene' | 'device' | 'module' | 'module-settings' | 'item';
+  sceneId?: string;
+  details?: boolean;
   deviceId?: string;
   kind?: ControllerKind;
   itemId?: string;
   page: number;
 };
 type Action =
+  | SettingsAction
+  | { type: 'schedule'; id: string; revision: number; enabled: boolean }
+  | { type: 'meteo-chart'; deviceId: string; itemId: string; period: MeteoHistoryPeriod }
   | { type: 'page'; page: Page }
   | { type: 'scene'; id: string }
   | {
@@ -41,6 +77,7 @@ type Action =
       itemId: string;
       value: boolean;
       bootId: string | null;
+      connectionGeneration?: number;
     }
   | {
       type: 'batch';
@@ -48,20 +85,32 @@ type Action =
       kind: 'sockets' | 'lights';
       value: boolean;
       bootId: string | null;
+      connectionGeneration?: number;
     };
 interface Session {
   page: Page;
   actions: Map<string, Action>;
   updated: number;
   lastRun?: string;
+  editor?: SettingEditor;
 }
-const kinds: ControllerKind[] = ['sockets', 'lights', 'meteo', 'thermostats', 'security'];
+const kinds: ControllerKind[] = [
+  'sockets',
+  'lights',
+  'meteo',
+  'thermostats',
+  'security',
+  'tanks',
+  'irrigation',
+];
 const titles: Record<ControllerKind, string> = {
   sockets: 'Розетки',
   lights: 'Свет',
   meteo: 'Метео',
   thermostats: 'Термостаты',
   security: 'Охрана',
+  tanks: 'Баки',
+  irrigation: 'Полив',
 };
 const icons: Record<ControllerKind, string> = {
   sockets: '🔌',
@@ -69,35 +118,15 @@ const icons: Record<ControllerKind, string> = {
   meteo: '🌤',
   thermostats: '🌡',
   security: '🛡',
-};
-const phases: Record<string, string> = {
-  disarmed: 'Охрана снята',
-  armed: 'Под охраной',
-  exit_delay: 'Задержка выхода',
-  entry_delay: 'Задержка входа',
-  alarm: '🚨 ТРЕВОГА',
+  tanks: '🛢',
+  irrigation: '💧',
 };
 const pageSize = 12;
-const rows = (value: unknown): Row[] =>
-  Array.isArray(value)
-    ? value.filter((row): row is Row =>
-        Boolean(row && typeof row === 'object' && !Array.isArray(row)),
-      )
-    : [];
-const text = (value: unknown, fallback = '') =>
-  typeof value === 'string'
-    ? value.replace(/[\x00-\x1f\x7f]/g, ' ').slice(0, 96) || fallback
-    : fallback;
-const reading = (value: unknown, unit = ' °C') =>
-  typeof value === 'number' && Number.isFinite(value)
-    ? value.toLocaleString('ru-RU', { maximumFractionDigits: 1 }) + unit
-    : '—';
 const home = (): Page => ({ view: 'home', page: 0 });
 // Include the complete target identity: names, ordinals and item IDs alone can repeat across PLCs.
 const tag = (...parts: string[]) =>
   createHash('sha256').update(JSON.stringify(parts)).digest('hex').slice(0, 8);
 const deviceName = (device: DeviceView) => text(device.name, device.id);
-const itemName = (item: Row) => text(item.name, text(item.id, 'Без имени'));
 const commandResult = (command: CommandView) =>
   command.status === 'applied'
     ? '✅ PLC подтвердил изменение.'
@@ -137,6 +166,7 @@ export class TelegramMenu {
     deviceId: string,
     kind: WritableControllerKind,
     bootId: string | null,
+    connectionGeneration?: number,
   ): DeviceView {
     const snapshot = this.actions.snapshot();
     const device = snapshot.devices.find((entry) => entry.id === deviceId);
@@ -146,6 +176,8 @@ export class TelegramMenu {
       device.status !== 'online' ||
       !bootId ||
       device.bootId !== bootId ||
+      (connectionGeneration !== undefined &&
+        device.connectionGeneration !== connectionGeneration) ||
       !device.controllers[kind]?.fresh
     )
       throw new Error('Нет свежей связи с PLC. Обновите меню; команда не отправлена.');
@@ -155,26 +187,76 @@ export class TelegramMenu {
   }
 
   /** @brief Handle only current keyboard actions; free-form or old buttons never become commands. */
-  async handle(chatId: string, input: string, permitted: () => boolean): Promise<TelegramReply> {
+  async handle(
+    chatId: string,
+    input: string,
+    permitted: () => boolean,
+    signal?: AbortSignal,
+  ): Promise<TelegramReply> {
     const session = this.session(chatId);
     let notice = '';
     if (/^\/(?:start|menu)(?:@[A-Za-z0-9_]+)?(?:\s.*)?$/.test(input) || input === '🏠 Главное') {
       session.page = home();
+      session.editor = undefined;
       return this.render(session);
     }
     if (input === '/id') return this.render(session, `Ваш Chat ID: ${chatId}`);
     if (input === '🔄 Обновить') return this.render(session);
     const action = session.actions.get(input);
-    if (!action)
+    if (!action) {
+      const editor = session.editor;
+      if (editor?.field && settingPrompts[editor.field] && permitted()) {
+        const value = parseTelegramSetting(editor.field, input);
+        if (!value) return this.render(session, '⚠️ Проверьте формат значения.');
+        editor.candidate = value;
+        return this.render(session);
+      }
       return this.render(
         session,
         'Используйте актуальные кнопки меню. Старые команды не повторяются.',
       );
-    if (action.type === 'page') session.page = action.page;
-    else if (action.type === 'scene') {
+    }
+    if (action.type === 'page') {
+      session.page = action.page;
+      session.editor = undefined;
+    } else if (action.type === 'meteo-chart') {
       if (!permitted()) return this.render(session, 'Запрос устарел или доступ отозван.');
       try {
-        const run = this.actions.runScene(action.id);
+        const chart = await this.actions.meteoChart?.(
+          action.deviceId,
+          action.itemId,
+          action.period,
+        );
+        if (!permitted()) return this.render(session, 'Запрос устарел или доступ отозван.');
+        if (chart) return { ...this.render(session), chart };
+        notice = 'За этот период ещё нет показаний.';
+      } catch {
+        notice = '⚠️ Не удалось построить график. Попробуйте ещё раз.';
+      }
+    } else if (action.type === 'schedule') {
+      if (!permitted()) return this.render(session, 'Запрос устарел или доступ отозван.');
+      try {
+        if (!this.actions.setSceneSchedule) throw new Error('Изменение расписания недоступно.');
+        await this.actions.setSceneSchedule(action.id, action.revision, action.enabled);
+        notice = action.enabled ? '✅ Расписание включено.' : '✅ Расписание приостановлено.';
+      } catch (error) {
+        notice =
+          '⚠️ ' + text(error instanceof Error ? error.message : '', 'Расписание не изменено.');
+      }
+    } else if (
+      action.type === 'module-enabled' ||
+      action.type === 'settings' ||
+      action.type === 'setting-field' ||
+      action.type === 'setting-value' ||
+      action.type === 'setting-page' ||
+      action.type === 'setting-back' ||
+      action.type === 'setting-save'
+    ) {
+      return this.handleSettings(session, action, permitted);
+    } else if (action.type === 'scene') {
+      if (!permitted()) return this.render(session, 'Запрос устарел или доступ отозван.');
+      try {
+        const run = await this.actions.runScene(action.id, signal);
         session.lastRun = run.id;
         const deadline = Date.now() + this.settleMs;
         while (
@@ -191,7 +273,12 @@ export class TelegramMenu {
       }
     } else {
       try {
-        const device = this.commandable(action.deviceId, action.kind, action.bootId);
+        const device = this.commandable(
+          action.deviceId,
+          action.kind,
+          action.bootId,
+          action.connectionGeneration,
+        );
         const module = device.controllers[action.kind]!;
         if (action.type === 'batch') {
           const candidates = rows(module.data.items);
@@ -202,8 +289,13 @@ export class TelegramMenu {
           for (const item of candidates) {
             if (!permitted()) break;
             processed++;
-            const current = this.commandable(action.deviceId, action.kind, action.bootId);
-            const fresh = rows(current.controllers[action.kind]?.data.items).find(
+            const current = this.commandable(
+              action.deviceId,
+              action.kind,
+              action.bootId,
+              action.connectionGeneration,
+            );
+            const fresh: Row | undefined = rows(current.controllers[action.kind]?.data.items).find(
               (row) => row.id === item.id,
             );
             if (!fresh || fresh.available !== true || typeof fresh.actual !== 'boolean') {
@@ -243,11 +335,14 @@ export class TelegramMenu {
               throw new Error('Охрана не готова к постановке. Проверьте датчики.');
           } else {
             const item = rows(module.data.items).find((row) => row.id === action.itemId);
-            const field = action.kind === 'thermostats' ? 'enabled' : 'actual';
+            const field = ['thermostats', 'tanks', 'irrigation'].includes(action.kind)
+              ? 'enabled'
+              : 'actual';
             if (
               !item ||
               typeof item[field] !== 'boolean' ||
-              (action.kind !== 'thermostats' && item.available !== true)
+              (!['thermostats', 'tanks', 'irrigation'].includes(action.kind) &&
+                item.available !== true)
             )
               throw new Error('Канал недоступен. Команда не отправлена.');
           }
@@ -273,23 +368,27 @@ export class TelegramMenu {
     );
   }
 
-  private itemStatus(kind: ControllerKind, item: Row, fresh: boolean): string {
-    const name = itemName(item);
-    if (!fresh) return `⚫ ${name} — данные устарели`;
-    if (kind === 'security')
-      return item.available !== true || typeof item.active !== 'boolean'
-        ? `⚫ ${name} — недоступно`
-        : `${item.active ? '🔴' : '🟢'} ${name} — ${item.active ? 'сработка' : 'норма'}`;
-    if (kind === 'meteo')
-      return (
-        `${item.available === true ? '🌡' : '⚫'} ${name}: ${item.available === true ? reading(item.temperatureC) : 'нет показаний'}` +
-        (item.available === true && typeof item.humidityPercent === 'number'
-          ? ` · ${reading(item.humidityPercent, '%')}`
-          : '')
+  private async handleSettings(
+    session: Session,
+    action: SettingsAction,
+    permitted: () => boolean,
+  ): Promise<TelegramReply> {
+    let notice: string;
+    try {
+      if (!this.actions.service) throw new Error('Настройка PLC недоступна.');
+      notice = await handleTelegramSettings(
+        session,
+        action,
+        {
+          snapshot: () => this.actions.snapshot(),
+          service: this.actions.service,
+        },
+        permitted,
       );
-    if (kind === 'thermostats')
-      return `${item.enabled === true ? '🟢' : '⚪'} ${name}: ${item.enabled === true ? 'включён' : 'выключен'} · ${item.mode === 'cooling' ? '❄️' : '🔥'} ${item.available === true ? reading(item.temperatureC) : 'нет показаний'} → ${reading(item.setpointC)}`;
-    return `${item.available === true ? (item.actual === true ? '🟢' : '⚪') : '⚫'} ${name} — ${item.available === true ? (item.actual === true ? 'включено' : 'выключено') : 'недоступно'}`;
+    } catch (error) {
+      notice = '⚠️ ' + text(error instanceof Error ? error.message : '', 'Настройка не сохранена.');
+    }
+    return this.render(session, notice);
   }
 
   /** @brief Build bounded text and a native persistent reply keyboard from the latest snapshot. */
@@ -297,6 +396,12 @@ export class TelegramMenu {
     session.actions = new Map();
     const keyboard: string[][] = [];
     const lines: string[] = [];
+    const headings = new Set<number>();
+    const section = (title: string, ...details: string[]) => {
+      lines.push('');
+      headings.add(lines.length);
+      lines.push(title, ...details);
+    };
     const add = (label: string, action: Action) => {
       session.actions.set(label, action);
       return label;
@@ -323,8 +428,9 @@ export class TelegramMenu {
     };
     const snapshot = this.actions.snapshot();
     const device = snapshot.devices.find((entry) => entry.id === session.page.deviceId);
-    if (!['home', 'scenes'].includes(session.page.view) && !device) {
+    if (!['home', 'scenes', 'scheduled', 'scene'].includes(session.page.view) && !device) {
       session.page = home();
+      session.editor = undefined;
       notice = notice || 'Устройство больше не найдено.';
     }
     if (session.page.view === 'home') {
@@ -336,39 +442,98 @@ export class TelegramMenu {
         '',
         'Устройства:',
       );
+      const house = this.actions.houseStatus?.();
+      if (house) {
+        const enrolled = house.devices.filter((plc) => plc.configured && plc.enabled);
+        const confirmed = enrolled.filter((plc) => plc.status === 'confirmed');
+        const desired =
+          house.desiredArmed === true
+            ? 'Ушел'
+            : house.desiredArmed === false
+              ? 'Я дома'
+              : 'режим не задан';
+        const alarms = enrolled.filter((plc) => plc.online && plc.phase === 'alarm');
+        lines.splice(
+          2,
+          0,
+          `🛡 Охрана дома · ${desired} · подтверждено ${confirmed.length}/${enrolled.length}`,
+          ...(alarms.length
+            ? ['🚨 Тревога · ' + alarms.map((plc) => text(plc.name)).join(', ')]
+            : []),
+        );
+      }
       keyboard.push([
         add('🏠 Я дома', { type: 'scene', id: 'home' }),
         add('🚪 Ушел', { type: 'scene', id: 'away' }),
-        add('🌅 Готовлюсь', { type: 'scene', id: 'prepare' }),
+        add('🚗 Готовлюсь', { type: 'scene', id: 'prepare' }),
       ]);
-      const selected = paginate(snapshot.devices);
-      split(
-        selected.map((entry) => {
-          lines.push(
-            `${entry.online ? '🟢' : '⚫'} ${deviceName(entry)}${entry.room ? ' · ' + text(entry.room) : ''}`,
-          );
-          return nav(`🏡 ${deviceName(entry).slice(0, 55)} · ${tag(entry.id)}`, {
+      for (const entry of paginate(snapshot.devices)) {
+        lines.push(
+          `${entry.online ? '🟢' : '⚫'} ${deviceName(entry)}${entry.room ? ' · ' + text(entry.room) : ''}`,
+        );
+        keyboard.push([
+          nav(`🏡 ${deviceName(entry).slice(0, 55)} · ${tag(entry.id)}`, {
             view: 'device',
             deviceId: entry.id,
             page: 0,
-          });
-        }),
-      );
+          }),
+        ]);
+      }
       if (!snapshot.devices.length) lines.push('PLC пока не обнаружены.');
       pages(snapshot.devices.length);
-      keyboard.push([nav('🎬 Сценарии', { view: 'scenes', page: 0 })]);
-    } else if (session.page.view === 'scenes') {
-      lines.push('🎬 Сценарии', 'Одно нажатие запускает назначенные действия.');
-      const all = this.actions.scenes().definitions;
+      keyboard.push([
+        nav('🎬 Сценарии', { view: 'scenes', page: 0 }),
+        nav('🗓 По расписанию', { view: 'scheduled', page: 0 }),
+      ]);
+    } else if (session.page.view === 'scenes' || session.page.view === 'scheduled') {
+      const scheduled = session.page.view === 'scheduled';
+      lines.push(scheduled ? '🗓 Сценарии по расписанию' : '🎬 Мгновенные сценарии');
+      const all = this.actions
+        .scenes()
+        .definitions.filter((scene) => Boolean(scene.schedule?.enabled) === scheduled);
       split(
-        paginate(all).map((scene) =>
-          add(`🎬 ${text(scene.name).slice(0, 55)} · ${tag(scene.id)}`, {
-            type: 'scene',
-            id: scene.id,
-          }),
-        ),
+        paginate(all).map((scene) => {
+          const label = `${scheduled ? (scene.schedule?.paused ? '⏸' : '🗓') : '🎬'} ${text(scene.name).slice(0, 55)} · ${tag(scene.id)}`;
+          if (scheduled) {
+            lines.push(`${text(scene.name)} · ${scene.schedule?.paused ? 'на паузе' : 'включён'}`);
+            return nav(label, { view: 'scene', sceneId: scene.id, page: 0 });
+          }
+          return add(label, { type: 'scene', id: scene.id });
+        }),
       );
+      if (!all.length) lines.push('Сценариев пока нет.');
       pages(all.length);
+    } else if (session.page.view === 'scene') {
+      const scene = this.actions
+        .scenes()
+        .definitions.find((row) => row.id === session.page.sceneId);
+      if (!scene) lines.push('Сценарий удалён.');
+      else {
+        lines.push(`🗓 ${text(scene.name)}`);
+        const schedule = scene.schedule;
+        if (schedule?.enabled) {
+          lines.push(`${irrigationDays(schedule.days)} · ${schedule.time} · ${schedule.timeZone}`);
+          lines.push(schedule.paused ? 'Расписание приостановлено' : 'Расписание включено');
+          if (this.actions.setSceneSchedule) {
+            keyboard.push([
+              add(
+                (schedule.paused ? '▶️ Включить расписание' : '⏸ Приостановить расписание') +
+                  ' · ' +
+                  tag(scene.id, String(scene.revision)),
+                {
+                  type: 'schedule',
+                  id: scene.id,
+                  revision: scene.revision,
+                  enabled: Boolean(schedule.paused),
+                },
+              ),
+            ]);
+          }
+        }
+        keyboard.push([
+          add('▶️ Запустить сейчас · ' + tag(scene.id), { type: 'scene', id: scene.id }),
+        ]);
+      }
     } else if (device) {
       const freshDevice = snapshot.broker.connected && device.online && device.status === 'online';
       lines.push(
@@ -381,14 +546,9 @@ export class TelegramMenu {
         split(
           available.map((kind) => {
             const module = device.controllers[kind]!;
-            const items = rows(module.data.items);
-            const fresh = freshDevice && module.fresh;
-            const value =
-              kind === 'security'
-                ? text(module.data.phase, 'неизвестно')
-                : `${items.filter((item) => (kind === 'meteo' ? item.available === true : kind === 'thermostats' ? item.enabled === true : item.actual === true)).length}/${items.length}`;
-            lines.push(
-              `${icons[kind]} ${titles[kind]}: ${fresh ? (kind === 'security' ? phases[value] || value : value) : 'устарело'}${module.data.enabled === true ? '' : ' · модуль выключен'}`,
+            section(
+              `${icons[kind]} ${titles[kind]}`,
+              ...controllerModuleSummaryLines(kind, module, freshDevice && module.fresh),
             );
             return nav(`${icons[kind]} ${titles[kind]}`, {
               view: 'module',
@@ -404,102 +564,156 @@ export class TelegramMenu {
         const module = device.controllers[kind];
         const fresh = freshDevice && module?.fresh === true;
         const items = rows(module?.data.items);
-        lines.push(
-          `${icons[kind]} ${titles[kind]}`,
-          module?.data.enabled === true ? '' : '⚠️ Модуль выключен',
-        );
-        if (session.page.view === 'item') {
+        const enabled = module?.data.enabled === true;
+        const revision = Number(module?.data.revision);
+        const canConfigure =
+          fresh &&
+          device.management?.supported === true &&
+          this.actions.service &&
+          Number.isSafeInteger(revision) &&
+          revision >= 1;
+        const liveTarget = {
+          deviceId: device.id,
+          bootId: device.bootId,
+          connectionGeneration: device.connectionGeneration,
+        };
+        const target = { ...liveTarget, revision };
+        const stateTag = (...parts: string[]) =>
+          tag(
+            device.id,
+            kind,
+            device.bootId || '',
+            String(device.connectionGeneration ?? ''),
+            ...parts,
+          );
+        const binary = kind === 'sockets' || kind === 'lights';
+        lines.push(`${icons[kind]} ${titles[kind]}`);
+        if (session.page.view !== 'module-settings') {
+          if (!module) lines.push('Нет данных модуля.');
+          else if (!enabled) lines.push('⚠️ Модуль выключен');
+        }
+        if (session.page.view === 'module-settings') {
+          section(
+            '⚙️ Настройки модуля',
+            canConfigure
+              ? `Состояние: модуль ${enabled ? 'включён' : 'выключен'}`
+              : '⚠️ Настройки модуля недоступны.',
+          );
+          if (canConfigure) {
+            keyboard.push([
+              add(
+                (enabled ? '⚙️ Выключить модуль' : '⚙️ Включить модуль') +
+                  ' · ' +
+                  stateTag(String(revision)),
+                { type: 'module-enabled', kind, target, enabled: !enabled },
+              ),
+            ]);
+          }
+        } else if (session.page.view === 'item') {
           const item = items.find((entry) => entry.id === session.page.itemId);
           if (!item) lines.push('Канал удалён. Вернитесь к контроллеру.');
           else {
-            lines.push('', this.itemStatus(kind, item, fresh));
-            if (kind === 'thermostats') {
-              lines.push(
-                `Режим: ${item.mode === 'cooling' ? '❄️ Охлаждение' : '🔥 Нагрев'}`,
-                `Уставка: ${reading(item.setpointC)} · Гистерезис: ${reading(item.hysteresisC)}`,
-                `Выход: ${fresh && item.actual === true ? 'включён' : fresh ? 'выключен' : 'неизвестно'}`,
-              );
-              const suffix = ' · ' + tag(device.id, kind, String(item.id));
-              keyboard.push([
-                add('🟢 Включить' + suffix, {
-                  type: 'set',
-                  deviceId: device.id,
-                  kind,
-                  itemId: String(item.id),
-                  value: true,
-                  bootId: device.bootId,
-                }),
-                add('⚪ Выключить' + suffix, {
-                  type: 'set',
-                  deviceId: device.id,
-                  kind,
-                  itemId: String(item.id),
-                  value: false,
-                  bootId: device.bootId,
-                }),
-              ]);
-            } else if (kind === 'meteo') {
-              lines.push(
-                `Тип: ${item.sensorType === 'onewire' ? 'DS18B20 / OneWire' : text(item.sensorType, '—')}`,
-                `Порт: ${text(item.portId, '—')}`,
-                `Адрес: ${text(item.address, '—')}`,
-              );
-              if (typeof item.humidityPercent === 'number')
-                lines.push(`Влажность: ${reading(item.humidityPercent, '%')}`);
-            } else if (kind === 'security')
-              lines.push(
-                `Тип: ${item.sensorType === 'motion' ? 'Датчик движения' : 'Геркон'}`,
-                `Вход: ${text(item.inputId, '—')}`,
-              );
+            section(...controllerItemStatusLines(kind, item, fresh, enabled));
+            lines.push(...controllerItemDetails(device, kind, item, fresh, enabled));
+            if (session.editor) {
+              renderTelegramSettings(session.editor, item, lines, keyboard, add, tag, pageSize);
+            } else {
+              const itemId = String(item.id);
+              const suffix = ' · ' + stateTag(itemId);
+              if (kind === 'meteo' && this.actions.meteoChart) {
+                const chart = { type: 'meteo-chart' as const, deviceId: device.id, itemId };
+                keyboard.push([
+                  add('📈 24 часа' + suffix, { ...chart, period: 'day' }),
+                  add('📈 7 дней' + suffix, { ...chart, period: 'week' }),
+                ]);
+              }
+              if (
+                binary &&
+                fresh &&
+                enabled &&
+                item.available === true &&
+                typeof item.actual === 'boolean'
+              ) {
+                keyboard.push([
+                  add((item.actual ? '⚪ Выключить' : '🟢 Включить') + suffix, {
+                    type: 'set',
+                    ...liveTarget,
+                    kind,
+                    itemId,
+                    value: !item.actual,
+                  }),
+                ]);
+              }
+              if (kind === 'thermostats' || kind === 'tanks' || kind === 'irrigation') {
+                const targetName =
+                  kind === 'tanks' ? ' мониторинг' : kind === 'irrigation' ? ' правило' : '';
+                if (fresh && enabled)
+                  keyboard.push([
+                    add('🟢 Включить' + targetName + suffix, {
+                      type: 'set',
+                      ...liveTarget,
+                      kind,
+                      itemId,
+                      value: true,
+                    }),
+                    add('⚪ Выключить' + targetName + suffix, {
+                      type: 'set',
+                      ...liveTarget,
+                      kind,
+                      itemId,
+                      value: false,
+                    }),
+                  ]);
+                if (canConfigure)
+                  keyboard.push([
+                    add('⚙️ Настроить' + suffix, {
+                      type: 'settings',
+                      kind,
+                      target: { ...target, itemId },
+                    }),
+                  ]);
+              }
+            }
           }
         } else {
-          if (kind === 'security') {
-            lines.push(
-              '',
-              fresh
-                ? phases[text(module?.data.phase)] || 'Неизвестный режим охраны'
-                : 'Состояние охраны устарело',
-            );
-            const suffix = ' · ' + tag(device.id, kind);
+          if (module && fresh && enabled)
+            lines.push(...controllerModuleDetails(kind, module, fresh));
+          if (kind === 'security' && fresh && enabled) {
+            const suffix = ' · ' + stateTag();
             keyboard.push([
               add('🛡 Поставить на охрану' + suffix, {
                 type: 'set',
-                deviceId: device.id,
+                ...liveTarget,
                 kind,
                 itemId: 'alarm',
                 value: true,
-                bootId: device.bootId,
               }),
               add('🔓 Снять охрану' + suffix, {
                 type: 'set',
-                deviceId: device.id,
+                ...liveTarget,
                 kind,
                 itemId: 'alarm',
                 value: false,
-                bootId: device.bootId,
               }),
             ]);
-          } else if (kind === 'sockets' || kind === 'lights')
+          } else if (binary && fresh && enabled && !session.page.details)
             keyboard.push([
-              add('🟢 Вкл все · ' + tag(device.id, kind), {
+              add('🟢 Вкл все · ' + stateTag(), {
                 type: 'batch',
-                deviceId: device.id,
+                ...liveTarget,
                 kind,
                 value: true,
-                bootId: device.bootId,
               }),
-              add('⚪ Выкл все · ' + tag(device.id, kind), {
+              add('⚪ Выкл все · ' + stateTag(), {
                 type: 'batch',
-                deviceId: device.id,
+                ...liveTarget,
                 kind,
                 value: false,
-                bootId: device.bootId,
               }),
             ]);
-          lines.push('');
           split(
             paginate(items).map((item) => {
-              lines.push(this.itemStatus(kind, item, fresh));
+              section(...controllerItemStatusLines(kind, item, fresh, enabled));
               const icon =
                 kind === 'sockets' || kind === 'lights'
                   ? !fresh || item.available !== true
@@ -508,15 +722,19 @@ export class TelegramMenu {
                       ? '🟢'
                       : '⚪'
                   : icons[kind];
-              const label = `${icon} ${itemName(item).slice(0, 55)} · ${tag(device.id, kind, String(item.id))}`;
-              return kind === 'sockets' || kind === 'lights'
+              const label = `${icon} ${itemName(item).slice(0, 55)} · ${stateTag(String(item.id))}`;
+              return binary &&
+                !session.page.details &&
+                fresh &&
+                enabled &&
+                item.available === true &&
+                typeof item.actual === 'boolean'
                 ? add(label, {
                     type: 'set',
-                    deviceId: device.id,
+                    ...liveTarget,
                     kind,
                     itemId: String(item.id),
-                    value: item.actual !== true,
-                    bootId: device.bootId,
+                    value: !item.actual,
                   })
                 : nav(label, {
                     view: 'item',
@@ -529,6 +747,18 @@ export class TelegramMenu {
           );
           if (!items.length) lines.push('Каналы не добавлены.');
           pages(items.length);
+          if (canConfigure)
+            keyboard.push([nav('⚙️ Настройки', { ...session.page, view: 'module-settings' })]);
+          if (binary) {
+            const details = Boolean(session.page.details);
+            keyboard.push([
+              nav(details ? '⚡ Быстрое управление' : 'ℹ️ Подробности каналов', {
+                ...session.page,
+                details: !details,
+                page: 0,
+              }),
+            ]);
+          }
         }
       }
     }
@@ -539,11 +769,16 @@ export class TelegramMenu {
               view: 'module' as const,
               deviceId: session.page.deviceId,
               kind: session.page.kind,
+              details: session.page.kind === 'sockets' || session.page.kind === 'lights',
               page: 0,
             }
-          : session.page.view === 'module'
-            ? { view: 'device' as const, deviceId: session.page.deviceId, page: 0 }
-            : home();
+          : session.page.view === 'module-settings'
+            ? { ...session.page, view: 'module' as const }
+            : session.page.view === 'module'
+              ? { view: 'device' as const, deviceId: session.page.deviceId, page: 0 }
+              : session.page.view === 'scene'
+                ? { view: 'scheduled' as const, page: 0 }
+                : home();
       keyboard.push([nav('⬅️ Назад', back), '🏠 Главное']);
     }
     keyboard.push(['🔄 Обновить']);
@@ -552,10 +787,8 @@ export class TelegramMenu {
       if (run) notice = this.sceneResult(run);
     }
     return {
-      text: [notice, ...lines]
-        .filter((line, index) => index !== 0 || line)
-        .join('\n')
-        .slice(0, 4000),
+      text: formatTelegramMessage(lines, notice, headings),
+      parse_mode: 'HTML',
       reply_markup: {
         keyboard,
         resize_keyboard: true,

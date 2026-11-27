@@ -63,8 +63,9 @@ inline constexpr const char* kSocketNvsKey = "runtime";
 /** @brief Historical FCSOCK01 binary version accepted by the decoder. */
 inline constexpr std::uint16_t kSocketStorageVersion = 1;
 
-/** @brief Current FCCTRL09 binary version with Security and a unique FRAM state identity. */
-inline constexpr std::uint16_t kControllerStorageVersion = 9;
+/** @brief Current FCCTRL11 binary version, including weekly irrigation rules and a state-memory
+ * identity. */
+inline constexpr std::uint16_t kControllerStorageVersion = 11;
 
 /** @brief Fixed minimum regular ON and OFF durations for all thermostats, in seconds. */
 inline constexpr std::uint32_t kThermostatMinimumCycleSeconds = 60;
@@ -98,7 +99,10 @@ enum class ControllerKind : std::size_t {
     Lights = 1,  ///< Persistent lighting outputs with the same button semantics.
     Meteo = 2,  ///< Sensor selection and read-only cached measurements.
     Thermostats = 3,  ///< Autonomous heat/cool demand with durable per-item enable flags.
-    Security = 4  ///< Autonomous intrusion alarm with iButton access and durable armed/alarm flags.
+    Security =
+        4,  ///< Autonomous intrusion alarm with iButton access and durable armed/alarm flags.
+    Tanks = 5,  ///< Local water-level monitoring and independent drain/fill automation.
+    Irrigation = 6  ///< Weekly watering rules and local tank interlock.
 };
 
 /** @brief Generic name for the legacy-compatible operation result type. */
@@ -160,7 +164,7 @@ esp_err_t controllers_init();
  * @param kind Module to inspect.
  * @return Owned JSON snapshot, or nullptr for an invalid kind/allocation failure.
  */
-cJSON* controller_status_json(ControllerKind kind);
+cJSON* controller_status_json(ControllerKind kind, bool includeRemoteTanks = true);
 
 /**
  * @brief Capture all module snapshots and the resource-owner catalog atomically.
@@ -329,6 +333,8 @@ bool controllers_backup_record(const cJSON* json,
  * @param[out] record Encoded current-version Controllers section on success.
  * @param[out] error Failure diagnostic.
  * @param securityRevision Target Security configuration revision.
+ * @param tankRevision Target tank configuration revision.
+ * @param irrigationRevision Target irrigation configuration revision.
  * @return True on successful validation/encoding.
  * @details Pure structural codecs preserve valid dangling Meteo references as
  * fault-OFF configurations. New assignments still require a known source in
@@ -342,7 +348,9 @@ bool controllers_backup_record(const cJSON* json,
                                std::uint32_t thermostatRevision,
                                SettingsBytes& record,
                                std::string& error,
-                               std::uint32_t securityRevision = 1);
+                               std::uint32_t securityRevision = 1,
+                               std::uint32_t tankRevision = 1,
+                               std::uint32_t irrigationRevision = 1);
 
 /**
  * @brief Validate and encode controller backup JSON without live state or storage changes.
@@ -394,6 +402,8 @@ ControllerResult controllers_backup_prepare(const cJSON* json,
  * @param[out] record Encoded current-version Controllers section on success.
  * @param[out] error Failure diagnostic.
  * @param securityRevision Target Security configuration revision.
+ * @param tankRevision Target tank configuration revision.
+ * @param irrigationRevision Target irrigation configuration revision.
  * @return Typed result distinguishing malformed data from resource conflicts.
  * @details Pure structural codecs preserve valid dangling Meteo references as
  * fault-OFF configurations. New assignments still require a known source in
@@ -407,7 +417,9 @@ ControllerResult controllers_backup_prepare(const cJSON* json,
                                             std::uint32_t thermostatRevision,
                                             SettingsBytes& record,
                                             std::string& error,
-                                            std::uint32_t securityRevision = 1);
+                                            std::uint32_t securityRevision = 1,
+                                            std::uint32_t tankRevision = 1,
+                                            std::uint32_t irrigationRevision = 1);
 
 /**
  * @brief Decode module revisions without taking module locks, doing I/O or changing storage.
@@ -448,6 +460,8 @@ bool controllers_record_revisions(const SettingsBytes& record,
  * @param[out] thermostatRevision Decoded Thermostats config revision.
  * @param[out] error Failure diagnostic.
  * @param[out] securityRevision Optional Security revision destination; nullptr skips it.
+ * @param[out] tankRevision Optional tank revision destination; nullptr skips it.
+ * @param[out] irrigationRevision Optional irrigation revision destination; nullptr skips it.
  * @return True for a valid record.
  * @details Missing modules in historical records have initial revision 1.
  */
@@ -457,7 +471,9 @@ bool controllers_record_revisions(const SettingsBytes& record,
                                   std::uint32_t& meteoRevision,
                                   std::uint32_t& thermostatRevision,
                                   std::string& error,
-                                  std::uint32_t* securityRevision = nullptr);
+                                  std::uint32_t* securityRevision = nullptr,
+                                  std::uint32_t* tankRevision = nullptr,
+                                  std::uint32_t* irrigationRevision = nullptr);
 
 /** @brief Compatibility initialization of the whole engine. @return controllers_init() result. */
 esp_err_t socket_controller_init();
@@ -542,4 +558,50 @@ void socket_controller_test_step();
 
 /** @brief Reset RAM for a simulated host reboot; fake tasks must be stopped and NVS is retained. */
 void socket_controller_test_reset();
+#endif
+
+/**
+ * @brief Persist the monitoring permission of one local tank.
+ * @param id Tank identifier.
+ * @param enabled Monitoring permission; OFF confirms both outputs OFF.
+ * @param[out] error Failure diagnostic.
+ * @return Confirmed permission or a validation, I/O or storage failure.
+ */
+ControllerResult controller_tank_set_enabled(std::string_view id, bool enabled, std::string& error);
+
+/**
+ * @brief Apply a tank permission within the current monotonic command deadline.
+ * @param id Tank identifier.
+ * @param enabled New monitoring permission.
+ * @param expiresAtUptimeMs Delivery deadline in milliseconds.
+ * @param[out] error Failure diagnostic.
+ * @return Confirmation or deadline/configuration/I/O/storage refusal.
+ */
+ControllerResult controller_tank_set_enabled_until(std::string_view id,
+                                                   bool enabled,
+                                                   std::int64_t expiresAtUptimeMs,
+                                                   std::string& error);
+
+/** @brief Persist permission to run a weekly irrigation rule.
+ * @param id Local rule identifier.
+ * @param enabled Requested schedule permission.
+ * @param[out] error Failure diagnostic.
+ * @return Confirmed permission or a configuration, valve or storage failure.
+ */
+ControllerResult
+controller_irrigation_set_enabled(std::string_view id, bool enabled, std::string& error);
+/** @brief Persist a rule permission within a monotonic delivery deadline.
+ * @param id Local rule identifier.
+ * @param enabled Requested schedule permission.
+ * @param expiresAtUptimeMs Command delivery deadline in milliseconds.
+ * @param[out] error Failure diagnostic.
+ * @return Confirmed permission or a deadline, configuration, valve or storage failure.
+ */
+ControllerResult controller_irrigation_set_enabled_until(std::string_view id,
+                                                         bool enabled,
+                                                         std::int64_t expiresAtUptimeMs,
+                                                         std::string& error);
+#ifdef FCPLCN_SOCKET_CONTROLLER_TESTING
+/** @brief Set the host-test clock. @param unixSeconds Wall clock in UTC epoch seconds. */
+void controller_irrigation_test_clock(std::int64_t unixSeconds);
 #endif

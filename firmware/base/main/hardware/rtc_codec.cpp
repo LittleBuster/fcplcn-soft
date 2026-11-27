@@ -4,11 +4,11 @@
  * @details Calendar conversion is independent of libc timezone state. Decode validates BCD,
  * reserved bits, leap years and the real month length before assigning the epoch value.
  */
-#include "time/rtc_codec.h"
+#include "rtc_codec.h"
+#include "ds3231.h"
 
 namespace {
 constexpr std::int64_t kEpoch2000 = 946684800;
-constexpr std::int64_t kEpoch2100 = 4102444800;
 
 /**
  * @brief Apply the Gregorian leap-year rule without timezone or libc state.
@@ -105,7 +105,7 @@ bool rtc_decode_calendar(const std::uint8_t (&r)[7], std::uint8_t status, std::i
  */
 bool rtc_encode_calendar(std::int64_t unix_time, std::uint8_t (&r)[7])
 {
-    if (unix_time < kEpoch2000 || unix_time >= kEpoch2100)
+    if (unix_time < kEpoch2000 || unix_time >= kDs3231UnixEnd)
         return false;
     std::int64_t days = (unix_time - kEpoch2000) / 86400;
     const int weekday = static_cast<int>((unix_time / 86400 + 4) % 7) + 1;

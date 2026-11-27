@@ -34,6 +34,7 @@ std::array<std::uint8_t, 8192> framBytes{};
 std::array<FakeI2cBus, 2> buses{{{0}, {1}}};
 std::vector<std::unique_ptr<FakeI2cDevice>> handles;
 std::vector<io_test::Transfer> history;
+std::vector<io_test::GpioCall> gpioHistory;
 std::mutex mutex;
 std::atomic<std::int64_t> timeUs{1000000};
 std::atomic<std::int64_t> nextReadElapsedUs{0};
@@ -141,6 +142,11 @@ std::uint8_t read_canonical(const Device& d, std::uint8_t reg)
 }  // namespace
 
 namespace io_test {
+const std::vector<GpioCall>& gpio_calls()
+{
+    return gpioHistory;
+}
+
 void set_present(int bus, std::uint8_t address, bool value)
 {
     std::lock_guard<std::mutex> l(mutex);
@@ -330,6 +336,7 @@ void esp_rom_delay_us(std::uint32_t us)
 
 esp_err_t gpio_set_level(gpio_num_t gpio, std::uint32_t level)
 {
+    gpioHistory.push_back({io_test::GpioOperation::Level, gpio, level != 0});
     if (failedGpio == gpio) {
         failedGpio = -1;
         return ESP_FAIL;
@@ -348,8 +355,15 @@ esp_err_t gpio_config(const gpio_config_t*)
     return ESP_OK;
 }
 
-esp_err_t gpio_set_direction(gpio_num_t, gpio_mode_t)
+esp_err_t gpio_set_direction(gpio_num_t gpio, gpio_mode_t mode)
 {
+    gpioHistory.push_back({io_test::GpioOperation::Direction, gpio, mode});
+    return ESP_OK;
+}
+
+esp_err_t gpio_set_pull_mode(gpio_num_t gpio, gpio_pull_mode_t mode)
+{
+    gpioHistory.push_back({io_test::GpioOperation::Pull, gpio, mode});
     return ESP_OK;
 }
 

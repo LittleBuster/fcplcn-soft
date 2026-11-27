@@ -95,7 +95,7 @@ async function checkMeteo({ browser, createMock, artifacts }) {
   const editItems = () => mock.meteo.exportSettings().items;
   try {
     await login();
-    assert.equal(await page.locator('[data-controller-id]').count(), 5);
+    assert.equal(await page.locator('[data-controller-id]').count(), 7);
     assert.deepEqual(mock.meteo.exportSettings(), { enabled: false, items: [] });
     const enable = response();
     await page.locator('#meteo-tile-enabled').click();
@@ -384,7 +384,7 @@ async function checkMeteo({ browser, createMock, artifacts }) {
     page.removeListener('request', observeScan);
 
     const disk = JSON.parse(fs.readFileSync(statePath, 'utf8'));
-    assert.equal(disk.version, 8);
+    assert.equal(disk.version, 10);
     const oldPath = path.join(directory, 'old-v2.json');
     const v2 = {
       version: 2,
@@ -404,7 +404,7 @@ async function checkMeteo({ browser, createMock, artifacts }) {
       assert.equal(old.sockets.snapshot().items[0].state, true);
       assert.equal(old.lights.snapshot().items[0].state, true);
       await old.sockets.state({ id: 'keep-sockets', value: false });
-      assert.equal(JSON.parse(fs.readFileSync(oldPath, 'utf8')).version, 8);
+      assert.equal(JSON.parse(fs.readFileSync(oldPath, 'utf8')).version, 10);
     } finally {
       old.controllers.close();
     }

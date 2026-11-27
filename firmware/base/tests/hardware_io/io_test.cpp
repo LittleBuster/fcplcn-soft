@@ -1,4 +1,5 @@
 #include "hardware/hardware_io.h"
+#include "hardware/board_gpio.h"
 #include "hardware/board_profile.h"
 #include "hardware/fram.h"
 #include "cJSON.h"
@@ -120,6 +121,56 @@ void fake_map()
     io_test::reset_mcp(0, 0x20);
     CHECK(io_test::register_pair(0, 0x20, 0) == 0xffff);
     CHECK(io_test::register_pair(0, 0x20, 0x14) == 0);
+}
+
+void boot_gpio()
+{
+    const auto& board = board_profile_active();
+    const bool has_reset = board.expanderResetGpio >= 0;
+    if (has_reset)
+        io_test::fail_next_gpio_write(board.expanderResetGpio);
+    bool reset_asserted = true;
+    const auto result = board_gpio_prepare_safe_outputs(board, reset_asserted);
+    CHECK(result == (has_reset ? ESP_FAIL : ESP_OK));
+    CHECK(!reset_asserted);
+    const auto& calls = io_test::gpio_calls();
+    CHECK(calls.size() == board.safeBootGpioCount * 2);
+    using Operation = io_test::GpioOperation;
+    std::size_t index = 0;
+    const auto output = [&](int pin, bool high) {
+        const auto& level = calls.at(index++);
+        CHECK(level.operation == Operation::Level && level.pin == pin && level.value == high);
+        const auto& direction = calls.at(index++);
+        CHECK(direction.operation == Operation::Direction && direction.pin == pin
+              && direction.value == GPIO_MODE_OUTPUT);
+    };
+    if (has_reset)
+        output(board.expanderResetGpio, false);
+    for (std::size_t i = 0; i < board.safeBootGpioCount; ++i) {
+        const auto& pin = board.safeBootGpios[i];
+        if (pin.gpio != board.expanderResetGpio)
+            output(pin.gpio, pin.levelHigh);
+    }
+    CHECK(index == calls.size());
+    CHECK(board_gpio_prepare_safe_outputs(board, reset_asserted) == ESP_OK);
+    CHECK(reset_asserted == has_reset);
+}
+
+void recovery_button()
+{
+    const auto& button = board_profile_active().recoveryButton;
+    const auto setup = board_gpio_setup_recovery_button(button);
+    CHECK(setup.direction == ESP_OK && setup.pull == ESP_OK);
+    const auto& calls = io_test::gpio_calls();
+    CHECK(calls.size() == 2);
+    CHECK(calls[0].operation == io_test::GpioOperation::Direction && calls[0].pin == button.gpio
+          && calls[0].value == GPIO_MODE_INPUT);
+    CHECK(calls[1].operation == io_test::GpioOperation::Pull && calls[1].pin == button.gpio
+          && calls[1].value == GPIO_PULLUP_ONLY);
+    CHECK(gpio_set_level(button.gpio, 1) == ESP_OK);
+    CHECK(!board_gpio_recovery_button_pressed(button));
+    CHECK(gpio_set_level(button.gpio, 0) == ESP_OK);
+    CHECK(board_gpio_recovery_button_pressed(button));
 }
 
 void safe_init()
@@ -878,6 +929,10 @@ int main(int argc, char** argv)
         CHECK(board_profile_activate("fcplc-080806-3v1"));
     if (name == "fake_map")
         fake_map();
+    else if (name == "boot_gpio" || name == "legacy_boot_gpio")
+        boot_gpio();
+    else if (name == "recovery_button")
+        recovery_button();
     else if (name == "safe_init")
         safe_init();
     else if (name == "relay_rmw")
